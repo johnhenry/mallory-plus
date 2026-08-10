@@ -16,6 +16,22 @@ status: draft — for review before any implementation work starts
 
 ---
 
+## 0. Positioning, Alternatives & Runtime Targets
+
+**Alternatives considered — the source conversation's Turn 3 dividing line, preserved here so the "why not X" doesn't get re-litigated later:**
+- **Pyodide** (CPython + NumPy/pandas compiled to WASM): the right tool for bringing *existing* Python code to a JS client — high semantic compatibility, but proxy/conversion ergonomics at the boundary, heavy startup/download, constrained threading. Explicitly not this project.
+- **Server-side Python** (Node/Deno backend calling a Python service over Arrow IPC/Parquet/gRPC — never JSON dataframe records at scale): usually better for large data, native BLAS, multiprocessing. The interop story (§6.2) is deliberately built so users can adopt this hybrid later without a rewrite.
+- **TensorFlow.js / Danfo.js / stdlib / math.js**: API references and adapter targets only, never foundations (§2, non-goal 11).
+- **This project** is the source's third design: *greenfield, performance-sensitive JS applications* — hot kernels in Rust/WASM, clean JS-native API, no CPython shipped.
+
+**Runtime targets** *(the source names Node/Deno/browser but no support matrix — tiering below is own judgment)*:
+- **v1 tier 1:** Node (current LTS), Chromium-family browsers, Deno via npm compatibility.
+- **v1 tier 2 (should-work, verified later):** Firefox/Safari WASM paths; Deno-native WebGPU (a better native story than Node's third-party Dawn bindings — see §6.3).
+- **Untested/unclaimed:** Bun, Cloudflare Workers — the source mentions them only regarding `@std/math` portability; WASM-heavy packages need explicit verification before claiming support.
+- **Distribution open question:** npm is the baseline; dual npm+JSR publishing for first-class Deno reach needs a decision before the first release (own addition, see §9).
+
+---
+
 ## 1. Repo Structure
 
 The repo mixes two build systems with no shared package manager: TypeScript (npm) and Rust (Cargo → WASM). Two top-level workspace roots, touching only at defined build seams:
@@ -39,7 +55,10 @@ malloy-plus/
 │   ├── tensor-webgpu/             # TS wrapper over crates/tensor-webgpu-wgsl (build seam)
 │   ├── frame-arrow/               # Arrow-backed Frame/Series, expressions, Arrow IPC
 │   ├── frame-parquet/             # scans/writes, projection/predicate pushdown
-│   └── interop-python/            # Python-side helper package — own pyproject.toml, PyPI-published
+│   ├── interop-python/            # Python-side helper package — own pyproject.toml, PyPI-published
+│   └── runtime/                   # umbrella package — single import surface re-exporting named
+│                                  # namespaces (Tensor, ops, linalg, …, Frame, onnx); the source
+│                                  # explicitly prefers this over hanging hundreds of methods on Tensor
 ├── scalars/                       # math.js-derived value domains — deliberately NOT Tensor<T>
 │   ├── complex/  fraction/  unit/
 ├── adapters/                      # core has zero dependency on these
@@ -116,7 +135,7 @@ Where Changesets doesn't reach:
 | `tensor-compile` | `tensor-core` | Expression IR, elementwise fusion, temp-memory planning — must land before WebGPU |
 | `tensor-webgpu` | `tensor-core` **+** `tensor-compile` | Large matmuls/attention-adjacent/image kernels need the fusion/IR layer for GPU dispatch planning |
 | `frame-parquet` | `frame-arrow` | Scans/writes, projection/predicate pushdown |
-| `fft`, `signal`, convolution/attention primitives, data loaders, checkpoint format | `tensor-core`, `tensor-compile` | "Practical ML/media compute" bundle |
+| `fft`, `signal`, `image` (resize/normalize), convolution/attention primitives, `data` loaders + `trainer` facade, checkpoint format (`stateDict` + `io.writeCheckpoint`) | `tensor-core`, `tensor-compile` | "Practical ML/media compute" bundle |
 | Dense linalg maturity (QR/SVD/eigen), `optimize`, minimal `sparse` (CSR/COO) | `tensor-core`, `tensor-autograd` | `optimize.minimize` needs autodiff; full sparse solvers deferred to v3 |
 | `adapters/runtime-stdlib`, `runtime-tfjs`, `runtime-danfo`, `runtime-arrow` | respective core packages | Larger-surface adapters, deferred until the APIs they bridge to stabilize |
 
@@ -128,6 +147,7 @@ Where Changesets doesn't reach:
 | Dataframe hardening: window ops, full groupby/join maturity | `frame-arrow`, `frame-parquet` | — |
 | `sparse.linalg` iterative solvers, `interpolate`, `special`, `stats.distributions`, full `integrate` | `tensor-core`, `tensor-autograd` | "Build later" tier — large algorithm/test surface |
 | GPU kernel DSL maturity (typed `kernel({inputs, output, expression})`) | `tensor-webgpu` | The *DSL* matures here; unrestricted JS-to-shader transpilation never enters scope, at any version |
+| `expression` (optional) — safe string-expression parser (`"softmax(x @ w + b)"`) compiling into `tensor-compile`'s IR, never into JS | `tensor-compile` | Source's math.js section: useful for a REPL/notebook/calculator/graphing view/LLM-facing constrained compute DSL, explicitly non-core; compatible with non-goal 2 because the IR and WASM/WGSL emitters stay fully controlled |
 | `DecimalTensor` (if ever) | `scalars/*` | Own fixed-width storage family, never boxed `BigNumber` |
 | Full Danfo/pandas behavioral parity in adapters | `adapters/runtime-danfo` | Explicitly bounded, not full parity even here |
 
@@ -141,9 +161,10 @@ Non-goals from §2 never enter this roadmap at any version.
 
 #### `tensor-core` v1 scope
 - **Dtypes:** `bool`, `u8/i8`, `u16/i16`, `u32/i32`, `f16/bf16/f32/f64`. No complex dtypes in v1.
+  - **Inconsistency found in the source on re-read:** its `DType` union stops at 32-bit ints, yet its own ONNX example constructs `Tensor.ones([1, 4], { dtype: "i64" })` from a `BigInt64Array` — transformer models genuinely need int64 `input_ids`. Resolve before freezing the dtype list: either add `i64/u64` (BigInt64Array-backed) to v1, or define an explicit i32→i64 conversion policy at the ONNX adapter boundary.
 - **Core object:** `Tensor` with `shape`, `ndim`, `size`, `dtype`, `device` (`"wasm" | "webgpu"`), `requiresGrad`, `grad`.
 - **Constructors:** `Tensor.scalar/from/fromTypedArray/zeros/ones/full/arange/linspace/eye/empty/concat/stack/where/loadNpy`. `einsum` is stretch, not core-blocking.
-- **Shape/view ops:** `reshape/flatten/squeeze/unsqueeze/transpose/permute/broadcastTo/contiguous/at/slice/select/gather/cast/clone/detach`. **View vs. contiguous must stay semantically distinct from day one** — `permute()` never copies, `contiguous()` copies iff not already contiguous, enforced by tests.
+- **Shape/view ops:** `reshape/flatten/squeeze/unsqueeze/transpose/permute/broadcastTo/contiguous/at/slice/select/gather/cast/clone/detach`; `reshape` supports `-1` shape inference (source-explicit). **View vs. contiguous must stay semantically distinct from day one** — `permute()` never copies, `contiguous()` copies iff not already contiguous, enforced by tests.
 - **Elementwise + broadcasting:** `add/sub/mul/div/pow/neg/exp/log/sqrt/abs/clip` plus comparison (`eq/ne/lt/lte/gt/gte`) and logical ops, `any/all`.
 - **Reductions/masking:** `sum/mean/max/argmax/std/variance(ddof)/cumsum/cumprod/sort/argsort/topK/take/gather/scatter/mask/Tensor.where`.
 - **matmul + dense linalg:** `matmul`, `dot` only (full `linalg.solve/cholesky/qr/svd` stays out of `tensor-core` itself, though `linalg.matmul/solve` is Stage-1 for the bundle as a whole).
@@ -159,9 +180,10 @@ Non-goals from §2 never enter this roadmap at any version.
 - **`...Into` functions:** `ops.addInto(out, a, b)` etc. — write directly into `out`'s WASM buffer offset, zero intermediate allocation, return `out` for chaining. This is the tier-3 "no-allocation production kernel" rung of a 3-tier allocation model (1: backend auto-plans/fuses; 2: explicit `scope()`/`keep()`; 3: explicit `...Into`).
 
 #### `tensor-autograd`
-- **Tape:** reverse-mode, dynamically built (define-by-run). Support **both** functional (`grad.valueAndGrad`, `grad.of`) and PyTorch-style tape/`.backward()` styles. `grad.noGrad()`/`grad.enable()` toggle recording. **No in-place ops on tensors with an active tape record in v1** — hard constraint, not a "later" TODO.
+- **Tape:** reverse-mode, dynamically built (define-by-run). Support **both** functional (`grad.valueAndGrad`, `grad.of`) and PyTorch-style tape/`.backward()` styles. `Tensor.variable(values)` is the grad-enabled constructor (the source's translation of `requires_grad_(True)`); `grad.checkpoint` exists in the full API but is deferred to v2. `grad.noGrad()`/`grad.enable()` toggle recording. **No in-place ops on tensors with an active tape record in v1** — hard constraint, not a "later" TODO.
 - **Ops needing gradients first:** elementwise arithmetic, broadcasting-aware `sum/mean`, `matmul`, `softmax/relu/sigmoid/gelu`. Non-differentiable ops (`argmax`, `sort`, comparisons) should raise on `.backward()`, not silently produce wrong gradients.
 - **Minimal `nn`/`optim` slice:** `nn.Parameter`, `nn.Module` (abstract `forward()`), `nn.Linear/Embedding/LayerNorm`, `nn.mseLoss/crossEntropy`, `optim.AdamW`. RMSNorm/Sequential/Dropout and plain SGD are fast-follows, not blocking.
+- **v2 training-workflow surface (gap incorporated on re-read):** the source's TensorFlow.js translations also name a `trainer` facade (`trainer.configure(...)`, `await trainer.fit({x, y})`, `trainer.fit(dataLoader)`) and a `data` namespace (`data.fromAsync`, async datasets, batching, transforms), with model persistence as `model.stateDict()` + `io.writeCheckpoint`/`io.loadCheckpoint`. None of this blocks v1 autograd, but §5's v2 "data loaders + checkpoint format" bundle means this specific API surface.
 
 #### `tensor-compile`
 - **Expression IR (v1 cut):** a small, closed, typed graph IR — elementwise/broadcast nodes only, each typed by `(dtype, shape)`, built via tracing a `compile(fn)`-wrapped function. **Reuse this same IR as the shared lowering target for both WASM fusion and the future WebGPU kernel DSL** (`tensor-webgpu`) — the practical win of building this package before `tensor-webgpu`.
@@ -190,12 +212,12 @@ Not specified in the source — proposed here. Run a **Python subprocess** (not 
 Build as a thin, ergonomic layer over the `apache-arrow` npm package (the project's official JS implementation — `Table`/`RecordBatch`/`Vector`/`Schema`), not a reimplementation of columnar storage.
 - **`Frame`:** `schema/columns/length`, `select/drop/rename/withColumns`, `filter/sortBy/limit/slice`, `groupBy().aggregate()`, `join`, `concat`, `nullCount/fillNull/dropNull`, `toArrow/toRows/toTensor/toCSV/toIPC` (`toParquet` lives in `frame-parquet` — keep this package free of a Parquet dependency).
 - **`Series<T>`:** `name/dtype/length`, `cast/isNull/fillNull/unique/valueCounts/toTensor`.
-- **Expression builders:** `col(name)` + comparison/logical combinators, matching the pandas-translation examples in the source doc.
+- **Expression builders:** `col(name)` + comparison/logical combinators, plus the `fn.*` aggregate/scalar helpers the source uses throughout its examples (`fn.count/sum/mean/stddev/month`) and the `.overAll()` whole-column modifier from its Danfo-section normalization example (`col("spend").sub(fn.mean(col("spend")).overAll())...`). Full window functions stay in v3, but `overAll()`-style whole-column aggregates inside `withColumns` are needed for v1 parity with the source's own examples — a gap incorporated on re-read.
 - **Hard design constraints:** immutable, expression-oriented by default (every transform builds a new logical-plan node — this is what makes lazy planning/column pruning/predicate pushdown/worker execution/backend substitution possible); no `.loc`/`.iloc`-style overloaded indexing, no in-place mutation, no `Proxy`-based indexing.
 - **Lazy planner v1 minimum:** a `.collect()` materialization boundary plus column pruning and predicate pushdown for `select`/`filter` at the logical-plan level, even with single-threaded in-process execution. Worker/WASM query execution, window operations, and pivot/melt are explicitly deferred.
 
 #### `frame-parquet` v1 scope
-Scan, write, projection pushdown, predicate pushdown, layered on `frame-arrow`'s expression model (`Frame.readParquet(path, {columns, filter})` pushes down; `scanParquet()` plugs into the lazy planner).
+Scan, write, projection pushdown, predicate pushdown, layered on `frame-arrow`'s expression model (`Frame.readParquet(path, {columns, filter})` pushes down; `scanParquet()` plugs into the lazy planner, including glob/partitioned scans — the source's own example is `Frame.scanParquet("/events/*.parquet")`). Write options per the source: `compression: "zstd"`, `rowGroupSize`.
 
 **The source conversation names no Parquet library — this is an open v1 decision.** Current landscape:
 
@@ -263,6 +285,10 @@ Sequenced 7th of 8 in the source's release order, after `tensor-compile` — its
 
 Note: `linalg.matmul/solve` is Stage-1 (core, v1), but the rest of this table is Stage-3 (v3 in §5) — the SciPy layer as a whole is third-priority, not near-term; don't parallelize it with `tensor-webgpu`.
 
+**Complex-number dependency for `fft` (gap found on re-read):** the source defers complex *dtypes* to "later projects" yet schedules `fft` in Stage 2 (v2). Its math.js section supplies the resolution: a dedicated **`ComplexTensor`** with interleaved or split typed storage (`complex.fromParts(real, imag)` — its own example feeds this into `fft.fft`), accelerated, and explicitly distinct from any generic `Tensor<T>`. Plan accordingly: v2 `fft` ships either as `rfft`/`irfft`-only (real-valued API) or alongside a minimal `ComplexTensor`; full `fft.fft` on complex inputs requires the latter.
+
+**stdlib-derived detail worth keeping:** NaN-aware reductions (`stats.mean(x, { ignoreNaN: true })`) — the source specifically calls out stdlib's specialized typed-array NaN-aware accumulation (including extended-precision single-precision variants) as valuable to match.
+
 #### Kernel-compile DSL (GPU.js-inspired) — v1/v2 plan
 - **v1 — explicit WGSL only, no DSL:** `gpuKernel.define({name, inputs: TensorSpec[], output: TensorSpec, wgsl: string})`. Hand-written, vetted WGSL — the WGSL analogue of "no arbitrary user-defined WASM kernels without a validated ABI." Shape/dtype validation happens at the `TensorSpec` boundary (declared, not inferred), sidestepping the hardest part of a DSL.
 - **v2 — typed expression DSL:** only after v1 has real usage and `tensor-compile`'s IR exists. A strict pure/side-effect-free subset over `TensorSpec` inputs, lowering to the *same* IR already used for WASM fusion, then emitting WGSL from that IR — never transpiling JS syntax directly.
@@ -308,8 +334,21 @@ Ranked by how early each risk becomes load-bearing:
 
 ## 8. Immediate Next Steps
 
-1. Review and revise this plan — confirm package naming (`@jh/runtime` scope vs. something malloy-plus-specific), confirm the v1 package list in §5 is the right starting cut.
+1. Review and revise this plan — confirm package naming (`@jh/runtime` scope vs. something malloy-plus-specific) and confirm the v1 package list in §5 is the right starting cut. **Naming caution (own observation, not from the source):** "Malloy" is already Google's open-source data language (malloydata.github.io), which is also data/analytics-adjacent — a distinct npm scope or different public-facing name avoids confusion and potential trademark friction.
 2. Scaffold the monorepo per §1: `pnpm-workspace.yaml`, root `Cargo.toml`, `turbo.json`/`nx.json` with the `build:wasm → build` task dependency wired, empty `packages/tensor-core` and `crates/tensor-wasm-kernels` as the first two real packages.
 3. Stand up the Python-subprocess differential-testing harness (§6.1) early — even before `tensor-wasm` kernels exist, it validates `tensor-core`'s pure-JS/TypedArray fallback path against NumPy.
 4. Spike the Parquet library decision (§6.2) and the `apache-arrow`/PyArrow semantic-parity check before committing to `frame-arrow`'s v1 method list.
 5. Set up the Xvfb + Dawn/SwiftShader headless WebGPU CI path (§6.3) early, reusing the existing `headless-webgl` Xvfb pattern on this machine, even before `tensor-webgpu` has real kernels — cheaper to have the harness ready than to retrofit it under deadline pressure later.
+
+## 9. Open Questions
+
+Carried directly from the source conversation's own unexplored follow-ups:
+1. **Which ml-matrix decompositions to prioritize first** (feeds the v2 dense-linalg row in §5).
+2. **How to structure Arrow-backed DataFrames with a Danfo.js-like API** (feeds `frame-arrow` ergonomics and `adapters/runtime-danfo`).
+3. **Implementing Complex and Fraction types in Rust for WASM** (feeds `crates/scalar-complex-fraction` and the `ComplexTensor` dependency flagged in §6.3).
+
+Raised by this plan (not in the source):
+4. **`i64`/`u64` dtype decision** — resolve the source's own DType-vs-ONNX-example inconsistency (§6.1) before freezing the dtype list.
+5. **Public naming** — "Malloy" collision with Google's Malloy data language (§8 item 1).
+6. **npm-only vs. dual npm+JSR publishing** for first-class Deno distribution (§0).
+7. **Browser bundle-size budget** — a concrete number and lazy-loading policy for the Arrow + Parquet-WASM + tensor-WASM stack (§6.2 risk 3) rather than discovering the cost post-hoc.
