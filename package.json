@@ -16,6 +16,7 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.0",
+    "async-itertools": "github:johnhenry/async-itertools#ae0d558a84aa51b7119be885bf3fd3e402330158",
     "typescript": "^5.7.0"
   },
   "engines": {
