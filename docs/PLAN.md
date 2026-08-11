@@ -87,7 +87,7 @@ Every TS package wrapping Rust output has a gitignored `wasm/` dir populated by 
 
 **External ecosystem dependencies** (both johnhenry libraries, both stay independent of this repo):
 - `mallory-math@^0.8` — scalar types (via `packages/scalar-types`) and the `adapter-math` bridge target; also supplies scalar reference oracles for differential tests. Zero-dep, education/CAS mission unchanged.
-- `async-itertools@^2` — foundation of the v2 `data` namespace via a curated facade (see §5 v2). Requires the upstream fix-and-publish workstream in §8 first.
+- `mallory-iteration@^2` — foundation of the v2 `data` namespace via a curated facade (see §5 v2). Formerly published as `async-itertools`; now lives at `packages/iteration` in the [mallory](https://github.com/johnhenry/mallory) pure-TS monorepo. **Not yet wired in:** the `data` namespace is a v2 item that doesn't exist, and npm does not support subdirectory git dependencies (a `github:owner/repo#sha&path:/packages/x` spec silently installs the monorepo *root* instead), so this becomes a normal versioned dependency once `mallory-iteration@2.0.0` is published to npm.
 
 ## 2. Non-Goals (v1, whole project)
 
