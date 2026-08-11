@@ -1,0 +1,24 @@
+{
+  "name": "mallory-plus",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "adapters/*",
+    "scalars/*"
+  ],
+  "scripts": {
+    "build:wasm": "npm run build:wasm -w mallory-tensor-wasm",
+    "build": "npm run build:wasm && npm run build -w mallory-scalar-types -w mallory-tensor-core -w mallory-tensor-wasm",
+    "test": "npm run test -w mallory-scalar-types -w mallory-tensor-core -w mallory-tensor-wasm",
+    "check": "npm run check --workspaces --if-present",
+    "changeset": "changeset"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

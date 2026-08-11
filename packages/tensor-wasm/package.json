@@ -1,0 +1,31 @@
+{
+  "name": "mallory-tensor-wasm",
+  "version": "0.0.1",
+  "description": "Rust→WASM CPU kernels for Mallory Plus tensors — flat-numeric extern-C ABI, no wasm-bindgen marshalling on hot paths",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "wasm"
+  ],
+  "scripts": {
+    "build:wasm": "cargo build --release --target wasm32-unknown-unknown -p tensor-wasm-kernels && node scripts/copy-wasm.mjs",
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test test/*.test.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johnhenry/mallory-plus.git",
+    "directory": "packages/tensor-wasm"
+  },
+  "license": "MIT",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
