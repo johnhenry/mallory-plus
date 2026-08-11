@@ -12,10 +12,12 @@
     "build": "npm run build:wasm && npm run build -w mallory-scalar-types -w mallory-tensor-core -w mallory-tensor-wasm",
     "test": "npm run test -w mallory-scalar-types -w mallory-tensor-core -w mallory-tensor-wasm",
     "check": "npm run check --workspaces --if-present",
-    "changeset": "changeset"
+    "changeset": "changeset",
+    "release": "npm run build && changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.0",
+    "@types/node": "^24.13.3",
     "async-itertools": "github:johnhenry/async-itertools#ae0d558a84aa51b7119be885bf3fd3e402330158",
     "typescript": "^5.7.0"
   },

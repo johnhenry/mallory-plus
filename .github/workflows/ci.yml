@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22.x, 24.x]
+    name: node ${{ matrix.node-version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      # Rust -> WASM kernels. lld is required to link wasm32-unknown-unknown;
+      # the flat extern-C ABI needs no wasm-bindgen/wasm-pack toolchain.
+      - name: Set up Rust wasm target
+        run: |
+          rustup target add wasm32-unknown-unknown
+          sudo apt-get update && sudo apt-get install -y lld
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+
+      # NumPy oracle for the differential tests. Without it those tests SKIP
+      # rather than fail, so the import check below is the guard that keeps
+      # CI honest about actually running them.
+      - name: Set up Python (NumPy oracle)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install numpy
+
+      - name: Verify the NumPy oracle is importable (differential tests must not skip)
+        run: python3 -c "import numpy; print('numpy', numpy.__version__)"
+
+      - run: npm ci
+
+      - name: Build (WASM kernels + TypeScript)
+        run: npm run build
+
+      - name: Rust unit tests
+        run: cargo test --workspace
+
+      - name: Unit + differential tests
+        run: npm test
