@@ -5,3 +5,4 @@ target/
 .env
 *.log
 packages/tensor-wasm/wasm/
+.claude/

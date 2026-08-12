@@ -1,0 +1,30 @@
+{
+  "name": "mallory-unit",
+  "version": "0.0.1",
+  "description": "Unit/dimension scalar type (issue #23) — magnitude plus dimension metadata, parsing, formatting, dimensional-analysis-checked arithmetic. Pure TypeScript, zero dependencies (conversion/parsing is metadata transformation, not bulk numeric work, per the acceleration test). Units never enter tensor storage.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
+    "test": "npm run typecheck && node --test test/*.test.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johnhenry/mallory-plus.git",
+    "directory": "scalars/unit"
+  },
+  "license": "MIT",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
