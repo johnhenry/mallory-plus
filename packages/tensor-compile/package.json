@@ -21,6 +21,9 @@
     "mallory-tensor-core": "0.0.1",
     "mallory-tensor-autograd": "0.0.1"
   },
+  "devDependencies": {
+    "mallory-math": "^0.8.0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/johnhenry/mallory-plus.git",
