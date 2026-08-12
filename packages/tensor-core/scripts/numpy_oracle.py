@@ -3,13 +3,16 @@
 
 Reads a JSON job file:
   {
-    "op": "add" | "sub" | "mul" | "div" | "sum" | "mean" | "arange" | "permute",
+    "op": "add" | "sub" | "mul" | "div" | "sum" | "mean" | "arange" | "permute" | "slice",
     "inputs": ["/path/a.npy", ...],       # .npy files written by tensor-core
     "axis": 1,                            # optional (reductions)
     "permutation": [1, 0],                # optional (permute op)
     "scalar": 2.5,                        # optional (binary ops vs scalar)
     "arange": [start, stop, step],        # optional (arange op)
     "dtype": "float32",                   # optional (arange dtype)
+    "specs": [[1, 10, 2], null, [null, null, -1]],  # optional (slice op) -- per-axis
+                                           # [start, end, step] triples or null for the
+                                           # whole axis, matching tensor-core's SliceSpec
     "output": "/path/out.npy"
   }
 Computes the equivalent NumPy result and writes it to `output` as .npy.
@@ -47,6 +50,12 @@ def main() -> None:
         result = np.arange(start, stop, step, dtype=job.get("dtype", "float32"))
     elif op == "permute":
         result = np.ascontiguousarray(inputs[0].transpose(job["permutation"]))
+    elif op == "slice":
+        index = tuple(
+            slice(*spec) if spec is not None else slice(None)
+            for spec in job["specs"]
+        )
+        result = np.ascontiguousarray(inputs[0][index])
     else:
         raise SystemExit(f"unknown op {op!r}")
 

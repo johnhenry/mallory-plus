@@ -225,3 +225,121 @@ test(".npy header is 64-byte aligned and v1.0", () => {
   const headerLength = (bytes[8] as number) | ((bytes[9] as number) << 8);
   assert.equal((10 + headerLength) % 64, 0);
 });
+
+// ---- indexing & slicing (issue #1) --------------------------------------
+
+test("slice is a view: shares storage, matches basic NumPy slicing", () => {
+  const t = Tensor.arange(12).reshape([3, 4]); // [[0,1,2,3],[4,5,6,7],[8,9,10,11]]
+  const s = t.slice({ start: 1, end: 3 }, { start: 1, end: 3 });
+  assert.equal(s.data, t.data); // pointer identity — a view, not a copy
+  assert.deepEqual([...s.shape], [2, 2]);
+  assert.deepEqual(s.toArray(), [
+    [5, 6],
+    [9, 10],
+  ]);
+});
+
+test("slice: omitted trailing axes are taken whole", () => {
+  const t = Tensor.arange(12).reshape([3, 4]);
+  const s = t.slice({ start: 1, end: 2 }); // second axis unspecified
+  assert.deepEqual([...s.shape], [1, 4]);
+  assert.deepEqual(s.toArray(), [[4, 5, 6, 7]]);
+});
+
+test("slice: negative start/end count from the end (Python slice semantics)", () => {
+  const t = Tensor.arange(10);
+  assert.deepEqual(t.slice({ start: -3 }).toArray(), [7, 8, 9]);
+  assert.deepEqual(t.slice({ end: -3 }).toArray(), [0, 1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(t.slice({ start: -5, end: -2 }).toArray(), [5, 6, 7]);
+});
+
+test("slice: negative step reverses via negative stride, still a view", () => {
+  const t = Tensor.arange(5); // [0,1,2,3,4]
+  const r = t.slice({ step: -1 });
+  assert.equal(r.data, t.data);
+  assert.equal(r.strides[0], -1);
+  assert.deepEqual(r.toArray(), [4, 3, 2, 1, 0]);
+
+  const partial = t.slice({ start: 3, end: 0, step: -1 });
+  assert.deepEqual(partial.toArray(), [3, 2, 1]);
+});
+
+test("slice composes with permute: slice-of-a-view stays a view", () => {
+  const t = Tensor.arange(12).reshape([3, 4]);
+  const p = t.permute([1, 0]); // 4x3, non-contiguous
+  const s = p.slice({ start: 1, end: 3 });
+  assert.equal(s.data, t.data); // still the original buffer, two views deep
+  assert.deepEqual([...s.shape], [2, 3]);
+  assert.deepEqual(s.toArray(), p.toArray().slice(1, 3));
+});
+
+test("slice: zero-length and out-of-range specs clamp rather than throw", () => {
+  const t = Tensor.arange(5);
+  assert.deepEqual(t.slice({ start: 3, end: 3 }).toArray(), []);
+  assert.deepEqual(t.slice({ start: 10 }).toArray(), []);
+  assert.deepEqual(t.slice({ end: 100 }).toArray(), [0, 1, 2, 3, 4]);
+});
+
+test("slice: step of zero throws", () => {
+  const t = Tensor.arange(5);
+  assert.throws(() => t.slice({ step: 0 }), RangeError);
+});
+
+test("select drops an axis and is a view", () => {
+  const t = Tensor.arange(12).reshape([3, 4]);
+  const row = t.select(0, 1);
+  assert.equal(row.data, t.data);
+  assert.deepEqual([...row.shape], [4]);
+  assert.deepEqual(row.toArray(), [4, 5, 6, 7]);
+  // negative index
+  assert.deepEqual(t.select(0, -1).toArray(), [8, 9, 10, 11]);
+  assert.throws(() => t.select(0, 5), RangeError);
+});
+
+test("take gathers arbitrary indices along an axis (copies)", () => {
+  const t = Tensor.arange(12).reshape([3, 4]);
+  const picked = t.take([2, 0], { axis: 0 });
+  assert.notEqual(picked.data, t.data); // copy, not a view
+  assert.deepEqual(picked.toArray(), [
+    [8, 9, 10, 11],
+    [0, 1, 2, 3],
+  ]);
+  // negative indices and default axis 0
+  assert.deepEqual(
+    t.take([-1]).toArray(),
+    [[8, 9, 10, 11]],
+  );
+  assert.throws(() => t.take([99]), RangeError);
+});
+
+test("gather is take with (axis, indices) argument order", () => {
+  const t = Tensor.arange(12).reshape([3, 4]);
+  assert.deepEqual(t.gather(1, [3, 0]).toArray(), t.take([3, 0], { axis: 1 }).toArray());
+});
+
+test("mask selects elements where the boolean tensor is true, flattening to 1-D", () => {
+  const t = Tensor.from([10, 20, 30, 40], { dtype: "f64" });
+  const cond = Tensor.from([1, 0, 1, 0], { dtype: "bool" });
+  const selected = t.mask(cond);
+  assert.deepEqual([...selected.shape], [2]);
+  assert.deepEqual(selected.toArray(), [10, 30]);
+});
+
+test("mask rejects non-bool conditions and shape mismatches", () => {
+  const t = Tensor.from([1, 2, 3], { dtype: "f64" });
+  assert.throws(() => t.mask(Tensor.from([1, 0, 1], { dtype: "f64" })), TypeError);
+  assert.throws(
+    () => t.mask(Tensor.from([1, 0], { dtype: "bool" })),
+    RangeError,
+  );
+});
+
+test("take/select/mask on non-contiguous views read the correct (view-relative) values", () => {
+  const t = Tensor.arange(6).reshape([2, 3]); // [[0,1,2],[3,4,5]]
+  const p = t.permute([1, 0]); // [[0,3],[1,4],[2,5]]
+  assert.deepEqual(p.select(0, 1).toArray(), [1, 4]);
+  assert.deepEqual(p.take([2, 0], { axis: 0 }).toArray(), [
+    [2, 5],
+    [0, 3],
+  ]);
+});

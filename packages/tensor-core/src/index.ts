@@ -70,6 +70,45 @@ export function broadcastShapes(a: Shape, b: Shape): number[] {
 }
 
 /** Strides for reading `shape`-shaped data as if it were `target`-shaped (0-stride on broadcast axes). */
+export interface SliceSpec {
+  start?: number;
+  end?: number;
+  step?: number;
+}
+
+/**
+ * Python `slice.indices(length)` semantics: negative start/end count from the
+ * end, a negative step reverses direction, and out-of-range bounds clamp
+ * rather than throw. Returns `{start, length, step}` where `start` is the
+ * first element index and `length` is the number of elements selected — the
+ * inputs a strided VIEW needs (`offset += start*stride; stride *= step`).
+ */
+function resolveSlice(spec: SliceSpec, dim: number): {
+  start: number;
+  length: number;
+  step: number;
+} {
+  const step = spec.step ?? 1;
+  if (step === 0) throw new RangeError("slice step must be non-zero");
+
+  const clamp = (i: number, lo: number, hi: number) =>
+    Math.max(lo, Math.min(hi, i));
+  const resolve = (raw: number | undefined, defaultValue: number): number => {
+    if (raw === undefined) return defaultValue;
+    let i = raw;
+    if (i < 0) i += dim;
+    return step > 0 ? clamp(i, 0, dim) : clamp(i, -1, dim - 1);
+  };
+
+  const start = resolve(spec.start, step > 0 ? 0 : dim - 1);
+  const end = resolve(spec.end, step > 0 ? dim : -1);
+  const length =
+    step > 0
+      ? Math.max(0, Math.ceil((end - start) / step))
+      : Math.max(0, Math.ceil((end - start) / step));
+  return { start, length, step };
+}
+
 function broadcastStrides(
   shape: Shape,
   strides: readonly number[],
@@ -306,6 +345,137 @@ export class Tensor {
     );
   }
 
+  // ---- indexing & slicing --------------------------------------------------
+
+  /**
+   * Strided range selection — a VIEW, never a copy (issue #1).
+   *
+   * Specs align to leading axes; omitted trailing axes are taken whole, as is
+   * `null`. Follows Python's `slice.indices()` semantics exactly, including
+   * negative indices and negative `step` (which produces a negative stride
+   * rather than reordering data).
+   *
+   * `x.slice({ start: 1, end: 10, step: 2 })` — deliberately not `x[1:10:2]`;
+   * see non-goal 12 (no Proxy-based pseudo-Python indexing).
+   */
+  slice(...specs: Array<SliceSpec | null>): Tensor {
+    if (specs.length > this.ndim) {
+      throw new RangeError(
+        `got ${specs.length} slice specs for a ${this.ndim}-d tensor`,
+      );
+    }
+    const shape: number[] = [];
+    const strides: number[] = [];
+    let offset = this.offset;
+
+    for (let axis = 0; axis < this.ndim; axis++) {
+      const dim = this.shape[axis] as number;
+      const stride = this.strides[axis] as number;
+      const spec = specs[axis];
+      if (spec === undefined || spec === null) {
+        shape.push(dim);
+        strides.push(stride);
+        continue;
+      }
+      const { start, length, step } = resolveSlice(spec, dim);
+      offset += start * stride;
+      shape.push(length);
+      strides.push(stride * step);
+    }
+    return new Tensor(this.data, shape, strides, this.dtype, offset);
+  }
+
+  /** Pick one index along `axis`, dropping that axis. A VIEW. */
+  select(axis: number, index: number): Tensor {
+    const ax = this.#normalizeAxis(axis);
+    const dim = this.shape[ax] as number;
+    let i = index;
+    if (i < 0) i += dim;
+    if (i < 0 || i >= dim) {
+      throw new RangeError(
+        `index ${index} out of bounds for axis ${ax} (size ${dim})`,
+      );
+    }
+    return new Tensor(
+      this.data,
+      this.shape.filter((_, a) => a !== ax),
+      this.strides.filter((_, a) => a !== ax),
+      this.dtype,
+      this.offset + i * (this.strides[ax] as number),
+    );
+  }
+
+  /**
+   * Gather arbitrary indices along an axis. COPIES — arbitrary index lists
+   * cannot be expressed as a stride.
+   */
+  take(indices: readonly number[], options: { axis?: number } = {}): Tensor {
+    const ax = this.#normalizeAxis(options.axis ?? 0);
+    const dim = this.shape[ax] as number;
+    const resolved = indices.map((raw) => {
+      const i = raw < 0 ? raw + dim : raw;
+      if (i < 0 || i >= dim) {
+        throw new RangeError(
+          `index ${raw} out of bounds for axis ${ax} (size ${dim})`,
+        );
+      }
+      return i;
+    });
+    const outShape = this.shape.map((d, a) => (a === ax ? resolved.length : d));
+    const out = Tensor.zeros(outShape, { dtype: this.dtype });
+    for (let k = 0; k < resolved.length; k++) {
+      const source = this.select(ax, resolved[k] as number);
+      const target = out.select(ax, k);
+      target.#copyFrom(source);
+    }
+    return out;
+  }
+
+  /** Alias of {@link take} matching the source design's `gather(axis, indices)` order. */
+  gather(axis: number, indices: readonly number[]): Tensor {
+    return this.take(indices, { axis });
+  }
+
+  /**
+   * Boolean selection. COPIES, and always yields a 1-D result — the number of
+   * selected elements isn't known until runtime, so no shape survives.
+   */
+  mask(condition: Tensor): Tensor {
+    if (condition.dtype !== "bool") {
+      throw new TypeError(`mask expects a bool tensor, got ${condition.dtype}`);
+    }
+    if (
+      condition.ndim !== this.ndim ||
+      condition.shape.some((d, i) => d !== this.shape[i])
+    ) {
+      throw new RangeError(
+        `mask shape [${condition.shape}] does not match [${this.shape}]`,
+      );
+    }
+    const selected: number[] = [];
+    const condOffsets = [...condition.elementOffsets()];
+    const selfOffsets = [...this.elementOffsets()];
+    for (let i = 0; i < condOffsets.length; i++) {
+      if (condition.data[condOffsets[i] as number]) {
+        selected.push(selfOffsets[i] as number);
+      }
+    }
+    const out = Tensor.zeros([selected.length], { dtype: this.dtype });
+    for (let i = 0; i < selected.length; i++) {
+      out.data[i] = this.data[selected[i] as number] as never;
+    }
+    return out;
+  }
+
+  #normalizeAxis(axis: number): number {
+    let ax = axis;
+    if (ax < 0) ax += this.ndim;
+    if (ax < 0 || ax >= this.ndim) {
+      throw new RangeError(`axis ${axis} out of range for ndim ${this.ndim}`);
+    }
+    return ax;
+  }
+
   // ---- element access ------------------------------------------------------
 
   /** Scalar element read by multi-index. Returns bigint for i64/u64. */
@@ -376,6 +546,27 @@ export class Tensor {
           (this.shape[axis] as number) * (this.strides[axis] as number);
       }
       return;
+    }
+  }
+
+  /** Strided element-by-element copy from `source` into `this` (shapes must match). */
+  #copyFrom(source: Tensor): void {
+    if (
+      this.shape.length !== source.shape.length ||
+      this.shape.some((d, i) => d !== source.shape[i])
+    ) {
+      throw new RangeError(
+        `copy shape mismatch: [${this.shape}] vs [${source.shape}]`,
+      );
+    }
+    const targetOffsets = this.elementOffsets();
+    const sourceOffsets = source.elementOffsets();
+    let target = targetOffsets.next();
+    let src = sourceOffsets.next();
+    while (!target.done && !src.done) {
+      this.data[target.value] = source.data[src.value] as never;
+      target = targetOffsets.next();
+      src = sourceOffsets.next();
     }
   }
 

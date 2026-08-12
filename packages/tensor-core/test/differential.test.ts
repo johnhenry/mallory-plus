@@ -49,6 +49,7 @@ interface OracleJob {
   scalar?: number;
   arange?: [number, number, number];
   dtype?: string;
+  specs?: Array<[number | null, number | null, number | null] | null>;
   output: string;
 }
 
@@ -193,5 +194,46 @@ test("differential vs NumPy", { skip }, async (t) => {
       permutation: [2, 0, 1],
     });
     assertClose(a.permute([2, 0, 1]).contiguous(), expected, "permute");
+  });
+
+  await t.test("slice matches NumPy, incl. negative step and partial specs", () => {
+    const a = randomTensor([6, 5], "f64");
+    const aPath = saveTensor(dir, "a-slice", a);
+
+    const cases: Array<Array<[number | null, number | null, number | null] | null>> = [
+      [[1, 5, 2], null],
+      [null, [0, 4, 1]],
+      [[null, null, -1], null], // reverse axis 0
+      [[-4, -1, 1], [1, null, null]],
+    ];
+    for (const specs of cases) {
+      const expected = runOracle(dir, { op: "slice", inputs: [aPath], specs });
+      const jsSpecs = specs.map((s) =>
+        s === null
+          ? null
+          : {
+              start: s[0] ?? undefined,
+              end: s[1] ?? undefined,
+              step: s[2] ?? undefined,
+            },
+      );
+      assertClose(a.slice(...jsSpecs).contiguous(), expected, "slice");
+    }
+  });
+
+  await t.test("slice on a non-contiguous (permuted) view matches NumPy", () => {
+    const a = randomTensor([4, 3], "f64");
+    const aT = a.permute([1, 0]); // non-contiguous
+    const aTPath = saveTensor(dir, "aT-slice", aT); // toNpy packs it
+    const specs: Array<[number | null, number | null, number | null] | null> = [
+      [0, 2, 1],
+      [null, null, -1],
+    ];
+    const expected = runOracle(dir, { op: "slice", inputs: [aTPath], specs });
+    const sliced = aT.slice(
+      { start: 0, end: 2 },
+      { step: -1 },
+    );
+    assertClose(sliced.contiguous(), expected, "slice");
   });
 });
