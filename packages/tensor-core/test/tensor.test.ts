@@ -570,3 +570,167 @@ test("min/max/argmin/argmax on non-contiguous views", () => {
   assert.deepEqual(p.max(1).toArray(), [4, 5, 6]);
   assert.deepEqual(p.argmax(1).toArray(), [1, 1, 1]);
 });
+
+// ---- variance/std (issue #4) -----------------------------------------------
+
+test("variance/std over all elements, population (ddof=0) by default", () => {
+  const t = Tensor.from([2, 4, 4, 4, 5, 5, 7, 9], { dtype: "f64" });
+  // known example: population variance = 4, population std = 2
+  assert.ok(Math.abs(t.variance().item() as number - 4) < 1e-9);
+  assert.ok(Math.abs(t.std().item() as number - 2) < 1e-9);
+});
+
+test("variance: ddof >= count throws", () => {
+  const t = Tensor.from([1, 2], { dtype: "f64" });
+  assert.throws(() => t.variance(undefined, { ddof: 2 }), RangeError);
+});
+
+test("variance/std work on integer dtypes (upcast to f64)", () => {
+  const t = Tensor.from([2, 4, 4, 4, 5, 5, 7, 9], { dtype: "i32" });
+  const v = t.variance();
+  assert.equal(v.dtype, "f64");
+  assert.ok(Math.abs(v.item() as number - 4) < 1e-9);
+});
+
+// ---- cumsum/cumprod (issue #4) ---------------------------------------------
+
+test("cumsum/cumprod flatten when axis is omitted", () => {
+  const t = Tensor.from([1, 2, 3, 4], { dtype: "f64" }).reshape([2, 2]);
+  assert.deepEqual(t.cumsum().toArray(), [1, 3, 6, 10]);
+  assert.deepEqual(t.cumprod().toArray(), [1, 2, 6, 24]);
+});
+
+test("cumsum/cumprod along a specific axis preserve shape", () => {
+  const t = Tensor.from([1, 2, 3, 4, 5, 6], { dtype: "f64" }).reshape([2, 3]);
+  assert.deepEqual(t.cumsum(1).toArray(), [
+    [1, 3, 6],
+    [4, 9, 15],
+  ]);
+  assert.deepEqual(t.cumsum(0).toArray(), [
+    [1, 2, 3],
+    [5, 7, 9],
+  ]);
+});
+
+// ---- sort/argsort/topK (issue #4) ------------------------------------------
+
+test("sort/argsort default to the last axis", () => {
+  const t = Tensor.from([3, 1, 2, 6, 4, 5], { dtype: "f64" }).reshape([2, 3]);
+  assert.deepEqual(t.sort().toArray(), [
+    [1, 2, 3],
+    [4, 5, 6],
+  ]);
+  assert.deepEqual(t.argsort().toArray(), [
+    [1, 2, 0],
+    [1, 2, 0],
+  ]);
+});
+
+test("topK largest and smallest, values + indices", () => {
+  const t = Tensor.from([3, 1, 4, 1, 5, 9, 2, 6]);
+  const top3 = t.topK(3);
+  assert.deepEqual(top3.values.toArray(), [9, 6, 5]); // descending
+  assert.deepEqual(top3.indices.toArray(), [5, 7, 4]);
+  const bottom3 = t.topK(3, { largest: false });
+  assert.deepEqual(bottom3.values.toArray(), [1, 1, 2]); // ascending
+});
+
+test("topK rejects out-of-range k", () => {
+  const t = Tensor.from([1, 2, 3]);
+  assert.throws(() => t.topK(0), RangeError);
+  assert.throws(() => t.topK(4), RangeError);
+});
+
+// ---- concat/stack/where (issue #4) -----------------------------------------
+
+test("concat joins along an existing axis", () => {
+  const a = Tensor.from([1, 2, 3, 4], { dtype: "f64" }).reshape([2, 2]);
+  const b = Tensor.from([5, 6], { dtype: "f64" }).reshape([1, 2]);
+  const c = Tensor.concat([a, b], { axis: 0 });
+  assert.deepEqual([...c.shape], [3, 2]);
+  assert.deepEqual(c.toArray(), [
+    [1, 2],
+    [3, 4],
+    [5, 6],
+  ]);
+});
+
+test("concat rejects dtype/shape mismatches", () => {
+  const a = Tensor.from([1], { dtype: "f32" });
+  const b = Tensor.from([1], { dtype: "f64" });
+  assert.throws(() => Tensor.concat([a, b]), TypeError);
+  const c = Tensor.zeros([2, 3], { dtype: "f64" });
+  const d = Tensor.zeros([2, 4], { dtype: "f64" });
+  assert.throws(() => Tensor.concat([c, d], { axis: 0 }), RangeError); // mismatched non-concat axis
+});
+
+test("stack introduces a new axis", () => {
+  const a = Tensor.from([1, 2], { dtype: "f64" });
+  const b = Tensor.from([3, 4], { dtype: "f64" });
+  const s = Tensor.stack([a, b]);
+  assert.deepEqual([...s.shape], [2, 2]);
+  assert.deepEqual(s.toArray(), [
+    [1, 2],
+    [3, 4],
+  ]);
+});
+
+test("where selects elementwise with broadcasting", () => {
+  const cond = Tensor.from([1, 0, 1], { dtype: "bool" });
+  const a = Tensor.from([10, 20, 30], { dtype: "f64" });
+  const b = Tensor.from([1, 2, 3], { dtype: "f64" });
+  assert.deepEqual(Tensor.where(cond, a, b).toArray(), [10, 2, 30]);
+  // broadcasting: scalar-shaped b
+  assert.deepEqual(Tensor.where(cond, a, Tensor.full([], 0, { dtype: "f64" })).toArray(), [
+    10, 0, 30,
+  ]);
+});
+
+// ---- squeeze/unsqueeze/flatten/broadcastTo (issue #4) ----------------------
+
+test("squeeze drops size-1 axes and is a view", () => {
+  const t = Tensor.zeros([1, 3, 1, 2], { dtype: "f64" });
+  const s = t.squeeze();
+  assert.equal(s.data, t.data);
+  assert.deepEqual([...s.shape], [3, 2]);
+  const s2 = t.squeeze(0);
+  assert.deepEqual([...s2.shape], [3, 1, 2]);
+  assert.throws(() => t.squeeze(1), RangeError); // axis 1 has size 3, not 1
+});
+
+test("unsqueeze inserts a size-1 axis and is a view", () => {
+  const t = Tensor.from([1, 2, 3], { dtype: "f64" });
+  const u = t.unsqueeze(0);
+  assert.equal(u.data, t.data);
+  assert.deepEqual([...u.shape], [1, 3]);
+  const u2 = t.unsqueeze(-1);
+  assert.deepEqual([...u2.shape], [3, 1]);
+  const u3 = t.unsqueeze(1); // appended-position edge case (axis === ndim)
+  assert.deepEqual([...u3.shape], [3, 1]);
+});
+
+test("flatten collapses a range of axes", () => {
+  const t = Tensor.arange(24).reshape([2, 3, 4]);
+  const f = t.flatten(1, 2);
+  assert.deepEqual([...f.shape], [2, 12]);
+  assert.deepEqual(f.toArray(), t.reshape([2, 12]).toArray());
+});
+
+test("broadcastTo expands size-1 axes via stride 0", () => {
+  const t = Tensor.from([1, 2, 3], { dtype: "f64" }).reshape([1, 3]);
+  const b = t.broadcastTo([4, 3]);
+  assert.equal(b.data, t.data);
+  assert.deepEqual([...b.shape], [4, 3]);
+  assert.deepEqual(b.toArray(), [
+    [1, 2, 3],
+    [1, 2, 3],
+    [1, 2, 3],
+    [1, 2, 3],
+  ]);
+  assert.throws(() => t.broadcastTo([4, 5]), RangeError);
+});
+
+test("sqrt rejects bigint dtypes", () => {
+  const t = Tensor.from([4, 9], { dtype: "i64" });
+  assert.throws(() => t.sqrt(), TypeError);
+});

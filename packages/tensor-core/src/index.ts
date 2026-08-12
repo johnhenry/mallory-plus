@@ -287,6 +287,96 @@ export class Tensor {
     return new Tensor(data, shape, contiguousStrides(shape), options.dtype, 0);
   }
 
+  // ---- combining tensors (issue #4) ------------------------------------------
+
+  /** Join tensors along an existing axis (all dims but `axis` must match). Copies. */
+  static concat(tensors: readonly Tensor[], options: { axis?: number } = {}): Tensor {
+    if (tensors.length === 0) {
+      throw new RangeError("concat requires at least one tensor");
+    }
+    const first = tensors[0] as Tensor;
+    const axis = options.axis ?? 0;
+    let ax = axis;
+    if (ax < 0) ax += first.ndim;
+    if (ax < 0 || ax >= first.ndim) {
+      throw new RangeError(`axis ${axis} out of range for ndim ${first.ndim}`);
+    }
+    for (const t of tensors) {
+      if (t.dtype !== first.dtype) {
+        throw new TypeError(`concat: dtype mismatch ${first.dtype} vs ${t.dtype}`);
+      }
+      if (t.ndim !== first.ndim) {
+        throw new RangeError(`concat: ndim mismatch ${first.ndim} vs ${t.ndim}`);
+      }
+      for (let i = 0; i < first.ndim; i++) {
+        if (i !== ax && t.shape[i] !== first.shape[i]) {
+          throw new RangeError(
+            `concat: shape mismatch on axis ${i} (${first.shape[i]} vs ${t.shape[i]})`,
+          );
+        }
+      }
+    }
+    const axisSize = tensors.reduce((sum, t) => sum + (t.shape[ax] as number), 0);
+    const outShape = first.shape.map((d, i) => (i === ax ? axisSize : d));
+    const out = Tensor.zeros(outShape, { dtype: first.dtype });
+    let cursor = 0;
+    for (const t of tensors) {
+      const dim = t.shape[ax] as number;
+      const specs: Array<SliceSpec | null> = new Array(out.ndim).fill(null);
+      specs[ax] = { start: cursor, end: cursor + dim };
+      out.slice(...specs).#copyFrom(t);
+      cursor += dim;
+    }
+    return out;
+  }
+
+  /** Join tensors along a NEW axis (all inputs must share shape/dtype). Copies. */
+  static stack(tensors: readonly Tensor[], options: { axis?: number } = {}): Tensor {
+    if (tensors.length === 0) {
+      throw new RangeError("stack requires at least one tensor");
+    }
+    const axis = options.axis ?? 0;
+    return Tensor.concat(
+      tensors.map((t) => t.unsqueeze(axis)),
+      { axis },
+    );
+  }
+
+  /** Elementwise select: `condition[i] ? a[i] : b[i]`, broadcasting all three. */
+  static where(condition: Tensor, a: Tensor, b: Tensor): Tensor {
+    if (condition.dtype !== "bool") {
+      throw new TypeError(`where: condition must be a bool tensor, got ${condition.dtype}`);
+    }
+    if (a.dtype !== b.dtype) {
+      throw new TypeError(`where: dtype mismatch ${a.dtype} vs ${b.dtype}`);
+    }
+    const outShape = broadcastShapes(broadcastShapes(condition.shape, a.shape), b.shape);
+    const out = Tensor.zeros(outShape, { dtype: a.dtype });
+    const condStrides = broadcastStrides(condition.shape, condition.strides, outShape);
+    const aStrides = broadcastStrides(a.shape, a.strides, outShape);
+    const bStrides = broadcastStrides(b.shape, b.strides, outShape);
+    const index = new Array<number>(outShape.length).fill(0);
+    let condOff = condition.offset;
+    let aOff = a.offset;
+    let bOff = b.offset;
+    for (let i = 0; i < out.size; i++) {
+      const pick = (condition.data[condOff] as number) !== 0;
+      out.data[i] = (pick ? a.data[aOff] : b.data[bOff]) as never;
+      for (let axis = outShape.length - 1; axis >= 0; axis--) {
+        index[axis] = (index[axis] as number) + 1;
+        condOff += condStrides[axis] as number;
+        aOff += aStrides[axis] as number;
+        bOff += bStrides[axis] as number;
+        if ((index[axis] as number) < (outShape[axis] as number)) break;
+        index[axis] = 0;
+        condOff -= (outShape[axis] as number) * (condStrides[axis] as number);
+        aOff -= (outShape[axis] as number) * (aStrides[axis] as number);
+        bOff -= (outShape[axis] as number) * (bStrides[axis] as number);
+      }
+    }
+    return out;
+  }
+
   // ---- views (never copy) -------------------------------------------------
 
   /** View with a new shape. Supports one -1 (inferred). Requires contiguity. */
@@ -362,6 +452,92 @@ export class Tensor {
       contiguousStrides(this.shape),
       this.dtype,
       0,
+    );
+  }
+
+  /** Drop size-1 axes — all of them, or just `axis` if given. A VIEW. */
+  squeeze(axis?: Axis): Tensor {
+    let axesToRemove: Set<number>;
+    if (axis === undefined) {
+      axesToRemove = new Set(
+        this.shape.flatMap((d, i) => (d === 1 ? [i] : [])),
+      );
+    } else {
+      const ax = this.#normalizeAxis(axis);
+      if (this.shape[ax] !== 1) {
+        throw new RangeError(
+          `squeeze: axis ${axis} has size ${this.shape[ax]}, not 1`,
+        );
+      }
+      axesToRemove = new Set([ax]);
+    }
+    return new Tensor(
+      this.data,
+      this.shape.filter((_, i) => !axesToRemove.has(i)),
+      this.strides.filter((_, i) => !axesToRemove.has(i)),
+      this.dtype,
+      this.offset,
+    );
+  }
+
+  /** Insert a size-1 axis at `axis` (supports `axis === ndim`, appending). A VIEW. */
+  unsqueeze(axis: number): Tensor {
+    let ax = axis;
+    if (ax < 0) ax += this.ndim + 1;
+    if (ax < 0 || ax > this.ndim) {
+      throw new RangeError(`unsqueeze: axis ${axis} out of range for ndim ${this.ndim}`);
+    }
+    return new Tensor(
+      this.data,
+      [...this.shape.slice(0, ax), 1, ...this.shape.slice(ax)],
+      // Stride is irrelevant on a size-1 axis (never advances); 0 matches the
+      // broadcast convention used elsewhere (broadcastStrides).
+      [...this.strides.slice(0, ax), 0, ...this.strides.slice(ax)],
+      this.dtype,
+      this.offset,
+    );
+  }
+
+  /**
+   * Collapse axes `[start, end]` (inclusive, NumPy-style negative indices)
+   * into one. Packs into contiguous storage first if needed, so this is a
+   * VIEW only when the source already is contiguous over that range.
+   */
+  flatten(start = 0, end = -1): Tensor {
+    const s = start < 0 ? start + this.ndim : start;
+    const e = end < 0 ? end + this.ndim : end;
+    if (s < 0 || e >= this.ndim || s > e) {
+      throw new RangeError(
+        `flatten: invalid range [${start}, ${end}] for ndim ${this.ndim}`,
+      );
+    }
+    const packed = this.contiguous();
+    const flatSize = packed.shape.slice(s, e + 1).reduce((a, b) => a * b, 1);
+    return packed.reshape([
+      ...packed.shape.slice(0, s),
+      flatSize,
+      ...packed.shape.slice(e + 1),
+    ]);
+  }
+
+  /** Expand size-1 (or missing leading) axes to `shape` via stride-0 broadcasting. A VIEW. */
+  broadcastTo(shape: Shape): Tensor {
+    const target = [...shape];
+    const validated = broadcastShapes(this.shape, target);
+    if (
+      validated.length !== target.length ||
+      validated.some((d, i) => d !== target[i])
+    ) {
+      throw new RangeError(
+        `cannot broadcastTo [${shape}] from [${this.shape}] (broadcasting the two gives [${validated}])`,
+      );
+    }
+    return new Tensor(
+      this.data,
+      target,
+      broadcastStrides(this.shape, this.strides, target),
+      this.dtype,
+      this.offset,
     );
   }
 
@@ -667,6 +843,20 @@ export class Tensor {
   }
   div(other: Tensor | number): Tensor {
     return this.#binary("div", other);
+  }
+
+  /** Elementwise square root. Float dtypes only (cast() first). */
+  sqrt(): Tensor {
+    if (isBigIntDType(this.dtype)) {
+      throw new TypeError(`sqrt requires a float dtype, got ${this.dtype}`);
+    }
+    const out = Tensor.zeros(this.shape, { dtype: this.dtype });
+    const outData = out.data as Float64Array;
+    let i = 0;
+    for (const off of this.elementOffsets()) {
+      outData[i++] = Math.sqrt(this.data[off] as number);
+    }
+    return out;
   }
 
   // ---- matmul (issue #2) ---------------------------------------------------
@@ -1240,6 +1430,192 @@ export class Tensor {
       }
     }
     return out;
+  }
+
+  // ---- variance & standard deviation (issue #4) -------------------------------
+
+  /**
+   * Sample/population variance (`ddof=0` by default — population variance,
+   * matching NumPy's default). Built on existing ops rather than a new
+   * strided loop: `cast` (int dtypes upcast to f64, matching #reduce's mean
+   * semantics) → `mean` → broadcast-subtract → square → `sum` → `div`.
+   */
+  variance(axis?: Axis, options: { ddof?: number } = {}): Tensor {
+    const ddof = options.ddof ?? 0;
+    const isFloat = this.dtype === "f32" || this.dtype === "f64";
+    const working = isFloat ? this : this.cast("f64");
+    const meanTensor = working.mean(axis);
+
+    let meanBroadcastable: Tensor;
+    if (axis === undefined) {
+      meanBroadcastable = meanTensor; // 0-d broadcasts against anything
+    } else {
+      const ax = this.#normalizeAxis(axis);
+      const expanded = [...meanTensor.shape];
+      expanded.splice(ax, 0, 1);
+      meanBroadcastable = meanTensor.reshape(expanded); // #reduce's output is always contiguous
+    }
+
+    const centered = working.sub(meanBroadcastable);
+    const count =
+      axis === undefined ? this.size : (this.shape[this.#normalizeAxis(axis)] as number);
+    const denom = count - ddof;
+    if (denom <= 0) {
+      throw new RangeError(`variance: ddof=${ddof} >= count=${count}`);
+    }
+    return centered.mul(centered).sum(axis).div(denom);
+  }
+
+  /** Standard deviation — `sqrt(variance(axis, options))`. */
+  std(axis?: Axis, options: { ddof?: number } = {}): Tensor {
+    return this.variance(axis, options).sqrt();
+  }
+
+  // ---- cumulative scans (issue #4) --------------------------------------------
+
+  /** Running sum along `axis` (flattens first if `axis` is omitted, per NumPy). */
+  cumsum(axis?: Axis): Tensor {
+    return this.#cumulative(axis, "add");
+  }
+
+  /** Running product along `axis` (flattens first if `axis` is omitted, per NumPy). */
+  cumprod(axis?: Axis): Tensor {
+    return this.#cumulative(axis, "mul");
+  }
+
+  #cumulative(axis: Axis | undefined, op: "add" | "mul"): Tensor {
+    const source = axis === undefined ? this.contiguous().reshape([this.size]) : this;
+    const ax = axis === undefined ? 0 : source.#normalizeAxis(axis);
+    const big = isBigIntDType(source.dtype);
+    const out = Tensor.zeros(source.shape, { dtype: source.dtype });
+
+    const scanDim = source.shape[ax] as number;
+    const scanStrideIn = source.strides[ax] as number;
+    const scanStrideOut = out.strides[ax] as number; // out is fresh & contiguous
+    const leadShape = source.shape.filter((_, i) => i !== ax);
+    const leadStridesIn = source.strides.filter((_, i) => i !== ax);
+    const leadStridesOut = out.strides.filter((_, i) => i !== ax);
+    const leadSize = shapeSize(leadShape);
+    const index = new Array<number>(leadShape.length).fill(0);
+    let baseIn = source.offset;
+    let baseOut = 0;
+
+    for (let i = 0; i < leadSize; i++) {
+      if (big) {
+        let acc = op === "add" ? 0n : 1n;
+        for (let j = 0; j < scanDim; j++) {
+          const v = source.data[baseIn + j * scanStrideIn] as bigint;
+          acc = op === "add" ? acc + v : acc * v;
+          (out.data as BigInt64Array)[baseOut + j * scanStrideOut] = acc;
+        }
+      } else {
+        let acc = op === "add" ? 0 : 1;
+        for (let j = 0; j < scanDim; j++) {
+          const v = source.data[baseIn + j * scanStrideIn] as number;
+          acc = op === "add" ? acc + v : acc * v;
+          (out.data as Float64Array)[baseOut + j * scanStrideOut] = acc;
+        }
+      }
+      for (let a = leadShape.length - 1; a >= 0; a--) {
+        index[a] = (index[a] as number) + 1;
+        baseIn += leadStridesIn[a] as number;
+        baseOut += leadStridesOut[a] as number;
+        if ((index[a] as number) < (leadShape[a] as number)) break;
+        index[a] = 0;
+        baseIn -= (leadShape[a] as number) * (leadStridesIn[a] as number);
+        baseOut -= (leadShape[a] as number) * (leadStridesOut[a] as number);
+      }
+    }
+    return out;
+  }
+
+  // ---- sorting & top-k (issue #4) ---------------------------------------------
+
+  /** Sort along `axis` (default: last axis, matching NumPy). */
+  sort(axis: Axis = -1): Tensor {
+    return this.#sortAlong(axis).values;
+  }
+
+  /** Indices that would sort along `axis` (default: last axis). */
+  argsort(axis: Axis = -1): Tensor {
+    return this.#sortAlong(axis).indices;
+  }
+
+  #sortAlong(axis: Axis): { values: Tensor; indices: Tensor } {
+    const ax = this.#normalizeAxis(axis);
+    const reduceDim = this.shape[ax] as number;
+    const reduceStride = this.strides[ax] as number;
+    const values = Tensor.zeros(this.shape, { dtype: this.dtype });
+    const indices = Tensor.zeros(this.shape, { dtype: "i32" });
+    const outAxisStride = values.strides[ax] as number; // values/indices share layout
+    const leadShape = this.shape.filter((_, i) => i !== ax);
+    const leadStridesIn = this.strides.filter((_, i) => i !== ax);
+    const leadStridesOut = values.strides.filter((_, i) => i !== ax);
+    const leadSize = shapeSize(leadShape);
+    const index = new Array<number>(leadShape.length).fill(0);
+    let baseIn = this.offset;
+    let baseOut = 0;
+    const big = isBigIntDType(this.dtype);
+    const indicesData = indices.data as Int32Array;
+
+    for (let i = 0; i < leadSize; i++) {
+      const positions = Array.from({ length: reduceDim }, (_, j) => j);
+      if (big) {
+        positions.sort((p, q) => {
+          const a = this.data[baseIn + p * reduceStride] as bigint;
+          const b = this.data[baseIn + q * reduceStride] as bigint;
+          return a < b ? -1 : a > b ? 1 : 0;
+        });
+      } else {
+        positions.sort(
+          (p, q) =>
+            (this.data[baseIn + p * reduceStride] as number) -
+            (this.data[baseIn + q * reduceStride] as number),
+        );
+      }
+      for (let k = 0; k < reduceDim; k++) {
+        const srcPos = positions[k] as number;
+        values.data[baseOut + k * outAxisStride] = this.data[
+          baseIn + srcPos * reduceStride
+        ] as never;
+        indicesData[baseOut + k * outAxisStride] = srcPos;
+      }
+      for (let a = leadShape.length - 1; a >= 0; a--) {
+        index[a] = (index[a] as number) + 1;
+        baseIn += leadStridesIn[a] as number;
+        baseOut += leadStridesOut[a] as number;
+        if ((index[a] as number) < (leadShape[a] as number)) break;
+        index[a] = 0;
+        baseIn -= (leadShape[a] as number) * (leadStridesIn[a] as number);
+        baseOut -= (leadShape[a] as number) * (leadStridesOut[a] as number);
+      }
+    }
+    return { values, indices };
+  }
+
+  /**
+   * The `k` largest (default) or smallest values along `axis` (default: last
+   * axis), plus their original indices. `largest: true` returns descending
+   * order; `largest: false` returns ascending order. A VIEW into a freshly
+   * sorted buffer (built on {@link sort}/{@link slice}, not a new algorithm).
+   */
+  topK(
+    k: number,
+    options: { axis?: Axis; largest?: boolean } = {},
+  ): { values: Tensor; indices: Tensor } {
+    const axis = options.axis ?? -1;
+    const largest = options.largest ?? true;
+    const ax = this.#normalizeAxis(axis);
+    const dim = this.shape[ax] as number;
+    if (!Number.isInteger(k) || k <= 0 || k > dim) {
+      throw new RangeError(`topK: k=${k} out of range for axis size ${dim}`);
+    }
+    const { values, indices } = this.#sortAlong(axis); // ascending
+    const specs: Array<SliceSpec | null> = new Array(this.ndim).fill(null);
+    specs[ax] = largest
+      ? { start: -1, end: -(k + 1), step: -1 } // last k, reversed -> descending
+      : { start: 0, end: k }; // first k, already ascending
+    return { values: values.slice(...specs), indices: indices.slice(...specs) };
   }
 
   // ---- .npy I/O -------------------------------------------------------------

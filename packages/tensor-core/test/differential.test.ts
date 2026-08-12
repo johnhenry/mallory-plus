@@ -50,6 +50,10 @@ interface OracleJob {
   arange?: [number, number, number];
   dtype?: string;
   specs?: Array<[number | null, number | null, number | null] | null>;
+  ddof?: number;
+  k?: number;
+  largest?: boolean;
+  condition?: string;
   output: string;
 }
 
@@ -85,6 +89,12 @@ const TOLERANCES: Record<string, { rtol: number; atol: number }> = {
   "default:f64": { rtol: 1e-12, atol: 1e-12 },
   "sum:f32": { rtol: 1e-4, atol: 1e-5 },
   "matmul:f32": { rtol: 1e-4, atol: 1e-5 },
+  "variance:f32": { rtol: 1e-3, atol: 1e-4 },
+  "variance:f64": { rtol: 1e-9, atol: 1e-9 },
+  "std:f32": { rtol: 1e-3, atol: 1e-4 },
+  "std:f64": { rtol: 1e-9, atol: 1e-9 },
+  "cumsum:f32": { rtol: 1e-4, atol: 1e-5 },
+  "cumprod:f32": { rtol: 1e-3, atol: 1e-4 },
   "mean:f32": { rtol: 1e-4, atol: 1e-5 },
 };
 
@@ -350,5 +360,105 @@ test("differential vs NumPy", { skip }, async (t) => {
       assertClose(a[op](0), runOracle(dir, { op, inputs: [aPath], axis: 0 }), op);
       assertClose(a[op](1), runOracle(dir, { op, inputs: [aPath], axis: 1 }), op);
     }
+  });
+
+  await t.test("sqrt matches NumPy", () => {
+    const a = randomTensor([6], "f64").add(20); // keep positive
+    const aPath = saveTensor(dir, "sqrt-a", a);
+    assertClose(a.sqrt(), runOracle(dir, { op: "sqrt", inputs: [aPath] }), "sqrt");
+  });
+
+  await t.test("variance/std match NumPy, full + per-axis + ddof=1", () => {
+    const a = randomTensor([4, 5], "f64");
+    const aPath = saveTensor(dir, "var-a", a);
+    for (const op of ["variance", "std"] as const) {
+      assertClose(a[op](), runOracle(dir, { op, inputs: [aPath] }), op);
+      assertClose(a[op](0), runOracle(dir, { op, inputs: [aPath], axis: 0 }), op);
+      assertClose(
+        a[op](1, { ddof: 1 }),
+        runOracle(dir, { op, inputs: [aPath], axis: 1, ddof: 1 }),
+        op,
+      );
+    }
+  });
+
+  await t.test("cumsum/cumprod match NumPy, flattened and per-axis", () => {
+    const a = randomTensor([3, 4], "f64");
+    const aPath = saveTensor(dir, "cum-a", a);
+    for (const op of ["cumsum", "cumprod"] as const) {
+      assertClose(a[op](), runOracle(dir, { op, inputs: [aPath] }), op);
+      assertClose(a[op](1), runOracle(dir, { op, inputs: [aPath], axis: 1 }), op);
+    }
+  });
+
+  await t.test("sort/argsort match NumPy along the last axis by default", () => {
+    const a = randomTensor([4, 5], "f64");
+    const aPath = saveTensor(dir, "sort-a", a);
+    assertClose(a.sort(), runOracle(dir, { op: "sort", inputs: [aPath] }), "sort");
+    assertClose(
+      a.argsort(),
+      runOracle(dir, { op: "argsort", inputs: [aPath] }),
+      "argsort",
+    );
+    assertClose(
+      a.sort(0),
+      runOracle(dir, { op: "sort", inputs: [aPath], axis: 0 }),
+      "sort",
+    );
+  });
+
+  await t.test("topK matches NumPy (values + indices, largest and smallest)", () => {
+    const a = randomTensor([6], "f64");
+    const aPath = saveTensor(dir, "topk-a", a);
+    for (const largest of [true, false]) {
+      const { values, indices } = a.topK(3, { largest });
+      assertClose(
+        values,
+        runOracle(dir, { op: "topk_values", inputs: [aPath], k: 3, largest }),
+        "topk_values",
+      );
+      assertClose(
+        indices,
+        runOracle(dir, { op: "topk_indices", inputs: [aPath], k: 3, largest }),
+        "topk_indices",
+      );
+    }
+  });
+
+  await t.test("concat/stack match NumPy", () => {
+    const a = randomTensor([2, 3], "f64");
+    const b = randomTensor([2, 3], "f64");
+    const aPath = saveTensor(dir, "cat-a", a);
+    const bPath = saveTensor(dir, "cat-b", b);
+    assertClose(
+      Tensor.concat([a, b], { axis: 0 }),
+      runOracle(dir, { op: "concat", inputs: [aPath, bPath], axis: 0 }),
+      "concat",
+    );
+    assertClose(
+      Tensor.concat([a, b], { axis: 1 }),
+      runOracle(dir, { op: "concat", inputs: [aPath, bPath], axis: 1 }),
+      "concat",
+    );
+    assertClose(
+      Tensor.stack([a, b], { axis: 0 }),
+      runOracle(dir, { op: "stack", inputs: [aPath, bPath], axis: 0 }),
+      "stack",
+    );
+  });
+
+  await t.test("where matches NumPy", () => {
+    const cond = Tensor.from([1, 0, 1, 0, 1, 0], { dtype: "bool" }).reshape([2, 3]);
+    const a = randomTensor([2, 3], "f64");
+    const b = randomTensor([2, 3], "f64");
+    const condPath = saveTensor(dir, "where-cond", cond);
+    const aPath = saveTensor(dir, "where-a", a);
+    const bPath = saveTensor(dir, "where-b", b);
+    const expected = runOracle(dir, {
+      op: "where",
+      inputs: [aPath, bPath],
+      condition: condPath,
+    });
+    assertClose(Tensor.where(cond, a, b), expected, "where");
   });
 });

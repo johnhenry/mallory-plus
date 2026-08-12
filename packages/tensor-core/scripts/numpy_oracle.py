@@ -5,7 +5,12 @@ Reads a JSON job file:
   {
     "op": "add" | "sub" | "mul" | "div" | "sum" | "mean" | "arange" | "permute" | "slice"
         | "matmul" | "dot" | "cast" | "eq" | "ne" | "lt" | "lte" | "gt" | "gte"
-        | "min" | "max" | "argmin" | "argmax",
+        | "min" | "max" | "argmin" | "argmax" | "sqrt" | "variance" | "std"
+        | "cumsum" | "cumprod" | "sort" | "argsort" | "topk_values" | "topk_indices"
+        | "concat" | "stack" | "where",
+    "ddof": 1,                            # optional (variance/std)
+    "k": 3, "largest": true,              # optional (topk)
+    "condition": "/path/cond.npy",        # optional (where -- npy dtype must be bool)
     "inputs": ["/path/a.npy", ...],       # .npy files written by tensor-core
     "axis": 1,                            # optional (reductions)
     "permutation": [1, 0],                # optional (permute op)
@@ -98,6 +103,37 @@ def main() -> None:
         result = inputs[0].argmin(axis=job.get("axis")).astype("int32")
     elif op == "argmax":
         result = inputs[0].argmax(axis=job.get("axis")).astype("int32")
+    elif op == "sqrt":
+        result = np.sqrt(inputs[0])
+    elif op == "variance":
+        result = inputs[0].var(axis=job.get("axis"), ddof=job.get("ddof", 0))
+    elif op == "std":
+        result = inputs[0].std(axis=job.get("axis"), ddof=job.get("ddof", 0))
+    elif op == "cumsum":
+        result = inputs[0].cumsum(axis=job.get("axis"))
+    elif op == "cumprod":
+        result = inputs[0].cumprod(axis=job.get("axis"))
+    elif op == "sort":
+        result = np.sort(inputs[0], axis=job.get("axis", -1))
+    elif op == "argsort":
+        result = np.argsort(inputs[0], axis=job.get("axis", -1)).astype("int32")
+    elif op in ("topk_values", "topk_indices"):
+        axis = job.get("axis", -1)
+        k = job["k"]
+        largest = job.get("largest", True)
+        a = inputs[0]
+        order = np.argsort(a, axis=axis)
+        if largest:
+            order = np.flip(order, axis=axis)
+        idx = np.take(order, range(k), axis=axis).astype("int32")
+        result = idx if op == "topk_indices" else np.take_along_axis(a, idx, axis=axis)
+    elif op == "concat":
+        result = np.ascontiguousarray(np.concatenate(inputs, axis=job.get("axis", 0)))
+    elif op == "stack":
+        result = np.ascontiguousarray(np.stack(inputs, axis=job.get("axis", 0)))
+    elif op == "where":
+        cond = np.load(job["condition"])
+        result = np.where(cond, inputs[0], inputs[1])
     else:
         raise SystemExit(f"unknown op {op!r}")
 
