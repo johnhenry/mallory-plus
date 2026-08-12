@@ -9,8 +9,8 @@
   ],
   "scripts": {
     "build:wasm": "npm run build:wasm -w mallory-tensor-wasm",
-    "build": "npm run build:wasm && npm run build -w mallory-scalar-types -w mallory-tensor-core -w mallory-telemetry -w mallory-tensor-wasm -w mallory-tensor-autograd -w mallory-tensor-compile -w mallory-adapter-math -w mallory-unit -w mallory-adapter-onnx -w mallory-frame-arrow",
-    "test": "npm run test -w mallory-scalar-types -w mallory-tensor-core -w mallory-telemetry -w mallory-tensor-wasm -w mallory-tensor-autograd -w mallory-tensor-compile -w mallory-adapter-math -w mallory-unit -w mallory-adapter-onnx -w mallory-frame-arrow",
+    "build": "npm run build:wasm && npm run build -w mallory-scalar-types -w mallory-tensor-core -w mallory-telemetry -w mallory-tensor-wasm -w mallory-tensor-autograd -w mallory-tensor-compile -w mallory-adapter-math -w mallory-unit -w mallory-adapter-onnx -w mallory-frame-arrow -w mallory-frame-parquet",
+    "test": "npm run test -w mallory-scalar-types -w mallory-tensor-core -w mallory-telemetry -w mallory-tensor-wasm -w mallory-tensor-autograd -w mallory-tensor-compile -w mallory-adapter-math -w mallory-unit -w mallory-adapter-onnx -w mallory-frame-arrow -w mallory-frame-parquet",
     "check": "npm run check --workspaces --if-present",
     "changeset": "changeset",
     "release": "npm run build && changeset publish"
