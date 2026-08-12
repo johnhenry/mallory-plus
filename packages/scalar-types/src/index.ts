@@ -12,6 +12,18 @@ export { ComplexNumber, Rational, Decimal } from "mallory-math";
 // Alias provided for adapter-mathjs familiarity only.
 export { Rational as Fraction } from "mallory-math";
 
+/**
+ * `Interval` (issue #36): rigorous interval arithmetic `[lo, hi]` -- no
+ * Tensor-boundary conversion of its own (it has no natural tensor-of-values
+ * shape the way ComplexNumber does), so it's re-exported verbatim like the
+ * scalars above rather than getting a matrix.ts-style converter. Useful as
+ * a rounding-error bound oracle wherever an f32 (e.g. tensor-webgpu) result
+ * needs to be checked against an f64 reference's known error bound, rather
+ * than just a bit-for-bit/tolerance comparison -- see
+ * packages/tensor-webgpu/test/fusion.test.ts for that usage.
+ */
+export { Interval } from "mallory-math";
+
 import { ComplexNumber } from "mallory-math";
 
 /** Split-storage parts of a complex vector — the ComplexTensor edge format. */

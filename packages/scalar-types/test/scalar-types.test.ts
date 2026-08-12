@@ -4,6 +4,7 @@ import {
   ComplexNumber,
   Decimal,
   Fraction,
+  Interval,
   Rational,
   complexToParts,
   partsToComplex,
@@ -20,6 +21,30 @@ test("re-exports mallory-math scalar types", () => {
 
 test("Fraction is an alias of Rational", () => {
   assert.equal(Fraction, Rational);
+});
+
+test("Interval is re-exported and does real rigorous interval arithmetic", () => {
+  const a = new Interval(1, 2);
+  const b = new Interval(3, 5);
+  const sum = a.add(b);
+  assert.equal(sum.lo, 4);
+  assert.equal(sum.hi, 7);
+  const product = a.multiply(b);
+  assert.equal(product.lo, 3); // 1*3
+  assert.equal(product.hi, 10); // 2*5
+  assert.ok(a.contains(1.5));
+  assert.ok(!a.contains(2.5));
+});
+
+test("Interval: a point interval bounds a known f64 computation, useful as a rounding-error oracle", () => {
+  // sin(pi/2) computed at f64 precision, wrapped as a degenerate interval,
+  // still contains the exact value -- the basic property any f32-vs-f64
+  // precision-bound check builds on (see tensor-webgpu's fusion tests for
+  // the real usage against an actual GPU f32 result).
+  const exact = Math.sin(Math.PI / 2);
+  const bounded = Interval.point(exact);
+  assert.ok(bounded.contains(exact));
+  assert.equal(bounded.width, 0);
 });
 
 test("complex boxed<->flat round-trip (ComplexTensor edge format)", () => {
