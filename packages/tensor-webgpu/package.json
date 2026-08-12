@@ -1,0 +1,39 @@
+{
+  "name": "mallory-tensor-webgpu",
+  "version": "0.0.1",
+  "description": "WebGPU-accelerated GEMM, attention-adjacent primitives, and #11-IR elementwise fusion for Mallory Plus tensors (issue #12) — Chromium-family browsers only in v1",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
+    "test": "npm run typecheck && node --test --test-concurrency=1 test/*.test.ts"
+  },
+  "dependencies": {
+    "mallory-tensor-core": "0.0.1",
+    "mallory-tensor-compile": "0.0.1"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.71",
+    "mallory-tensor-wasm": "0.0.1",
+    "typescript": "^5.7.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johnhenry/mallory-plus.git",
+    "directory": "packages/tensor-webgpu"
+  },
+  "license": "MIT",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

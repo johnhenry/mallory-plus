@@ -34,6 +34,7 @@ const PACKAGE_DIRS = [
   "packages/tensor-compile",
   "packages/tensor-core",
   "packages/tensor-wasm",
+  "packages/tensor-webgpu",
   "adapters/adapter-math",
   "adapters/adapter-onnx",
   "scalars/unit",

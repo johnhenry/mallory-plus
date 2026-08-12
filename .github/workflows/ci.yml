@@ -54,6 +54,27 @@ jobs:
       - name: Verify the oracles are importable (differential/round-trip tests must not skip)
         run: python3 -c "import numpy, pyarrow, pandas; print('numpy', numpy.__version__, 'pyarrow', pyarrow.__version__, 'pandas', pandas.__version__)"
 
+      # Headless-WebGPU oracle for mallory-tensor-webgpu's GPU-correctness
+      # tests (docs/TESTING.md "Headless WebGPU oracle"). Chrome-for-Testing
+      # (not the runner image's preinstalled browser) for a pinned, reliable
+      # version; Xvfb because headless WebGPU needs a real (virtual) display,
+      # not `--headless=new` alone — same reasoning as ~/.local/bin/gl-report
+      # on the trycooy dev machine. `--enable-unsafe-swiftshader` (in
+      # test/helpers.ts's Chrome flags) is meant to unblock Dawn's software
+      # adapter on a GPU-less runner like this one, verified locally by
+      # forcing the same flag combination on a machine WITH a real GPU
+      # (docs/spikes/webgpu-baseline.md) — not yet confirmed on an actual
+      # GitHub Actions runner. If these tests skip here instead of running,
+      # check the first CI run's log for the actual `requestAdapter()`
+      # failure reason before assuming the package itself is broken.
+      - name: Set up Chrome for headless WebGPU tests (mallory-tensor-webgpu)
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Install Xvfb
+        run: sudo apt-get install -y xvfb
+
       - run: npm ci
 
       - name: Build (WASM kernels + TypeScript)
