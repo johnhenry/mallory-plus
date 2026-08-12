@@ -19,6 +19,26 @@ test("Frame.concat (static) and .concat (instance) are equivalent and require ma
   assert.throws(() => Frame.concat([t1, mismatched]).schema, /schema mismatch/);
 });
 
+test("Frame.concat with a zero-row input doesn't throw on read (issue #31 — apache-arrow's Table.concat breaks getChild() once any input has zero rows)", () => {
+  const empty = Frame.fromArrow(new Table({ v: vectorFromArray([], new Int32()) }));
+  const full = Frame.fromArrow(new Table({ v: vectorFromArray([1, 2, 3], new Int32()) }));
+
+  // Zero-row input in the middle/edges — every position, since the bug is
+  // triggered by ANY concatenated input having zero rows, not just the first.
+  const combined = Frame.concat([empty, full, empty]);
+  assert.equal(combined.length, 3);
+  assert.deepEqual(
+    combined.toRows().map((r) => r.v),
+    [1, 2, 3],
+  );
+  assert.deepEqual(combined.toArrow().getChild("v")?.toArray(), Int32Array.from([1, 2, 3]));
+
+  // Every input empty -> still returns a valid (empty) Frame with the right schema.
+  const allEmpty = Frame.concat([empty, empty]);
+  assert.equal(allEmpty.length, 0);
+  assert.deepEqual(allEmpty.columns, ["v"]);
+});
+
 test("sortBy() is stable, ascending by default, descending via desc()", () => {
   const frame = Frame.fromArrow(
     new Table({

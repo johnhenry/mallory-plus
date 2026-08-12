@@ -36,14 +36,10 @@
  * `filter` that matches rows in some partition files but not others (a
  * completely ordinary `scanParquet` use case — that's the whole point of
  * partitioned data) routinely produces exactly that mix once each file is
- * read+filtered individually. Filtering out zero-row frames before handing
- * them to `Frame.concat` (frame-arrow's own concat, which delegates to
- * `Table.concat` — see packages/frame-arrow/src/execute.ts's "concat" case)
- * sidesteps it entirely; if EVERY matched file's frame is empty after
- * filtering, one empty frame is returned as-is (still the right schema, no
- * concat needed). Tracked as a follow-up issue against frame-arrow itself,
- * since any other caller of `Frame.concat` could hit the same apache-arrow
- * bug — not scoped to this package.
+ * read+filtered individually. Filed against frame-arrow as issue #31 and
+ * fixed there (`Frame.concat`'s own "concat" execute case now filters
+ * zero-row inputs itself), so `scanParquet` just calls `Frame.concat`
+ * directly below — no local workaround needed anymore.
  */
 import { glob } from "node:fs/promises";
 import { Frame } from "mallory-frame-arrow";
@@ -59,9 +55,5 @@ export async function scanParquet(pattern: string, options: ScanParquetOptions =
     throw new Error(`scanParquet: no files matched pattern "${pattern}"`);
   }
   const frames = await Promise.all(paths.map((p) => readParquet(p, options)));
-  // See module doc: apache-arrow 21.2.0's Table.concat() breaks getChild()
-  // when any input has zero rows, so those are excluded from the concat set.
-  const nonEmpty = frames.filter((f) => f.length > 0);
-  if (nonEmpty.length === 0) return frames[0] as Frame;
-  return Frame.concat(nonEmpty);
+  return frames.length > 1 ? Frame.concat(frames) : (frames[0] as Frame);
 }

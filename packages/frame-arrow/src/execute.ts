@@ -431,7 +431,17 @@ export function execute(node: PlanNode, wanted: Wanted): Table {
     case "concat": {
       if (node.inputs.length === 0) throw new Error("Frame.concat: no frames given");
       const tables = node.inputs.map((n) => execute(n, wanted));
-      const [first, ...rest] = tables as [Table, ...Table[]];
+      // apache-arrow 21.2.0's Table.concat() breaks getChild() ("Vector
+      // constructor expects an Array of Data instances") once ANY concatenated
+      // input has zero rows — reproducible directly against apache-arrow, no
+      // frame-arrow logic involved (issue #31). numRows is unaffected, so this
+      // surfaces later, at whatever terminal accessor first calls getChild().
+      // Filter zero-row tables out before concatenating; if every input is
+      // empty, return the first one as-is (still the right schema, nothing to
+      // concat).
+      const nonEmpty = tables.filter((t) => t.numRows > 0);
+      if (nonEmpty.length === 0) return tables[0] as Table;
+      const [first, ...rest] = nonEmpty as [Table, ...Table[]];
       return rest.length > 0 ? first.concat(...rest) : first;
     }
   }
