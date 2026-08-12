@@ -105,15 +105,72 @@ with open(os.path.join(HERE, "quirks_expected.json"), "w") as f:
     json.dump({"cat": dict_values}, f)
 
 # ---------------------------------------------------------------------------
-# nested.parquet — a struct column, to prove readParquet throws a clear,
+# nested_map.parquet — a MAP column, to prove readParquet throws a clear,
 # named UnsupportedParquetTypeError rather than silently mishandling or
-# crashing on a Parquet type this package's v1 doesn't support.
+# crashing on a Parquet type this package's v1 doesn't support. (LIST/STRUCT
+# used to serve this role before issue #30 added real support for them —
+# MAP is the one nested type that's still a genuine gap, since frame-arrow
+# has no map DType to map it to.)
 # ---------------------------------------------------------------------------
-nested_table = pa.table({
+nested_map_table = pa.table({
     "id": pa.array(list(range(10)), type=pa.int64()),
-    "point": pa.array([{"x": i, "y": i * 2} for i in range(10)], type=pa.struct([("x", pa.int64()), ("y", pa.int64())])),
+    "attrs": pa.array([{f"k{i}": i * 2} for i in range(10)], type=pa.map_(pa.string(), pa.int64())),
 })
-write(nested_table, "nested.parquet", compression="snappy")
+write(nested_map_table, "nested_map.parquet", compression="snappy")
+
+# ---------------------------------------------------------------------------
+# nested_list.parquet — list<double>, issue #30: proves readParquet maps a
+# standard 3-level-convention Parquet LIST column to frame-arrow's list<T>,
+# with nulls at every level distinguished: a null list (None), an empty list
+# ([]), and null elements inside a non-null list. Several row groups, like
+# this package's other fixtures.
+# ---------------------------------------------------------------------------
+LN = 60
+
+
+def make_list(i):
+    if i % 11 == 0:
+        return None  # null list
+    if i % 7 == 0:
+        return []  # empty, non-null list
+    length = (i % 4) + 1
+    return [float(i) + 0.25 * j if (i + j) % 5 != 0 else None for j in range(length)]
+
+
+list_values = [make_list(i) for i in range(LN)]
+nested_list_table = pa.table({
+    "id": pa.array(list(range(LN)), type=pa.int64()),
+    "values": pa.array(list_values, type=pa.list_(pa.float64())),
+})
+write(nested_list_table, "nested_list.parquet", compression="snappy", row_group_size=20)
+with open(os.path.join(HERE, "nested_list_expected.json"), "w") as f:
+    json.dump({"values": list_values}, f)
+
+# ---------------------------------------------------------------------------
+# nested_struct.parquet — struct<a: double, b: string>, issue #30: proves
+# readParquet maps a flat Parquet STRUCT group to frame-arrow's struct<...>,
+# with nulls at every level distinguished: a null struct (None) vs. a
+# non-null struct with a null field. Several row groups.
+# ---------------------------------------------------------------------------
+SN = 60
+
+
+def make_struct(i):
+    if i % 9 == 0:
+        return None  # null struct
+    a = None if i % 5 == 0 else float(i) + 0.5
+    b = None if i % 6 == 0 else f"s-{i}"
+    return {"a": a, "b": b}
+
+
+struct_values = [make_struct(i) for i in range(SN)]
+nested_struct_table = pa.table({
+    "id": pa.array(list(range(SN)), type=pa.int64()),
+    "point": pa.array(struct_values, type=pa.struct([("a", pa.float64()), ("b", pa.string())])),
+})
+write(nested_struct_table, "nested_struct.parquet", compression="snappy", row_group_size=20)
+with open(os.path.join(HERE, "nested_struct_expected.json"), "w") as f:
+    json.dump({"point": struct_values}, f)
 
 # ---------------------------------------------------------------------------
 # scan/part-*.parquet — three same-schema partitions for the scanParquet

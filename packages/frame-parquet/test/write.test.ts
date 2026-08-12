@@ -5,6 +5,9 @@
  * Parquet file — see write.ts's module doc and docs/spikes/parquet-bakeoff.md
  * §4's verified zstd footgun). pyarrow-dependent tests SKIP (don't fail)
  * when no interpreter with pyarrow is available (see test/helpers.ts).
+ * Covers every v1 scalar dtype across all three codecs, plus (issue #30)
+ * list<float64>/struct<a: float64, b: utf8> columns with nulls at every
+ * level, verified against pyarrow the same way.
  */
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -23,6 +26,7 @@ import {
   Int8,
   List,
   makeData,
+  Struct,
   Table,
   type Timestamp,
   TimestampMicrosecond,
@@ -86,6 +90,36 @@ function sampleFrame(): Frame {
     utf8: vectorFromArray(utf8, new Utf8()),
     ts_ms: tsVector(tsMs, new TimestampMillisecond(null)),
     ts_us: tsVector(tsUs, new TimestampMicrosecond(null)),
+  });
+  return Frame.fromArrow(table);
+}
+
+const NN = 24;
+
+/** A Frame with a list<float64> and a struct<a: float64, b: utf8> column
+ * (issue #30), exercising nulls at every level on both: a null list vs. an
+ * empty (non-null) list vs. a null element inside a non-null list; a null
+ * struct vs. a non-null struct with a null field. Mirrors the exact types
+ * packages/frame-arrow/test/list-struct.test.ts already proves Frame itself
+ * supports, so the two suites are directly cross-checkable. */
+function sampleNestedFrame(): Frame {
+  const listType = new List(new Field("item", new Float64(), true));
+  const structType = new Struct([new Field("a", new Float64(), true), new Field("b", new Utf8(), true)]);
+
+  const values: ((number | null)[] | null)[] = Array.from({ length: NN }, (_, i) => {
+    if (i % 6 === 0) return null; // null list
+    if (i % 5 === 0) return []; // empty, non-null list
+    const length = (i % 3) + 1;
+    return Array.from({ length }, (_, j) => ((i + j) % 4 === 0 ? null : i + j + 0.5));
+  });
+  const points: ({ a: number | null; b: string | null } | null)[] = Array.from({ length: NN }, (_, i) => {
+    if (i % 7 === 0) return null; // null struct
+    return { a: i % 4 === 0 ? null : i + 0.25, b: i % 3 === 0 ? null : `s-${i}` };
+  });
+
+  const table = new Table({
+    values: vectorFromArray(values, listType),
+    point: vectorFromArray(points, structType),
   });
   return Frame.fromArrow(table);
 }
@@ -184,12 +218,66 @@ test("writeParquet: unsupported compression string throws a clear error naming t
   );
 });
 
-test("writeParquet: a list column throws a clear error naming the column, rather than silently dropping it", async () => {
-  const listType = new List(new Field("item", new Float64(), true));
-  const table = new Table({ values: vectorFromArray([[1.5, 2.5], null], listType) });
-  const frame = Frame.fromArrow(table);
-  const path = join(tmpDir, "list-column.parquet");
-  await assert.rejects(() => writeParquet(frame, path), /column "values" has dtype "list"/);
+test("writeParquet: list<float64>/struct<a,b> columns round-trip through frame-parquet's own reader, with nulls at every level (issue #30)", async () => {
+  const frame = sampleNestedFrame();
+  const path = join(tmpDir, "nested-roundtrip.parquet");
+  await writeParquet(frame, path);
+  const readBack = await readParquet(path);
+  assert.equal(readBack.length, NN);
+  const readField = readBack.schema.find((f) => f.name === "values");
+  assert.equal(readField?.dtype, "list");
+  assert.equal(readField?.itemDType, "float64");
+  assert.equal(readBack.schema.find((f) => f.name === "point")?.dtype, "struct");
+  assert.deepEqual(readBack.toRows(), frame.toRows());
+});
+
+test("writeParquet: list<float64>/struct<a,b> columns produce a file pyarrow.parquet.read_table can read, with correct schema/nulls at every level", async (t) => {
+  if (!PYTHON) {
+    t.skip(PYARROW_SKIP_REASON);
+    return;
+  }
+  const frame = sampleNestedFrame();
+  const path = join(tmpDir, "nested-pyarrow-verify.parquet");
+  await writeParquet(frame, path);
+
+  const result = runPyarrowJson(`
+import json
+import pyarrow.parquet as pq
+t = pq.read_table(${JSON.stringify(path)})
+out = {
+    "schema": {f.name: str(f.type) for f in t.schema},
+    "values": t.column("values").to_pylist(),
+    "point": t.column("point").to_pylist(),
+}
+print(json.dumps(out, default=str))
+`) as {
+    schema: Record<string, string>;
+    values: ((number | null)[] | null)[];
+    point: ({ a: number | null; b: string | null } | null)[];
+  };
+
+  // pyarrow derives its Arrow field name from the Parquet leaf's own schema
+  // name ("element", the standard 3-level-convention name this package
+  // writes — see write.ts's planListSchema), not from frame-arrow's internal
+  // "item" placeholder name (which never round-trips through Parquet at all).
+  assert.match(result.schema.values as string, /list<element: double/);
+  assert.match(result.schema.point as string, /struct<a: double, b: string>/);
+
+  const rows = frame.toRows();
+  assert.deepEqual(
+    result.values,
+    rows.map((r) => r.values),
+  );
+  assert.deepEqual(
+    result.point,
+    rows.map((r) => r.point),
+  );
+  // Sanity: the sample data actually exercises every null shape this test claims to cover.
+  assert.ok(result.values.some((v) => v === null), "sample must include a null list");
+  assert.ok(result.values.some((v) => Array.isArray(v) && v.length === 0), "sample must include an empty list");
+  assert.ok(result.values.some((v) => Array.isArray(v) && v.includes(null)), "sample must include a null element inside a non-null list");
+  assert.ok(result.point.some((v) => v === null), "sample must include a null struct");
+  assert.ok(result.point.some((v) => v !== null && (v.a === null || v.b === null)), "sample must include a null field inside a non-null struct");
 });
 
 test("writeParquet: a dictionary column writes as plain STRING data and reads back with the right values", async () => {

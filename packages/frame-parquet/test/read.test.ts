@@ -4,7 +4,9 @@
  * pyarrow, see its module doc). Covers: value/null fidelity across every
  * v1-supported dtype, zstd-compressed input, column projection, filter
  * correctness, dictionary-column-decodes-as-utf8 (documented v1
- * simplification), and the clear-throw on nested (struct) columns.
+ * simplification), list<T>/struct<...> columns with nulls at every level
+ * (issue #30), and the clear-throw on a still-unsupported nested (MAP)
+ * column.
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -123,21 +125,59 @@ test("readParquet: dictionary-encoded column decodes as plain utf8 (documented v
   );
 });
 
-test("readParquet: a nested (struct) column throws UnsupportedParquetTypeError naming the column", async () => {
+test("readParquet: a MAP column throws UnsupportedParquetTypeError naming the column (still unsupported — no frame-arrow map DType)", async () => {
   await assert.rejects(
-    () => readParquet(new URL("fixtures/nested.parquet", import.meta.url).pathname),
+    () => readParquet(new URL("fixtures/nested_map.parquet", import.meta.url).pathname),
     (err: unknown) => {
       assert.ok(err instanceof UnsupportedParquetTypeError);
-      assert.match((err as Error).message, /"point"/);
+      assert.match((err as Error).message, /"attrs"/);
       return true;
     },
   );
 });
 
-test("readParquet: selecting around a nested column avoids the throw (projection happens before the schema check fails on it)", async () => {
-  const frame = await readParquet(new URL("fixtures/nested.parquet", import.meta.url).pathname, {
+test("readParquet: selecting around a MAP column avoids the throw (projection happens before the schema check fails on it)", async () => {
+  const frame = await readParquet(new URL("fixtures/nested_map.parquet", import.meta.url).pathname, {
     columns: ["id"],
   });
   assert.deepEqual(frame.columns, ["id"]);
   assert.equal(frame.length, 10);
+});
+
+test("readParquet: list<float64> column maps to frame-arrow's list<T>, with null list / empty list / null element all distinguished", async () => {
+  const expected = JSON.parse(readFileSync(new URL("fixtures/nested_list_expected.json", import.meta.url), "utf8")) as {
+    values: ((number | null)[] | null)[];
+  };
+  const frame = await readParquet(new URL("fixtures/nested_list.parquet", import.meta.url).pathname);
+  const field = frame.schema.find((f) => f.name === "values");
+  assert.equal(field?.dtype, "list");
+  assert.equal(field?.itemDType, "float64");
+  assert.equal(frame.length, 60);
+
+  const rows = frame.toRows();
+  for (let i = 0; i < 60; i++) {
+    assert.deepEqual(rows[i]?.values, expected.values[i], `values[${i}]`);
+  }
+  // Sanity: the fixture actually exercises all three null shapes, not just one.
+  assert.ok(expected.values.some((v) => v === null), "fixture must include a null list");
+  assert.ok(expected.values.some((v) => Array.isArray(v) && v.length === 0), "fixture must include an empty list");
+  assert.ok(expected.values.some((v) => Array.isArray(v) && v.includes(null)), "fixture must include a null element inside a non-null list");
+});
+
+test("readParquet: struct<a: float64, b: utf8> column maps to frame-arrow's struct<...>, with null struct vs. a null field distinguished", async () => {
+  const expected = JSON.parse(readFileSync(new URL("fixtures/nested_struct_expected.json", import.meta.url), "utf8")) as {
+    point: ({ a: number | null; b: string | null } | null)[];
+  };
+  const frame = await readParquet(new URL("fixtures/nested_struct.parquet", import.meta.url).pathname);
+  const field = frame.schema.find((f) => f.name === "point");
+  assert.equal(field?.dtype, "struct");
+  assert.equal(frame.length, 60);
+
+  const rows = frame.toRows();
+  for (let i = 0; i < 60; i++) {
+    assert.deepEqual(rows[i]?.point, expected.point[i], `point[${i}]`);
+  }
+  // Sanity: the fixture actually exercises both null shapes.
+  assert.ok(expected.point.some((v) => v === null), "fixture must include a null struct");
+  assert.ok(expected.point.some((v) => v !== null && (v.a === null || v.b === null)), "fixture must include a null field inside a non-null struct");
 });
