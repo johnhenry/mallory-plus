@@ -5,6 +5,7 @@ import {
   Decimal,
   Fraction,
   Interval,
+  Quaternion,
   Rational,
   complexToParts,
   partsToComplex,
@@ -45,6 +46,30 @@ test("Interval: a point interval bounds a known f64 computation, useful as a rou
   const bounded = Interval.point(exact);
   assert.ok(bounded.contains(exact));
   assert.equal(bounded.width, 0);
+});
+
+test("Quaternion is re-exported and toRotationMatrix()/rotateVector() round-trip a known 90-degree rotation", () => {
+  // 90 degrees about the Z axis.
+  const q = Quaternion.fromAxisAngle([0, 0, 1], Math.PI / 2);
+  const rotated = q.rotateVector([1, 0, 0]);
+  assert.ok(Math.abs((rotated[0] as number) - 0) < 1e-9);
+  assert.ok(Math.abs((rotated[1] as number) - 1) < 1e-9);
+  assert.ok(Math.abs((rotated[2] as number) - 0) < 1e-9);
+
+  const matrix = q.toRotationMatrix();
+  const viaMatrix = [
+    matrix[0]![0]! * 1 + matrix[0]![1]! * 0 + matrix[0]![2]! * 0,
+    matrix[1]![0]! * 1 + matrix[1]![1]! * 0 + matrix[1]![2]! * 0,
+    matrix[2]![0]! * 1 + matrix[2]![1]! * 0 + matrix[2]![2]! * 0,
+  ];
+  assert.ok(Math.abs(viaMatrix[0]! - (rotated[0] as number)) < 1e-9);
+  assert.ok(Math.abs(viaMatrix[1]! - (rotated[1] as number)) < 1e-9);
+  assert.ok(Math.abs(viaMatrix[2]! - (rotated[2] as number)) < 1e-9);
+});
+
+test("Quaternion: Identity leaves a vector unchanged", () => {
+  const rotated = Quaternion.Identity.rotateVector([1, 2, 3]);
+  assert.deepEqual(rotated, [1, 2, 3]);
 });
 
 test("complex boxed<->flat round-trip (ComplexTensor edge format)", () => {

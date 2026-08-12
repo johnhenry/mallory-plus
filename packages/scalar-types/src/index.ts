@@ -24,6 +24,15 @@ export { Rational as Fraction } from "mallory-math";
  */
 export { Interval } from "mallory-math";
 
+/**
+ * `Quaternion` (issue #37): rotation/3D-transform value type -- ready-made
+ * if a 3D/graphics-adjacent tensor-webgpu use case ever shows up; no
+ * concrete consumer yet, so this is a plain re-export like the scalars
+ * above, not a Tensor-boundary converter (nothing to convert to/from until
+ * a batched-quaternion tensor use case actually exists).
+ */
+export { Quaternion } from "mallory-math";
+
 import { ComplexNumber } from "mallory-math";
 
 /** Split-storage parts of a complex vector — the ComplexTensor edge format. */
