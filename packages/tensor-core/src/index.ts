@@ -15,6 +15,15 @@ import {
   type DType,
 } from "./dtype.ts";
 import { parseNpy, serializeNpy } from "./npy.ts";
+import {
+  fillFrom,
+  normalSample,
+  randintSample,
+  seed as rngSeed,
+  uniformSample,
+  type RandomOptions,
+  type Rng,
+} from "./random.ts";
 
 export {
   allocate,
@@ -24,6 +33,7 @@ export {
   type DType,
   type TypedArrayFor,
 } from "./dtype.ts";
+export { Rng, type RandomOptions } from "./random.ts";
 
 export type Shape = readonly number[];
 export type Axis = number;
@@ -1641,3 +1651,53 @@ export class Tensor {
     return Tensor.fromTypedArray(data, shape, { dtype });
   }
 }
+
+/**
+ * `random` namespace (issue #5) — exposed as a named object rather than
+ * static Tensor methods, matching the source design's "expose as named
+ * namespaces" convention. `seed(n)` returns a reproducible generator; pass
+ * it as `{ rng }` for deterministic output, or omit it for a fresh
+ * non-deterministic one each call (no shared global state).
+ */
+export const random = {
+  seed: rngSeed,
+
+  uniform(
+    shape: Shape,
+    options: RandomOptions & { min?: number; max?: number } = {},
+  ): Tensor {
+    const dtype = options.dtype ?? "f32";
+    const min = options.min ?? 0;
+    const max = options.max ?? 1;
+    const data = fillFrom(shape, dtype, options.rng, (rng) =>
+      uniformSample(rng, min, max),
+    );
+    return Tensor.fromTypedArray(data, shape, { dtype });
+  },
+
+  normal(
+    shape: Shape,
+    options: RandomOptions & { mean?: number; std?: number } = {},
+  ): Tensor {
+    const dtype = options.dtype ?? "f32";
+    const mean = options.mean ?? 0;
+    const std = options.std ?? 1;
+    const data = fillFrom(shape, dtype, options.rng, (rng) =>
+      normalSample(rng, mean, std),
+    );
+    return Tensor.fromTypedArray(data, shape, { dtype });
+  },
+
+  randint(
+    low: number,
+    high: number,
+    shape: Shape,
+    options: RandomOptions = {},
+  ): Tensor {
+    const dtype = options.dtype ?? "i32";
+    const data = fillFrom(shape, dtype, options.rng, (rng) =>
+      randintSample(rng, low, high),
+    );
+    return Tensor.fromTypedArray(data, shape, { dtype });
+  },
+};

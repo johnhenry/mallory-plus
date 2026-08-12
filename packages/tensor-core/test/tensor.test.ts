@@ -5,6 +5,7 @@ import {
   Tensor,
   broadcastShapes,
   isBigIntDType,
+  random,
 } from "../src/index.ts";
 
 // ---- constructors ----------------------------------------------------------
@@ -733,4 +734,79 @@ test("broadcastTo expands size-1 axes via stride 0", () => {
 test("sqrt rejects bigint dtypes", () => {
   const t = Tensor.from([4, 9], { dtype: "i64" });
   assert.throws(() => t.sqrt(), TypeError);
+});
+
+// ---- random (issue #5) -----------------------------------------------------
+
+test("random: same seed produces the same sequence, different seeds diverge", () => {
+  const a = random.uniform([5], { rng: random.seed(42) });
+  const b = random.uniform([5], { rng: random.seed(42) });
+  assert.deepEqual(a.toArray(), b.toArray());
+
+  const c = random.uniform([5], { rng: random.seed(7) });
+  assert.notDeepEqual(a.toArray(), c.toArray());
+});
+
+test("random: an Rng's sequence is NOT reset between calls (state advances)", () => {
+  const rng = random.seed(1);
+  const first = random.uniform([3], { rng });
+  const second = random.uniform([3], { rng }); // same rng object, further along
+  assert.notDeepEqual(first.toArray(), second.toArray());
+});
+
+test("random.uniform: values fall in [min, max) and default to [0, 1)", () => {
+  const t = random.uniform([200], { rng: random.seed(1) });
+  for (const v of t.toArray() as number[]) {
+    assert.ok(v >= 0 && v < 1, `${v} not in [0,1)`);
+  }
+  const scaled = random.uniform([200], { min: 10, max: 20, rng: random.seed(2) });
+  for (const v of scaled.toArray() as number[]) {
+    assert.ok(v >= 10 && v < 20, `${v} not in [10,20)`);
+  }
+});
+
+test("random.uniform: sample mean converges toward the midpoint (moment check)", () => {
+  const t = random.uniform([20000], { min: 0, max: 10, rng: random.seed(3) });
+  const mean = t.mean().item() as number;
+  assert.ok(Math.abs(mean - 5) < 0.2, `sample mean ${mean} too far from 5`);
+});
+
+test("random.normal: sample mean/std converge to the requested moments", () => {
+  const t = random.normal([20000], { mean: 5, std: 2, rng: random.seed(4) });
+  const mean = t.mean().item() as number;
+  const std = t.std().item() as number;
+  assert.ok(Math.abs(mean - 5) < 0.1, `sample mean ${mean} too far from 5`);
+  assert.ok(Math.abs(std - 2) < 0.1, `sample std ${std} too far from 2`);
+});
+
+test("random.randint: integers within [low, high), reproducible, correct dtype", () => {
+  const t = random.randint(0, 10, [500], { rng: random.seed(5) });
+  assert.equal(t.dtype, "i32");
+  for (const v of t.toArray() as number[]) {
+    assert.ok(Number.isInteger(v) && v >= 0 && v < 10, `${v} not in [0,10)`);
+  }
+  const again = random.randint(0, 10, [500], { rng: random.seed(5) });
+  assert.deepEqual(t.toArray(), again.toArray());
+});
+
+test("random.randint: covers the full range given enough samples", () => {
+  const t = random.randint(0, 5, [2000], { rng: random.seed(6) });
+  const seen = new Set(t.toArray() as number[]);
+  assert.deepEqual([...seen].sort(), [0, 1, 2, 3, 4]);
+});
+
+test("random.randint: rejects an empty or inverted range", () => {
+  assert.throws(() => random.randint(5, 5, [1], { rng: random.seed(1) }), RangeError);
+  assert.throws(() => random.randint(5, 2, [1], { rng: random.seed(1) }), RangeError);
+});
+
+test("random respects an explicit dtype", () => {
+  const t = random.uniform([10], { dtype: "f64", rng: random.seed(1) });
+  assert.equal(t.dtype, "f64");
+});
+
+test("Rng.nextBelow rejects a non-positive-integer bound", () => {
+  const rng = random.seed(1);
+  assert.throws(() => rng.nextBelow(0), RangeError);
+  assert.throws(() => rng.nextBelow(-3), RangeError);
 });
