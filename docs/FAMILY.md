@@ -50,20 +50,28 @@ it as a dependency. Extract on demand, not preemptively.
 ## What's actually connected right now
 
 - `mallory-plus`'s `scalar-types` package re-exports `mallory-math`'s
-  `ComplexNumber`/`Rational`/`Decimal` verbatim, plus adds
-  `complexToParts`/`partsToComplex` conversion helpers (boxed
+  `ComplexNumber`/`Rational`/`Decimal`/`Interval`/`Quaternion` verbatim,
+  plus adds `complexToParts`/`partsToComplex` conversion helpers (boxed
   `ComplexNumber[]` ↔ split `{real, imag}` `Float64Array`s) for tensor edges.
 - `mallory-plus`'s `adapter-math` package bridges `mallory-math` into
-  tensor/dataframe land in four ways: `Matrix`/`Vector` ↔ `Tensor`
-  conversion, `compileExpr` (compiles `mallory-math`'s symbolic `Expr` AST
-  into `tensor-compile`'s IR — all 39 named functions map through except
+  tensor/dataframe land: `Matrix`/`Vector` ↔ `Tensor` conversion,
+  `compileExpr` (compiles `mallory-math`'s symbolic `Expr` AST into
+  `tensor-compile`'s IR — all 39 named functions map through except
   `gcd`/`lcm`/`sum`/`product`, which throw a typed `UnsupportedExprError`
   since they're integer-domain/reduction ops with no elementwise-tensor
-  meaning), `toCSR`/`toDense` (`Graph<T>` → sparse-matrix CSR format), and a
+  meaning), `toCSR`/`toDense` (`Graph<T>` → sparse-matrix CSR format), a
   `DualNumber`-based autodiff test oracle (test-only, not a runtime
-  dependency). Its `linalg` module (`solve`/`qr`/`svd`/`eigSymmetric`/etc.)
-  is a thin Tensor-shaped wrapper that literally delegates to
-  `mallory-math`'s own `MatrixMath` — not reimplemented.
+  dependency), `fft`/`ifft`/`fftPadded`/`convolve` (wraps `mallory-math`'s
+  `FFT` class), and `SpecialFunctions`/`Distributions`/`HypothesisTests`
+  (re-exported verbatim) plus a `Statistics.ts` subset wrapped for
+  `Float64Array` input. Its `linalg` module (`solve`/`qr`/`svd`/
+  `eigSymmetric`/etc.) is a thin Tensor-shaped wrapper that literally
+  delegates to `mallory-math`'s own `MatrixMath` — not reimplemented.
+- `mallory-plus`'s `tensor-webgpu` package uses `scalar-types`'s `Interval`
+  as an f32-vs-f64 rounding-error bound oracle (`test/precision-oracle.test.ts`)
+  — propagates a per-operation f32 ULP bound through `Interval`'s real
+  arithmetic across a fused kernel chain, then asserts the real GPU f32
+  result falls inside that interval.
 - `mallory-graph` imports `mallory-math`'s `Expr`/`FuncName`/`CmpOp`/
   `BinaryFuncName` types directly (`src/lib/free-vars.ts`,
   `expr-to-latex.ts`) and pairs `mallory-math`'s `Structure<number>` with an
@@ -72,20 +80,21 @@ it as a dependency. Extract on demand, not preemptively.
   `CellGraph` itself is fully formula-agnostic (every cell is an opaque
   `() => T` closure); the app layer is what plugs `mallory-math`'s AST in.
 
-## Open interop opportunities
+## Interop opportunities
 
 Surveyed 2026-08-12 by reading `mallory`'s `packages/math`/`packages/iteration`
 source, `mallory-graph`'s `src/lib`, and `mallory-plus`'s existing bridge
 code (`adapter-math`, `tensor-compile`'s IR, `frame-arrow`'s `Expr`), looking
-for real, concrete gaps — not vague thematic similarity. Ranked roughly by
-how actionable/valuable each looks. Tracked as issues 2026-08-12 (all except
-#8, which is a documented non-gap, not a task).
+for real, concrete gaps — not vague thematic similarity. Filed as issues the
+same day; 6 of 7 actionable ones shipped 2026-08-12 (all except #38, a
+deliberately-deferred future direction). #8 below is a documented non-gap,
+never filed.
 
-1. **`mallory-graph`'s cycle detection is incomplete — `mallory-math`'s `Graph<T>` already has the fix.** `CellGraph`'s only cycle guard is `this.stack.includes(id)` inside `get()` — a per-evaluation check that can miss a cycle routed through a currently-clean (non-dirty) cell, since a clean cell short-circuits without re-walking its dependencies. `mallory-math`'s `Graph<T>` already has real `hasCycle()`/`topologicalSort()` over its adjacency structure; `CellGraph`'s private `Map<string, CellRecord>` (each record holding `dependencies`/`dependents` sets) is structurally an adjacency-list digraph already, just unexported and inlined. A full topological-sort-based cycle check run after each `propagateDirty` (or on demand) would close this gap. This is the one finding that looks like an actual latent correctness bug, not just an opportunity. — [`mallory-graph#18`](https://github.com/johnhenry/mallory-graph/issues/18)
-2. **No FFT anywhere in `mallory-plus`.** `mallory-math`'s `FFT.ts` (`FFT.fft`/`ifft`/`dft`/`convolve`) is real, tested, radix-2 Cooley-Tukey — and is the single most tensor-shaped file in `mallory-math` (array in, array out) with zero equivalent on the `mallory-plus` side. It operates on plain `(ComplexNumber|number)[]`, not typed arrays, so a bridge would need a `Float32Array`/`Float64Array` in/out wrapper (parallel to `scalar-types`'s existing `complexToParts`/`partsToComplex`) — straightforward, and would fill a real gap in the "practical ML/media compute" bundle `docs/PLAN.md` §5 already lists `fft` under (currently "not started"). — [`mallory-plus#33`](https://github.com/johnhenry/mallory-plus/issues/33)
-3. **`SpecialFunctions.erf` vs `tensor-compile`'s own `erf`.** `tensor-compile`'s IR and `tensor-webgpu`'s WGSL fusion both implement `erf` independently (same Abramowitz-Stegun 7.1.26 approximation, deliberately not calling `mallory-math` — "tensor-compile stays dependency-free of `mallory-math`," which is the right call for a hot-path kernel). That's fine as a design choice, but there's no cross-check anywhere that the two independently-written formulas actually agree with `mallory-math`'s own `SpecialFunctions.erf`/`erfc`. A cheap, low-risk differential test (compare `tensor-compile`'s erf against `mallory-math`'s across a value range) would be a real correctness win without touching the runtime dependency boundary at all. — [`mallory-plus#34`](https://github.com/johnhenry/mallory-plus/issues/34)
-4. **`gamma`/`beta`/`lnGamma` are a real gap for a future SciPy-equivalent tier.** `docs/PLAN.md` §6.3 already earmarks a SciPy-equivalent layer (stats/special functions) as a later-priority tier; `mallory-math`'s `SpecialFunctions.ts` (`gamma`, `lnGamma`, `beta`, `regularizedGammaP/Q`, `regularizedIncompleteBeta`) and `Distributions.ts`/`Statistics.ts` (distributions, hypothesis tests, descriptive stats) already exist and are scalar/array-in — the same "thin Tensor-shaped wrapper delegating to `mallory-math`" pattern `adapter-math`'s `linalg.ts` already uses for matrix decompositions would apply directly here when that tier starts, rather than reimplementing from scratch. — [`mallory-plus#35`](https://github.com/johnhenry/mallory-plus/issues/35)
-5. **Interval arithmetic has no equivalent, and pairs naturally with the WebGPU precision story.** `mallory-math`'s `Interval.ts` (rigorous interval arithmetic: `add`/`multiply`/`sqrt`/`sin`/etc. over `[lo, hi]` bounds) has zero counterpart anywhere in `mallory-plus`. `docs/spikes/webgpu-baseline.md` already documents f32-GPU-vs-f64-CPU precision as a live concern for `tensor-webgpu`'s fusion kernels — `Interval` could serve as a genuine rounding-error bound oracle there, a complement (not a duplicate) to the existing bit-for-bit differential tests. — [`mallory-plus#36`](https://github.com/johnhenry/mallory-plus/issues/36)
-6. **Quaternion has no equivalent — small, ready-made if 3D/rotation use cases show up.** `mallory-math`'s `Quaternion.ts` (Hamilton product, `slerp`, `toRotationMatrix`, `rotateVector`) is a complete, self-contained value type with no array/batch operations — `tensor-webgpu` has no rotation/3D-transform primitive today. Lower priority than the above (no concrete consumer yet), but worth knowing it exists ready-made rather than reinventing it if a WebGPU graphics/game-engine-adjacent use case ever comes up. — [`mallory-plus#37`](https://github.com/johnhenry/mallory-plus/issues/37)
-7. **`frame-arrow`'s `Expr`/`fn.*` namespace is currently too thin to be a second `Symbolic` compile target, but the door is open.** `mallory-math`'s `Symbolic` `Expr` AST already compiles to `tensor-compile`'s IR via `adapter-math`'s `compileExpr`. `frame-arrow` has its own, structurally similar `Expr` AST (`ArithExpr`/`CompareExpr`/`LogicalExpr` + a `ScalarFnOp` namespace) — but `ScalarFnOp` currently has exactly one member (`"month"`), no transcendental functions at all. Not actionable today, but if/when `frame-arrow`'s `fn.*` namespace grows real math functions (a plausible direction on its own merits, independent of this), the same `UNARY_FUNC_MAP`-style translation `adapter-math/expr.ts` already established could give computed dataframe columns a second `Symbolic`-Expr compile target for free (e.g. auto-differentiating a computed column's formula). Flagging as a future direction, not a near-term task. — [`mallory-plus#38`](https://github.com/johnhenry/mallory-plus/issues/38)
+1. ✅ **Shipped** — `mallory-graph`'s cycle detection, investigated: `CellGraph`'s `this.stack.includes(id)` check looked like it could miss a cycle routed through a clean cell. Turned out, on careful empirical investigation (4 constructed repro scenarios, checked against the actual unmodified code before implementing anything), the existing code already catches every case via `propagateDirty()`'s unconditional cascade — the hypothesis was wrong. Reverted the speculative fix, added 4 regression tests locking in the correct existing behavior instead. — [`mallory-graph#18`](https://github.com/johnhenry/mallory-graph/issues/18)
+2. ✅ **Shipped** — FFT bridge. `adapter-math` now exports `fft`/`ifft`/`fftPadded`/`convolve`, thin wrappers around `mallory-math`'s `FFT` class using a `{real, imag}` `Float64Array` split-storage convention. Reference-speed, no native kernel. — [`mallory-plus#33`](https://github.com/johnhenry/mallory-plus/issues/33)
+3. ✅ **Shipped** — differential test cross-checking `tensor-compile`'s independently-written `erf` against `mallory-math`'s `SpecialFunctions.erf` (devDependency only, no runtime coupling). The two formulas agree within `1e-6`. — [`mallory-plus#34`](https://github.com/johnhenry/mallory-plus/issues/34)
+4. ✅ **Shipped** — `SpecialFunctions`/`Distributions`/`HypothesisTests` re-exported verbatim from `adapter-math`; a `Statistics.ts` subset (`mean`/`variance`/`standardDeviation`/`median`/`percentile`/`correlation`/`linearRegression`) gets `Float64Array`-accepting wrappers via `Vector.fromArray`. — [`mallory-plus#35`](https://github.com/johnhenry/mallory-plus/issues/35)
+5. ✅ **Shipped** — `Interval` re-exported from `scalar-types`; `tensor-webgpu` now has a real demonstration (`test/precision-oracle.test.ts`) propagating a per-step f32 rounding-error bound through `Interval`'s own arithmetic across the `add -> mul -> sigmoid` fusion chain, asserting the real GPU f32 result falls inside the bound — a stronger claim than the existing tolerance-based comparisons. — [`mallory-plus#36`](https://github.com/johnhenry/mallory-plus/issues/36)
+6. ✅ **Shipped** — `Quaternion` re-exported from `scalar-types`, ready if a 3D/rotation `tensor-webgpu` use case ever shows up. — [`mallory-plus#37`](https://github.com/johnhenry/mallory-plus/issues/37)
+7. **Still open, deliberately deferred.** `frame-arrow`'s `Expr`/`fn.*` namespace is currently too thin to be a second `Symbolic` compile target (`ScalarFnOp` has exactly one member, `"month"`, no transcendental functions). `mallory-math`'s `Symbolic` `Expr` AST already compiles to `tensor-compile`'s IR via `adapter-math`'s `compileExpr` — if/when `frame-arrow`'s `fn.*` namespace grows real math functions on its own merits, the same `UNARY_FUNC_MAP`-style translation could give computed dataframe columns a second `Symbolic`-Expr compile target largely for free. Revisit then, don't force `fn.*` growth for this reason alone. — [`mallory-plus#38`](https://github.com/johnhenry/mallory-plus/issues/38)
 8. **`mallory-iteration` (pull-only) and `CellGraph` (push-only) are intentional duals, not a gap.** `mallory-iteration`'s entire toolkit (itertools, transducers, `AsyncChannel`) is pull-based — every consumer actively pulls from a source, nothing broadcasts. `CellGraph`'s dependency propagation is the structural opposite: a synchronous `Map<string, Set<Listener>>` push-callback model, no iterators involved at all. Worth documenting as a real architectural contrast within the family (and a reason NOT to force one to reuse the other's primitives) rather than something to reconcile. No issue filed — nothing to track.
