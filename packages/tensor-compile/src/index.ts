@@ -12,7 +12,7 @@ import { broadcastShapes, Tensor, type DType, type Shape } from "mallory-tensor-
 import { sumToShape, Variable } from "mallory-tensor-autograd";
 import { evalWithGrad, Traced, type IRNode } from "./ir.ts";
 
-export { Traced, evalWithGrad, type IRNode, type UnaryOp, type BinaryOp } from "./ir.ts";
+export { Traced, evalWithGrad, type IRNode, type UnaryOp, type BinaryOp, type CmpOp } from "./ir.ts";
 
 const FLOAT_DTYPES: readonly DType[] = ["f32", "f64"];
 

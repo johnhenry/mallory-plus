@@ -19,7 +19,8 @@
   },
   "dependencies": {
     "mallory-math": "^0.8.0",
-    "mallory-tensor-core": "0.0.1"
+    "mallory-tensor-core": "0.0.1",
+    "mallory-tensor-compile": "0.0.1"
   },
   "repository": {
     "type": "git",

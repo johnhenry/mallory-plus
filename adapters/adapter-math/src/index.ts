@@ -5,3 +5,4 @@
  * forward-mode gradient oracle (#17).
  */
 export { fromMatrix, fromVector, toMatrix, toVector, type ConvertOptions } from "./matrix.ts";
+export { compileExpr, UnsupportedExprError, type CompileExprOptions } from "./expr.ts";
