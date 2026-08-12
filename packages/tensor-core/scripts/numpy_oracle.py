@@ -7,7 +7,7 @@ Reads a JSON job file:
         | "matmul" | "dot" | "cast" | "eq" | "ne" | "lt" | "lte" | "gt" | "gte"
         | "min" | "max" | "argmin" | "argmax" | "sqrt" | "variance" | "std"
         | "cumsum" | "cumprod" | "sort" | "argsort" | "topk_values" | "topk_indices"
-        | "concat" | "stack" | "where" | "relu" | "sigmoid" | "gelu" | "softmax",
+        | "concat" | "stack" | "where" | "relu" | "sigmoid" | "gelu" | "softmax" | "log",
     "ddof": 1,                            # optional (variance/std)
     "k": 3, "largest": true,              # optional (topk)
     "condition": "/path/cond.npy",        # optional (where -- npy dtype must be bool)
@@ -105,6 +105,8 @@ def main() -> None:
         result = inputs[0].argmax(axis=job.get("axis")).astype("int32")
     elif op == "sqrt":
         result = np.sqrt(inputs[0])
+    elif op == "log":
+        result = np.log(inputs[0])
     elif op == "variance":
         result = inputs[0].var(axis=job.get("axis"), ddof=job.get("ddof", 0))
     elif op == "std":

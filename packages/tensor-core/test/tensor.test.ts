@@ -810,3 +810,8 @@ test("Rng.nextBelow rejects a non-positive-integer bound", () => {
   assert.throws(() => rng.nextBelow(0), RangeError);
   assert.throws(() => rng.nextBelow(-3), RangeError);
 });
+
+test("log rejects bigint dtypes", () => {
+  const t = Tensor.from([4, 9], { dtype: "i64" });
+  assert.throws(() => t.log(), TypeError);
+});

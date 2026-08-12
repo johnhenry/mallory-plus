@@ -164,3 +164,26 @@ test("gradient of a scalar chain matches mallory-math's DualNumber forward-mode"
     );
   }
 });
+
+test("gradcheck: unsqueeze, sqrt, log", () => {
+  assertGradientMatches((x) => x.unsqueeze(0).sum(), randomTensor([4]));
+  assertGradientMatches((x) => x.unsqueeze(1).sum(), randomTensor([3, 4]));
+  assertGradientMatches(
+    (x) => x.sqrt().sum(),
+    randomTensor([5], "f64", 1).add(Tensor.full([5], 5, { dtype: "f64" })), // keep positive
+  );
+  assertGradientMatches(
+    (x) => x.log().sum(),
+    randomTensor([5], "f64", 1).add(Tensor.full([5], 5, { dtype: "f64" })), // keep positive
+  );
+});
+
+test("unsqueeze backward reduces via sum when the axis was broadcast wider than 1", () => {
+  // x: [3] -> unsqueeze(0) -> [1,3] -> broadcast-multiply against [4,3] -> sum
+  // forces the inserted axis to receive a gradient of shape [4,1], not [1,1].
+  const x = variable(Tensor.from([1, 2, 3], { dtype: "f64" }));
+  const wide = constant(Tensor.ones([4, 3], { dtype: "f64" }));
+  const y = x.unsqueeze(0).mul(wide).sum();
+  y.backward();
+  assert.deepEqual(x.grad?.toArray(), [4, 4, 4]); // summed over the 4 broadcast rows
+});

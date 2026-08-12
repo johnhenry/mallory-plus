@@ -869,6 +869,20 @@ export class Tensor {
     return out;
   }
 
+  /** Elementwise natural log. Float dtypes only; domain is (0, +Inf) same as Math.log. */
+  log(): Tensor {
+    if (isBigIntDType(this.dtype)) {
+      throw new TypeError(`log requires a float dtype, got ${this.dtype}`);
+    }
+    const out = Tensor.zeros(this.shape, { dtype: this.dtype });
+    const outData = out.data as Float64Array;
+    let i = 0;
+    for (const off of this.elementOffsets()) {
+      outData[i++] = Math.log(this.data[off] as number);
+    }
+    return out;
+  }
+
   #unaryFloat(fn: (v: number) => number): Tensor {
     if (isBigIntDType(this.dtype)) {
       throw new TypeError(`this op requires a float dtype, got ${this.dtype}`);

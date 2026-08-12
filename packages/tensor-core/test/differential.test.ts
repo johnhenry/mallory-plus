@@ -462,6 +462,12 @@ test("differential vs NumPy", { skip }, async (t) => {
     assertClose(Tensor.where(cond, a, b), expected, "where");
   });
 
+  await t.test("log matches NumPy", () => {
+    const a = randomTensor([6], "f64").add(20); // keep positive, log's domain
+    const aPath = saveTensor(dir, "log-a", a);
+    assertClose(a.log(), runOracle(dir, { op: "log", inputs: [aPath] }), "log");
+  });
+
   await t.test("relu/sigmoid/gelu match NumPy", () => {
     const a = randomTensor([6], "f64");
     const aPath = saveTensor(dir, "act-a", a);

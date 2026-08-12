@@ -62,13 +62,24 @@ interface TapeNode {
 let nextId = 0;
 
 export class Variable {
-  readonly value: Tensor;
+  /**
+   * Intentionally NOT readonly: `optim.*` steps reassign a `Parameter`
+   * leaf's value in place between training steps (`param.value =
+   * newWeights`) — a JS object-reference repoint, not an in-place Tensor
+   * mutation (the underlying `Tensor` objects stay fully immutable; this
+   * just swaps which one `.value` points at). Non-goal 7 (no in-place ops
+   * on tracked tensors) is about mutating a tensor mid-computation on the
+   * tape — nothing here does that; reassignment only happens on leaves,
+   * between backward passes, after the previous step's tape is done with.
+   */
+  value: Tensor;
   readonly requiresGrad: boolean;
   grad: Tensor | null = null;
   readonly id: number;
   readonly node: TapeNode | null;
 
-  private constructor(value: Tensor, requiresGrad: boolean, node: TapeNode | null) {
+  /** `protected`, not `private`: allows `nn.Parameter extends Variable` while still blocking `new Variable(...)` from outside the class hierarchy. */
+  protected constructor(value: Tensor, requiresGrad: boolean, node: TapeNode | null) {
     this.value = value;
     this.requiresGrad = requiresGrad;
     this.node = node;
@@ -165,7 +176,11 @@ export class Variable {
 
   // ---- differentiable ops ----------------------------------------------------
 
-  add(other: Variable): Variable {
+  add(other: Variable | number): Variable {
+    if (typeof other === "number") {
+      const value = this.value.add(other);
+      return Variable.fromOp(value, [this], (g) => [g]);
+    }
     const value = this.value.add(other.value);
     return Variable.fromOp(value, [this, other], (g) => [
       sumToShape(g, this.value.shape),
@@ -173,7 +188,11 @@ export class Variable {
     ]);
   }
 
-  sub(other: Variable): Variable {
+  sub(other: Variable | number): Variable {
+    if (typeof other === "number") {
+      const value = this.value.sub(other);
+      return Variable.fromOp(value, [this], (g) => [g]);
+    }
     const value = this.value.sub(other.value);
     return Variable.fromOp(value, [this, other], (g) => [
       sumToShape(g, this.value.shape),
@@ -181,7 +200,11 @@ export class Variable {
     ]);
   }
 
-  mul(other: Variable): Variable {
+  mul(other: Variable | number): Variable {
+    if (typeof other === "number") {
+      const value = this.value.mul(other);
+      return Variable.fromOp(value, [this], (g) => [g.mul(other)]);
+    }
     const value = this.value.mul(other.value);
     return Variable.fromOp(value, [this, other], (g) => [
       sumToShape(g.mul(other.value), this.value.shape),
@@ -208,6 +231,34 @@ export class Variable {
       g.matmul(other.value.transpose()),
       this.value.transpose().matmul(g),
     ]);
+  }
+
+  /**
+   * Insert a size-1 axis at `axis` — a view forward, differentiable backward.
+   * Needed to broadcast a reduced result back against its pre-reduction
+   * shape (e.g. LayerNorm's `mean(axis).unsqueeze(axis)` before subtracting).
+   * Backward reduces exactly the inserted axis: squeeze if it stayed size 1,
+   * sum if a later op broadcast it wider (mirrors sumToShape's logic, but
+   * targeted at one known axis instead of inferred from a shape diff).
+   */
+  unsqueeze(axis: number): Variable {
+    const ax = axis < 0 ? axis + this.value.ndim + 1 : axis;
+    const value = this.value.unsqueeze(ax);
+    return Variable.fromOp(value, [this], (g) => [
+      (g.shape[ax] as number) === 1 ? g.squeeze(ax) : g.sum(ax),
+    ]);
+  }
+
+  sqrt(): Variable {
+    const value = this.value.sqrt();
+    // d/dx sqrt(x) = 1/(2*sqrt(x))
+    return Variable.fromOp(value, [this], (g) => [g.div(value.mul(2))]);
+  }
+
+  log(): Variable {
+    const value = this.value.log();
+    // d/dx log(x) = 1/x
+    return Variable.fromOp(value, [this], (g) => [g.div(this.value)]);
   }
 
   sum(axis?: Axis): Variable {
