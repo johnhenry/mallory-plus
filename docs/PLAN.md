@@ -162,7 +162,7 @@ Where Changesets doesn't reach:
 
 | Package | Depends on | Why here |
 |---|---|---|
-| `interop-python` | `frame-arrow`, `frame-parquet`, `tensor-core` | Needs stable Arrow IPC/Parquet/.npy surfaces to bridge — explicitly last in the source's release sequence | Queued (#21), blocked on `frame-parquet` |
+| `interop-python` | `frame-arrow`, `frame-parquet`, `tensor-core` | Needs stable Arrow IPC/Parquet/.npy surfaces to bridge — explicitly last in the source's release sequence | ✅ Shipped (#21) |
 | Dataframe hardening: window ops, full groupby/join maturity | `frame-arrow`, `frame-parquet` | — | Not started |
 | `sparse.linalg` iterative solvers, `interpolate`, `special`, `stats.distributions`, full `integrate` | `tensor-core`, `tensor-autograd` | "Build later" tier — large algorithm/test surface. `adapter-math`'s Graph→CSR bridge (`toCSR(g)` → `{rowPointers, columnIndices, values, order}`, iterating the `Map` adjacency directly — never via the dense Infinity-sentinel matrix; explicit `missing: "zero"\|"infinity"` policy on the `toDense` companion) lands alongside the minimal `sparse` package | Not started |
 | GPU kernel DSL maturity (typed `kernel({inputs, output, expression})`) | `tensor-webgpu` | The *DSL* matures here; unrestricted JS-to-shader transpilation never enters scope, at any version | Not started |

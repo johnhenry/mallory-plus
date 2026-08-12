@@ -51,6 +51,38 @@ Packages are unscoped `mallory-*` names (the `@mallory` npm scope belongs to ano
 root package is `private: true` and never publishes. `packages/interop-python` is a PyPI package
 outside both the npm and Cargo workspaces, released separately.
 
+## PyPI (`interop-python`, issue #21)
+
+`packages/interop-python` ships to PyPI as **`mallory-interop`**, on its own tag-triggered release
+cadence (`.github/workflows/release-interop-python.yml`) — independent of the npm/JSR Changesets
+flow above, since it's a different package manager, versioning scheme, and release cadence
+entirely.
+
+### Prerequisite: PyPI Trusted Publishing
+
+Like the JSR job below, this uses OIDC — no token to store — but needs a one-time manual step:
+
+1. Create the `mallory-interop` project on [pypi.org](https://pypi.org) (or publish it manually
+   once first via `twine` to reserve the name, if pypi.org requires the project to already exist
+   before configuring trusted publishing for it — check current PyPI UI).
+2. In that project's **Settings → Publishing**, add a trusted publisher: repo `johnhenry/mallory-plus`,
+   workflow `release-interop-python.yml`, environment (leave blank unless you've configured one).
+
+Until that's done, `release-interop-python.yml` fails at the publish step (no token, no configured
+trusted publisher) — it isn't `continue-on-error` like the JSR job, since a failed *tag push*
+release should be visibly red, not silently swallowed.
+
+### Publishing
+
+```bash
+# bump the version in packages/interop-python/pyproject.toml first
+git tag mallory-interop-v0.0.1
+git push origin mallory-interop-v0.0.1
+```
+
+`workflow_dispatch` re-runs the publish without a new tag (e.g. after fixing a Trusted Publishing
+misconfiguration).
+
 ## JSR (dual publish, issue #25)
 
 npm is the baseline distribution channel; every publishable package is **also** published to

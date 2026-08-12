@@ -1,0 +1,40 @@
+{
+  "columns": [
+    "id",
+    "value",
+    "label",
+    "active"
+  ],
+  "rows": [
+    {
+      "id": 1,
+      "value": 1.5,
+      "label": "alpha",
+      "active": true
+    },
+    {
+      "id": 2,
+      "value": null,
+      "label": "beta",
+      "active": false
+    },
+    {
+      "id": 3,
+      "value": 3.25,
+      "label": null,
+      "active": null
+    },
+    {
+      "id": 4,
+      "value": -0.5,
+      "label": "delta",
+      "active": true
+    },
+    {
+      "id": 5,
+      "value": 100.0,
+      "label": "",
+      "active": false
+    }
+  ]
+}

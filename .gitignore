@@ -6,3 +6,8 @@ target/
 *.log
 packages/tensor-wasm/wasm/
 .claude/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+build/
+*.whl

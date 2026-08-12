@@ -38,18 +38,21 @@ jobs:
             target
           key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
 
-      # NumPy oracle for the differential tests. Without it those tests SKIP
-      # rather than fail, so the import check below is the guard that keeps
-      # CI honest about actually running them.
-      - name: Set up Python (NumPy oracle)
+      # NumPy oracle for tensor-core's differential tests, and pyarrow/pandas
+      # for frame-arrow/frame-parquet's pyarrow-round-trip tests (MALLORY_ORACLE_PYTHON,
+      # docs/TESTING.md) — every one of these tests SKIPs rather than fails
+      # when its oracle is unavailable, so the import check below is the
+      # guard that keeps CI honest about actually running them, not
+      # silently skipping and reporting green.
+      - name: Set up Python (NumPy/pyarrow/pandas oracles)
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - run: pip install numpy
+      - run: pip install numpy pyarrow pandas
 
-      - name: Verify the NumPy oracle is importable (differential tests must not skip)
-        run: python3 -c "import numpy; print('numpy', numpy.__version__)"
+      - name: Verify the oracles are importable (differential/round-trip tests must not skip)
+        run: python3 -c "import numpy, pyarrow, pandas; print('numpy', numpy.__version__, 'pyarrow', pyarrow.__version__, 'pandas', pandas.__version__)"
 
       - run: npm ci
 
@@ -61,3 +64,12 @@ jobs:
 
       - name: Unit + differential tests
         run: npm test
+
+      # packages/interop-python is a PyPI package outside the npm/Cargo
+      # workspaces (docs/RELEASING.md) — its own pytest suite needs
+      # installing separately.
+      - name: Install mallory-interop + test deps
+        run: pip install pytest -e packages/interop-python
+
+      - name: interop-python conformance tests
+        run: python3 -m pytest packages/interop-python/tests/ -v

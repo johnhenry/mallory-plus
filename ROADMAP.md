@@ -31,7 +31,13 @@ package exists, the source design conversation, non-goals, risk register), see
 | `fft`/`signal`/`image`/`trainer`/checkpoint format | Not started |
 | Native (WASM) linalg kernels | Not started — the reference-speed path in `adapter-math` covers this today |
 
-**v3 (full dataframe system, Python interop, scientific breadth): mostly not started**, as planned — `interop-python` is queued behind `frame-parquet`; everything else in this tier (window ops, sparse solvers, GPU kernel DSL maturity, Danfo/pandas parity) is intentionally deferred until its v1/v2 prerequisites land.
+**v3 (full dataframe system, Python interop, scientific breadth): `interop-python` shipped, everything else not started** as planned.
+
+| Package | Status |
+|---|---|
+| `mallory-interop` (PyPI, `packages/interop-python`) | ✅ Shipped — `read_ipc`/`write_ipc`/`read_parquet`/`write_parquet`/`.npy`/`.npz` helpers, bidirectional JS↔Python conformance proven both ways with committed fixtures |
+| Window ops, full groupby/join maturity | Not started |
+| Sparse solvers, GPU kernel DSL maturity, Danfo/pandas parity | Not started — intentionally deferred until v1/v2 prerequisites land |
 
 ## Open decisions
 
