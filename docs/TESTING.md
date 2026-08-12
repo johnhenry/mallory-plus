@@ -77,3 +77,37 @@ output.
 nix-shell -p "python3.withPackages(ps: [ps.pyarrow ps.pandas ps.numpy ps.pytest])" \
   --run "cd packages/interop-python && PYTHONPATH=src python3 -m pytest tests/ -v"
 ```
+
+## Headless WebGPU oracle (`mallory-tensor-webgpu`)
+
+Same "oracle unavailable -> skip, never fail" convention as the NumPy/pyarrow oracles above, but
+the oracle is a live `GPUAdapter` reached over the Chrome DevTools Protocol instead of a Python
+subprocess — `packages/tensor-webgpu/test/helpers.ts` launches headless Chrome under Xvfb (mirroring
+`~/.local/bin/gl-report`'s pattern on the trycooy dev machine: raw CDP over WebSocket, no
+Playwright/Puppeteer) and probes `navigator.gpu.requestAdapter()` once per test file, caching the
+result. Individual tests call `getHarness()` and `t.skip(reason)` when unavailable.
+
+Resolution order for the Chrome binary: `$MALLORY_CHROME_PATH` (explicit override), else the usual
+PATH/well-known-path candidates (`google-chrome-stable`, `/opt/google/chrome/chrome`, `chromium`,
+etc. — see `CHROME_CANDIDATES` in `helpers.ts`). `Xvfb` must also be on `PATH` (or `$DISPLAY` set to
+an already-live display) — see `docs/spikes/webgpu-baseline.md` for the exact launch flags and two
+non-obvious gotchas found while building this (WebGPU needs a real `http://` origin, not
+`about:blank`/`data:`; Chrome's `/json/new?<url>` DevTools endpoint takes a literal, not
+percent-encoded, URL).
+
+Every test file that calls `getHarness()` MUST also call `test.after(closeHarness)` — an open CDP
+`WebSocket` keeps Node's event loop alive on its own, so without it `node --test` hangs after the
+last test passes instead of exiting.
+
+`mallory-tensor-webgpu`'s own `test` script passes `node --test --test-concurrency=1` (not
+`npm test`'s usual per-workspace default) because each test file launches its own private Chrome
+instance, and concurrent files' Chrome instances contend for the same physical GPU render node —
+observed directly during development as an intermittent `requestAdapter()` -> `null` in one file
+while others succeeded.
+
+**GPU *performance* is never gated by a per-PR test** (per issue #12: no real GPU in a standard
+GitHub Actions runner, only WASM has a hardware-verified speedup assertion in CI). GEMM correctness
+IS tested against a live adapter; the WASM-vs-WebGPU crossover itself is a manually-run spike
+(`packages/tensor-webgpu/scripts/measure-gemm-threshold.ts`), recorded in
+`docs/spikes/webgpu-baseline.md`, the same way `docs/spikes/wasm-baseline.md` records the
+WASM-vs-pure-JS numbers.
