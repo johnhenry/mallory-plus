@@ -1,0 +1,34 @@
+{
+  "name": "mallory-adapter-math",
+  "version": "0.0.1",
+  "description": "Bridge between mallory-math (Vector/Matrix, science/CAS side) and mallory-tensor-core (Tensor, engineering side) — Matrix/Vector <-> Tensor conversion (issue #14); Symbolic->IR and DualNumber oracle land here too",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
+    "test": "npm run typecheck && node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "mallory-math": "^0.8.0",
+    "mallory-tensor-core": "0.0.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johnhenry/mallory-plus.git",
+    "directory": "adapters/adapter-math"
+  },
+  "license": "MIT",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
