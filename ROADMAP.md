@@ -5,28 +5,28 @@ this file is a snapshot, not a substitute for it. For the full original design r
 package exists, the source design conversation, non-goals, risk register), see
 [`docs/PLAN.md`](docs/PLAN.md).
 
-## Status (2026-08-11)
+## Status (2026-08-12)
 
 **v1 (tensor foundation + parallel dataframe start): fully shipped.**
 
 | Package | What it is |
 |---|---|
 | `mallory-tensor-core` | Typed n-D arrays: dtypes, shapes, broadcasting, views, reductions, `.npy` |
-| `mallory-tensor-wasm` | Rust/WASM kernels under tensor-core's hot paths (flat extern-C ABI, no wasm-bindgen), incl. a measured SIMD128 fast path (~2.6-3x for contiguous elementwise add/mul, feature-detected, separate `.wasm` artifact) |
+| `mallory-tensor-wasm` | Rust/WASM kernels under tensor-core's hot paths (flat extern-C ABI, no wasm-bindgen), incl. a measured SIMD128 fast path (~2.6-4.4x for contiguous elementwise add/mul, feature-detected, separate `.wasm` artifact) |
 | `mallory-tensor-autograd` | Reverse-mode tape, `nn.Linear/Embedding/LayerNorm`, `optim.SGD/AdamW` |
 | `mallory-scalar-types` | Re-exports mallory-math's `ComplexNumber`/`Rational`/`Decimal` at the tensor boundary |
 | `mallory-unit` | Dimensioned quantities (`Unit.of(55, "cm").to("m")`), dimensional-analysis-checked arithmetic |
 | `mallory-adapter-onnx` | `onnx.load()`/`model.run()` over ONNX Runtime Web, verified against real ONNX models |
-| `mallory-frame-arrow` | Immutable, expression-oriented `Frame`/`Series` on Apache Arrow, real column pruning + predicate pushdown |
-| `mallory-adapter-math` | Bridge to `mallory-math` (the pure-TS science/CAS sibling library): Matrix/Vector↔Tensor, Symbolic Expr→IR, DualNumber gradient oracle, reference-speed `linalg` |
+| `mallory-frame-arrow` | Immutable, expression-oriented `Frame`/`Series` on Apache Arrow, real column pruning + predicate pushdown, plus a `"lazySource"`/`collectAsync()` extension point for genuinely-lazy I/O-backed sources |
+| `mallory-adapter-math` | Bridge to `mallory-math` (the pure-TS science/CAS sibling library): Matrix/Vector↔Tensor, Symbolic Expr→IR, DualNumber gradient oracle, reference-speed `linalg`, `Graph`↔CSR sparse-matrix bridge |
 
-**v2 (compilation, GPU, scientific core, dataframe I/O): in progress.**
+**v2 (compilation, GPU, scientific core, dataframe I/O): mostly shipped.**
 
 | Package | Status |
 |---|---|
 | `mallory-tensor-compile` | ✅ Shipped — elementwise expression IR + fusion, the shared lowering target `compileExpr` also targets |
-| `mallory-frame-parquet` | 🔄 In progress — hyparquet-based read/write with genuine row-group pushdown |
-| `mallory-tensor-webgpu` | Not started |
+| `mallory-frame-parquet` | ✅ Shipped — hyparquet-based read/write with genuine row-group pushdown, LIST/STRUCT (single-level nested) type support, and a genuinely-lazy `scanParquetLazy` on top of frame-arrow's lazy-source extension point |
+| `mallory-tensor-webgpu` | ✅ Shipped — GEMM/attention/elementwise-fusion WGSL kernels, verified against a real headless GPUAdapter; GEMM stays WASM-routed by default (measured, no crossover found on this machine's integrated-GPU + naive-kernel combination — see `docs/spikes/webgpu-baseline.md`) |
 | `data` namespace (async loaders on `mallory-iteration`) | Blocked — waiting on `mallory-iteration`'s npm publish (it lives in the sibling [`mallory`](https://github.com/johnhenry/mallory) monorepo) |
 | `fft`/`signal`/`image`/`trainer`/checkpoint format | Not started |
 | Native (WASM) linalg kernels | Not started — the reference-speed path in `adapter-math` covers this today |
@@ -47,4 +47,4 @@ package exists, the source design conversation, non-goals, risk register), see
 ## Cross-repo dependencies
 
 - [`johnhenry/mallory`](https://github.com/johnhenry/mallory) — `mallory-math` (pure-TS science/CAS library) and `mallory-iteration` (the future `data` namespace's foundation). [Issue #13](https://github.com/johnhenry/mallory/issues/13) tracks JSR-publishing `mallory-math`/`mallory-iteration` to unblock this repo's own dual npm+JSR distribution.
-- [`johnhenry/mallory-graph`](https://github.com/johnhenry/mallory-graph) — an unrelated app whose `CellGraph` reactive store was studied as design prior art for `frame-arrow`'s lazy planner (verdict: reference only, see `docs/spikes/cellgraph-study.md`). 5 sharp edges found during that spike were reported upstream as issues #12–#16; fixes in progress.
+- [`johnhenry/mallory-graph`](https://github.com/johnhenry/mallory-graph) — an unrelated app whose `CellGraph` reactive store was studied as design prior art for `frame-arrow`'s lazy planner (verdict: reference only, see `docs/spikes/cellgraph-study.md`). 5 sharp edges found during that spike were reported upstream as issues #12–#16; all fixed and closed.
