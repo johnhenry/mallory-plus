@@ -27,6 +27,7 @@ const ROOT = new URL("..", import.meta.url).pathname;
 
 const PACKAGE_DIRS = [
   "packages/frame-arrow",
+  "packages/frame-parquet",
   "packages/scalar-types",
   "packages/telemetry",
   "packages/tensor-autograd",

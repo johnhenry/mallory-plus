@@ -125,7 +125,7 @@ jobs:
       - name: Publish every package to JSR
         continue-on-error: true
         run: |
-          for dir in packages/frame-arrow packages/scalar-types packages/telemetry \
+          for dir in packages/frame-arrow packages/frame-parquet packages/scalar-types packages/telemetry \
                      packages/tensor-autograd packages/tensor-compile packages/tensor-core \
                      packages/tensor-wasm adapters/adapter-math adapters/adapter-onnx scalars/unit; do
             echo "::group::jsr publish — $dir"
