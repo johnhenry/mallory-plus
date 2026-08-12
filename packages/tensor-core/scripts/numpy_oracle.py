@@ -4,7 +4,8 @@
 Reads a JSON job file:
   {
     "op": "add" | "sub" | "mul" | "div" | "sum" | "mean" | "arange" | "permute" | "slice"
-        | "matmul" | "dot" | "cast" | "eq" | "ne" | "lt" | "lte" | "gt" | "gte",
+        | "matmul" | "dot" | "cast" | "eq" | "ne" | "lt" | "lte" | "gt" | "gte"
+        | "min" | "max" | "argmin" | "argmax",
     "inputs": ["/path/a.npy", ...],       # .npy files written by tensor-core
     "axis": 1,                            # optional (reductions)
     "permutation": [1, 0],                # optional (permute op)
@@ -89,6 +90,14 @@ def main() -> None:
             "gt": lambda: a > b,
             "gte": lambda: a >= b,
         }[op]()
+    elif op == "min":
+        result = inputs[0].min(axis=job.get("axis"))
+    elif op == "max":
+        result = inputs[0].max(axis=job.get("axis"))
+    elif op == "argmin":
+        result = inputs[0].argmin(axis=job.get("axis")).astype("int32")
+    elif op == "argmax":
+        result = inputs[0].argmax(axis=job.get("axis")).astype("int32")
     else:
         raise SystemExit(f"unknown op {op!r}")
 

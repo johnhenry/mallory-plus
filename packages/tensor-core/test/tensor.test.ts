@@ -528,3 +528,45 @@ test("any/all work directly on non-bool tensors via truthiness", () => {
   assert.equal(t.any().item(), 1);
   assert.equal(t.all().item(), 0);
 });
+
+// ---- min/max & argmin/argmax (issue #4) ------------------------------------
+
+test("min/max over all elements and per-axis", () => {
+  const t = Tensor.from([3, 1, 4, 1, 5, 9], { dtype: "f64" }).reshape([2, 3]);
+  assert.equal(t.min().item(), 1);
+  assert.equal(t.max().item(), 9);
+  assert.deepEqual(t.min(0).toArray(), [1, 1, 4]); // per-column min: [3,1]->1, [1,5]->1, [4,9]->4
+  assert.deepEqual(t.max(1).toArray(), [4, 9]);
+});
+
+test("min/max preserve dtype (incl. i64)", () => {
+  const t = Tensor.from([5, 2, 8], { dtype: "i64" });
+  const mn = t.min();
+  assert.equal(mn.dtype, "i64");
+  assert.equal(mn.item(), 2n);
+});
+
+test("min/max throw on empty reductions", () => {
+  const t = Tensor.zeros([0], { dtype: "f64" });
+  assert.throws(() => t.min(), RangeError);
+});
+
+test("argmin/argmax: flattened index when axis omitted, first-occurrence tie-break", () => {
+  const t = Tensor.from([3, 1, 4, 1, 5, 9], { dtype: "f64" }).reshape([2, 3]);
+  assert.equal(t.argmin().dtype, "i32");
+  assert.equal(t.argmin().item(), 1); // first "1" at flat index 1, not 3
+  assert.equal(t.argmax().item(), 5); // the "9" at flat index 5
+});
+
+test("argmin/argmax per axis", () => {
+  const t = Tensor.from([3, 1, 4, 1, 5, 9], { dtype: "f64" }).reshape([2, 3]);
+  assert.deepEqual(t.argmin(0).toArray(), [1, 0, 0]); // per-column argmin: [3,1]->1, [1,5]->0, [4,9]->0
+  assert.deepEqual(t.argmax(1).toArray(), [2, 2]); // index within each row
+});
+
+test("min/max/argmin/argmax on non-contiguous views", () => {
+  const t = Tensor.from([1, 2, 3, 4, 5, 6], { dtype: "f64" }).reshape([2, 3]);
+  const p = t.permute([1, 0]); // [[1,4],[2,5],[3,6]]
+  assert.deepEqual(p.max(1).toArray(), [4, 5, 6]);
+  assert.deepEqual(p.argmax(1).toArray(), [1, 1, 1]);
+});

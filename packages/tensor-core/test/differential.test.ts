@@ -336,4 +336,19 @@ test("differential vs NumPy", { skip }, async (t) => {
       assertBoolEqual(a[op](b), expected, op);
     }
   });
+
+  await t.test("min/max/argmin/argmax match NumPy, full and per-axis", () => {
+    const a = randomTensor([4, 5], "f64");
+    const aPath = saveTensor(dir, "extrema-a", a);
+    for (const op of ["min", "max"] as const) {
+      assertClose(a[op](), runOracle(dir, { op, inputs: [aPath] }), op);
+      assertClose(a[op](0), runOracle(dir, { op, inputs: [aPath], axis: 0 }), op);
+      assertClose(a[op](1), runOracle(dir, { op, inputs: [aPath], axis: 1 }), op);
+    }
+    for (const op of ["argmin", "argmax"] as const) {
+      assertClose(a[op](), runOracle(dir, { op, inputs: [aPath] }), op);
+      assertClose(a[op](0), runOracle(dir, { op, inputs: [aPath], axis: 0 }), op);
+      assertClose(a[op](1), runOracle(dir, { op, inputs: [aPath], axis: 1 }), op);
+    }
+  });
 });

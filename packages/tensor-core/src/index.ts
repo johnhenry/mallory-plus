@@ -1107,6 +1107,141 @@ export class Tensor {
     return out;
   }
 
+  // ---- min/max & argmin/argmax (issue #4) ------------------------------------
+
+  min(axis?: Axis): Tensor {
+    return this.#extremum(axis, false);
+  }
+
+  max(axis?: Axis): Tensor {
+    return this.#extremum(axis, true);
+  }
+
+  #extremum(axis: Axis | undefined, wantMax: boolean): Tensor {
+    const label = wantMax ? "max" : "min";
+    const big = isBigIntDType(this.dtype);
+    const better = (v: number | bigint, best: number | bigint): boolean =>
+      big
+        ? wantMax
+          ? (v as bigint) > (best as bigint)
+          : (v as bigint) < (best as bigint)
+        : wantMax
+          ? (v as number) > (best as number)
+          : (v as number) < (best as number);
+
+    if (axis === undefined) {
+      if (this.size === 0) throw new RangeError(`${label} of an empty tensor`);
+      let best: number | bigint | undefined;
+      for (const off of this.elementOffsets()) {
+        const v = this.data[off] as number | bigint;
+        if (best === undefined || better(v, best)) best = v;
+      }
+      const out = Tensor.zeros([], { dtype: this.dtype });
+      out.data[0] = best as never;
+      return out;
+    }
+
+    const ax = this.#normalizeAxis(axis);
+    const reduceDim = this.shape[ax] as number;
+    if (reduceDim === 0) throw new RangeError(`${label} of an empty axis`);
+    const outShape = this.shape.filter((_, i) => i !== ax);
+    const reduceStride = this.strides[ax] as number;
+    const out = Tensor.zeros(outShape, { dtype: this.dtype });
+    const leadStrides = this.strides.filter((_, i) => i !== ax);
+    const leadSize = shapeSize(outShape);
+    const index = new Array<number>(outShape.length).fill(0);
+    let base = this.offset;
+    for (let i = 0; i < leadSize; i++) {
+      let best = this.data[base] as number | bigint;
+      for (let j = 1; j < reduceDim; j++) {
+        const v = this.data[base + j * reduceStride] as number | bigint;
+        if (better(v, best)) best = v;
+      }
+      out.data[i] = best as never;
+      for (let a = outShape.length - 1; a >= 0; a--) {
+        index[a] = (index[a] as number) + 1;
+        base += leadStrides[a] as number;
+        if ((index[a] as number) < (outShape[a] as number)) break;
+        index[a] = 0;
+        base -= (outShape[a] as number) * (leadStrides[a] as number);
+      }
+    }
+    return out;
+  }
+
+  /** Index of the minimum: flattened C-order index if `axis` is omitted. */
+  argmin(axis?: Axis): Tensor {
+    return this.#argExtremum(axis, false);
+  }
+
+  /** Index of the maximum: flattened C-order index if `axis` is omitted. */
+  argmax(axis?: Axis): Tensor {
+    return this.#argExtremum(axis, true);
+  }
+
+  #argExtremum(axis: Axis | undefined, wantMax: boolean): Tensor {
+    const label = wantMax ? "argmax" : "argmin";
+    const big = isBigIntDType(this.dtype);
+    const better = (v: number | bigint, best: number | bigint): boolean =>
+      big
+        ? wantMax
+          ? (v as bigint) > (best as bigint)
+          : (v as bigint) < (best as bigint)
+        : wantMax
+          ? (v as number) > (best as number)
+          : (v as number) < (best as number);
+
+    if (axis === undefined) {
+      if (this.size === 0) throw new RangeError(`${label} of an empty tensor`);
+      let best: number | bigint | undefined;
+      let bestIndex = 0;
+      let i = 0;
+      for (const off of this.elementOffsets()) {
+        const v = this.data[off] as number | bigint;
+        if (best === undefined || better(v, best)) {
+          best = v;
+          bestIndex = i;
+        }
+        i++;
+      }
+      const out = Tensor.zeros([], { dtype: "i32" });
+      (out.data as Int32Array)[0] = bestIndex;
+      return out;
+    }
+
+    const ax = this.#normalizeAxis(axis);
+    const reduceDim = this.shape[ax] as number;
+    if (reduceDim === 0) throw new RangeError(`${label} of an empty axis`);
+    const outShape = this.shape.filter((_, i) => i !== ax);
+    const reduceStride = this.strides[ax] as number;
+    const out = Tensor.zeros(outShape, { dtype: "i32" });
+    const leadStrides = this.strides.filter((_, i) => i !== ax);
+    const leadSize = shapeSize(outShape);
+    const index = new Array<number>(outShape.length).fill(0);
+    let base = this.offset;
+    const outData = out.data as Int32Array;
+    for (let i = 0; i < leadSize; i++) {
+      let best = this.data[base] as number | bigint;
+      let bestIndex = 0;
+      for (let j = 1; j < reduceDim; j++) {
+        const v = this.data[base + j * reduceStride] as number | bigint;
+        if (better(v, best)) {
+          best = v;
+          bestIndex = j;
+        }
+      }
+      outData[i] = bestIndex;
+      for (let a = outShape.length - 1; a >= 0; a--) {
+        index[a] = (index[a] as number) + 1;
+        base += leadStrides[a] as number;
+        if ((index[a] as number) < (outShape[a] as number)) break;
+        index[a] = 0;
+        base -= (outShape[a] as number) * (leadStrides[a] as number);
+      }
+    }
+    return out;
+  }
+
   // ---- .npy I/O -------------------------------------------------------------
 
   /** Serialize to NPY v1.0 bytes (packs a non-contiguous view first). */
