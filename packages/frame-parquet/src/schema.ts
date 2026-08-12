@@ -21,12 +21,35 @@
  *   UINT_32 converted/logical annotations), INT64 (+TIMESTAMP_MILLIS/
  *   TIMESTAMP_MICROS), FLOAT, DOUBLE, BYTE_ARRAY decoded as UTF8 (hyparquet's
  *   default `utf8: true` read option, which this package always sets).
+ * - Supported group types (issue #30, follow-up to #20): a Parquet LIST
+ *   column following the standard 3-level list/element repetition
+ *   convention (`optional group name (LIST) { repeated group list {
+ *   optional|required <leaf> element; } }` — legacy `converted_type: 'LIST'`
+ *   and the newer `logical_type: { type: 'LIST' }` annotation are both
+ *   recognized, matching what real writers emit) maps to frame-arrow's
+ *   `list<T>` DType, and a flat STRUCT group (any group that isn't LIST/MAP,
+ *   whose fields are themselves all leaves) maps to `struct<...>`. Nulls at
+ *   every level — null list vs. empty list vs. a null element inside a
+ *   non-null list; null struct vs. a struct with a null field — round-trip
+ *   exactly, since hyparquet has already done the dremel repetition/
+ *   definition-level reconstruction into plain nested JS arrays/objects by
+ *   the time this package sees a row (see read.ts's module doc); this module
+ *   only has to get the *type* right, not reassemble the nesting itself.
+ *   Deeply nested types (list<struct>, struct<list>, list<list>) are NOT
+ *   supported — frame-arrow's own Frame doesn't support them either (see
+ *   its dtype.ts), so there's nothing to gain by accepting them here only to
+ *   have Frame.fromArrow() reject them later; they throw
+ *   {@link UnsupportedParquetTypeError} at this schema-mapping step instead,
+ *   naming the column, same as every other unsupported type in this file.
  * - Deferred, throws {@link UnsupportedParquetTypeError}: INT96, INT64 with
  *   NANOS unit or unsigned width, DATE/TIME/DECIMAL/JSON/BSON/ENUM/UUID/
- *   FLOAT16/GEOMETRY/GEOGRAPHY/VARIANT converted or logical types, and any
- *   group (LIST/MAP/STRUCT) column — nested types are a real gap (tracked as
- *   a follow-up issue), not a silent drop: a file containing one is rejected
- *   at the schema-mapping step before any row is read, naming the column.
+ *   FLOAT16/GEOMETRY/GEOGRAPHY/VARIANT converted or logical types, MAP
+ *   columns (the outer group carries legacy `converted_type: 'MAP'` and/or
+ *   `logical_type: { type: 'MAP' }` — `MAP_KEY_VALUE` only ever shows up one
+ *   level down, on the inner repeated group, so it's not part of THIS check)
+ *   — a real gap, not attempted here since frame-arrow has no map DType to
+ *   map it to — and the deeply-nested LIST/STRUCT combinations described
+ *   above.
  *
  * Dictionary-encoded parquet columns are NOT surfaced as frame-arrow's
  * `"dictionary"` DType — hyparquet materializes them to plain strings with
@@ -38,12 +61,15 @@
 import {
   Bool,
   type DataType,
+  Field,
   Float32,
   Float64,
   Int16,
   Int32,
   Int64,
   Int8,
+  List,
+  Struct,
   TimestampMicrosecond,
   TimestampMillisecond,
   Uint16,
@@ -67,6 +93,12 @@ export class UnsupportedParquetTypeError extends TypeError {
 export interface ParquetColumnType {
   readonly dtype: DType;
   readonly timezone?: string | null;
+  /** For dtype "list"/"struct" only: the exact Arrow `List`/`Struct` DataType
+   * computed during schema mapping. Unlike the flat scalar dtypes, list/struct
+   * can't be rebuilt generically from a dtype tag alone (the item type/struct
+   * fields matter) — {@link arrowTypeFor} just returns this precomputed value
+   * rather than trying to reconstruct it. */
+  readonly nestedArrowType?: DataType;
 }
 
 function mapInt32(element: SchemaElement): ParquetColumnType {
@@ -143,6 +175,79 @@ export function mapLeafElement(element: SchemaElement): ParquetColumnType {
   }
 }
 
+/**
+ * A Parquet group node is LIST-like when it follows the standard 3-level
+ * convention: exactly one REPEATED child ("list"), which itself has exactly
+ * one child ("element", the actual item). Only the SHAPE is checked, not the
+ * middle/leaf names — the convention doesn't mandate "list"/"element"
+ * specifically, and real writers vary (mirrors hyparquet's own internal
+ * `isListLike`, which this package deliberately does not import since it
+ * lives under hyparquet's `src/` rather than its public `index.js` surface).
+ */
+function isListGroup(child: SchemaTree): boolean {
+  return child.element.converted_type === "LIST" || child.element.logical_type?.type === "LIST";
+}
+
+/** Legacy `MAP_KEY_VALUE` shows up on the *middle* group in some old files,
+ * but the outer group (what this function is called with) always carries
+ * `converted_type: 'MAP'` and/or `logical_type: { type: 'MAP' }` — checking
+ * both covers writers that only emit one. */
+function isMapGroup(child: SchemaTree): boolean {
+  return child.element.converted_type === "MAP" || child.element.logical_type?.type === "MAP";
+}
+
+/** Map a Parquet LIST group (3-level convention) to frame-arrow's `list<T>`. */
+function mapListGroup(child: SchemaTree): ParquetColumnType {
+  const name = child.element.name;
+  const middle = child.children[0];
+  if (child.children.length !== 1 || !middle || middle.element.repetition_type !== "REPEATED" || middle.children.length !== 1) {
+    throw new UnsupportedParquetTypeError(name, "a LIST group not in the standard 3-level list/element repetition convention");
+  }
+  const elementNode = middle.children[0] as SchemaTree;
+  if (elementNode.children.length > 0) {
+    throw new UnsupportedParquetTypeError(
+      name,
+      "a list of a nested type (list<struct>/list<list>) — deeply nested Parquet types are not supported " +
+        "(frame-arrow itself only supports single-level list/struct, see its dtype.ts)",
+    );
+  }
+  const itemNullable = elementNode.element.repetition_type !== "REQUIRED";
+  const item = mapLeafElement(elementNode.element);
+  const nestedArrowType = new List(new Field("item", arrowTypeFor(item), itemNullable));
+  return { dtype: "list", nestedArrowType };
+}
+
+/** Map a flat Parquet STRUCT group (every field a leaf) to frame-arrow's `struct<...>`. */
+function mapStructGroup(child: SchemaTree): ParquetColumnType {
+  const name = child.element.name;
+  const fields = child.children.map((field) => {
+    if (field.children.length > 0) {
+      throw new UnsupportedParquetTypeError(
+        name,
+        `struct field "${field.element.name}" is itself a nested group — deeply nested Parquet types are not ` +
+          "supported (frame-arrow itself only supports single-level list/struct, see its dtype.ts)",
+      );
+    }
+    const leaf = mapLeafElement(field.element);
+    const nullable = field.element.repetition_type !== "REQUIRED";
+    return new Field(field.element.name, arrowTypeFor(leaf), nullable);
+  });
+  return { dtype: "struct", nestedArrowType: new Struct(fields) };
+}
+
+/** Map a group (non-leaf) SchemaElement to frame-arrow's `list`/`struct` DType, or throw. */
+function mapGroupElement(child: SchemaTree): ParquetColumnType {
+  if (isMapGroup(child)) {
+    throw new UnsupportedParquetTypeError(
+      child.element.name,
+      "a MAP group — Parquet MAP columns are not supported in mallory-frame-parquet v1 (LIST/STRUCT are; " +
+        "frame-arrow has no map DType to map a MAP column to)",
+    );
+  }
+  if (isListGroup(child)) return mapListGroup(child);
+  return mapStructGroup(child);
+}
+
 export interface ParquetColumnSchema extends ParquetColumnType {
   readonly name: string;
   readonly nullable: boolean;
@@ -160,27 +265,27 @@ export function topLevelColumnNames(tree: SchemaTree): string[] {
 /**
  * Map exactly the named top-level columns to frame-arrow-typed column
  * descriptors, in the given order. Throws {@link UnsupportedParquetTypeError}
- * for any of THOSE columns that's a nested group (LIST/MAP/STRUCT) or an
- * otherwise-unsupported leaf type — naming it — but never inspects, and
- * therefore never throws on, a column that isn't in `names`. This mirrors
- * frame-arrow's own pruning philosophy (packages/frame-arrow/src/plan.ts's
- * module doc: "a column that's pruned away is never read, never
- * type-checked, and never throws") at the schema-mapping step, before any
- * row is even read.
+ * for any of THOSE columns that's a MAP group, a deeply-nested LIST/STRUCT
+ * combination, or an otherwise-unsupported leaf type — naming it — but never
+ * inspects, and therefore never throws on, a column that isn't in `names`.
+ * This mirrors frame-arrow's own pruning philosophy
+ * (packages/frame-arrow/src/plan.ts's module doc: "a column that's pruned
+ * away is never read, never type-checked, and never throws") at the
+ * schema-mapping step, before any row is even read. LIST (standard 3-level
+ * convention) and flat STRUCT groups map to frame-arrow's `list<T>`/
+ * `struct<...>` — see this module's doc comment.
  */
 export function mapNamedColumns(tree: SchemaTree, names: readonly string[]): ParquetColumnSchema[] {
   const byName = new Map(tree.children.map((child) => [child.element.name, child] as const));
   return names.map((name) => {
     const child = byName.get(name);
     if (!child) throw new Error(`no such column "${name}"`);
+    const nullable = child.element.repetition_type !== "REQUIRED";
     if (child.children.length > 0) {
-      throw new UnsupportedParquetTypeError(
-        name,
-        "a nested group (LIST/MAP/STRUCT) — nested Parquet types are not supported in mallory-frame-parquet v1",
-      );
+      const { dtype, nestedArrowType } = mapGroupElement(child);
+      return { name, dtype, nullable, nestedArrowType };
     }
     const { dtype, timezone } = mapLeafElement(child.element);
-    const nullable = child.element.repetition_type !== "REQUIRED";
     return { name, dtype, timezone, nullable };
   });
 }
@@ -201,11 +306,20 @@ export function mapTopLevelColumns(tree: SchemaTree): ParquetColumnSchema[] {
  * frame-arrow's own `arrowTypeFor` (dtype.ts) isn't part of its public
  * export surface (see index.ts) — this is a small, deliberately-scoped
  * reimplementation covering exactly this package's v1 supported subset
- * (no "dictionary"/"list"/"struct" cases, since read.ts/schema.ts never
- * produce those dtypes).
+ * (no "dictionary" case, since read.ts/schema.ts never produce that dtype —
+ * "list"/"struct" ARE produced, but just return the already-computed
+ * {@link ParquetColumnType.nestedArrowType} rather than rebuilding it, since
+ * unlike the flat scalar dtypes a list/struct DataType can't be reconstructed
+ * from the dtype tag alone).
  */
 export function arrowTypeFor(col: ParquetColumnType): DataType {
   switch (col.dtype) {
+    case "list":
+    case "struct":
+      if (!col.nestedArrowType) {
+        throw new Error(`frame-parquet arrowTypeFor: dtype "${col.dtype}" is missing its precomputed nestedArrowType`);
+      }
+      return col.nestedArrowType;
     case "bool":
       return new Bool();
     case "int8":
@@ -233,6 +347,6 @@ export function arrowTypeFor(col: ParquetColumnType): DataType {
     case "timestamp_us":
       return new TimestampMicrosecond(col.timezone ?? null);
     default:
-      throw new Error(`frame-parquet arrowTypeFor: unexpected dtype "${col.dtype}" (dictionary/list/struct are not produced by the read path)`);
+      throw new Error(`frame-parquet arrowTypeFor: unexpected dtype "${col.dtype}" (dictionary is not produced by the read path)`);
   }
 }
