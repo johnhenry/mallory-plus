@@ -7,7 +7,7 @@ Reads a JSON job file:
         | "matmul" | "dot" | "cast" | "eq" | "ne" | "lt" | "lte" | "gt" | "gte"
         | "min" | "max" | "argmin" | "argmax" | "sqrt" | "variance" | "std"
         | "cumsum" | "cumprod" | "sort" | "argsort" | "topk_values" | "topk_indices"
-        | "concat" | "stack" | "where",
+        | "concat" | "stack" | "where" | "relu" | "sigmoid" | "gelu" | "softmax",
     "ddof": 1,                            # optional (variance/std)
     "k": 3, "largest": true,              # optional (topk)
     "condition": "/path/cond.npy",        # optional (where -- npy dtype must be bool)
@@ -134,6 +134,20 @@ def main() -> None:
     elif op == "where":
         cond = np.load(job["condition"])
         result = np.where(cond, inputs[0], inputs[1])
+    elif op == "relu":
+        result = np.maximum(inputs[0], 0)
+    elif op == "sigmoid":
+        result = 1 / (1 + np.exp(-inputs[0]))
+    elif op == "gelu":
+        x = inputs[0]
+        c = np.sqrt(2 / np.pi)
+        result = 0.5 * x * (1 + np.tanh(c * (x + 0.044715 * x**3)))
+    elif op == "softmax":
+        x = inputs[0]
+        axis = job.get("axis", -1)
+        shifted = x - np.max(x, axis=axis, keepdims=True)
+        expd = np.exp(shifted)
+        result = expd / np.sum(expd, axis=axis, keepdims=True)
     else:
         raise SystemExit(f"unknown op {op!r}")
 

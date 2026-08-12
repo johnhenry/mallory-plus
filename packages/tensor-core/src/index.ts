@@ -869,6 +869,46 @@ export class Tensor {
     return out;
   }
 
+  #unaryFloat(fn: (v: number) => number): Tensor {
+    if (isBigIntDType(this.dtype)) {
+      throw new TypeError(`this op requires a float dtype, got ${this.dtype}`);
+    }
+    const out = Tensor.zeros(this.shape, { dtype: this.dtype });
+    const outData = out.data as Float64Array;
+    let i = 0;
+    for (const off of this.elementOffsets()) {
+      outData[i++] = fn(this.data[off] as number);
+    }
+    return out;
+  }
+
+  /** Elementwise ReLU: `max(x, 0)`. Documented tensor-core v1 scope (PLAN.md §6.1); float dtypes only. */
+  relu(): Tensor {
+    return this.#unaryFloat((v) => (v > 0 ? v : 0));
+  }
+
+  /** Elementwise sigmoid: `1 / (1 + exp(-x))`. Float dtypes only. */
+  sigmoid(): Tensor {
+    return this.#unaryFloat((v) => 1 / (1 + Math.exp(-v)));
+  }
+
+  /** Elementwise GELU (tanh approximation, matching common ML-library defaults). Float dtypes only. */
+  gelu(): Tensor {
+    const c = Math.sqrt(2 / Math.PI);
+    return this.#unaryFloat((v) => 0.5 * v * (1 + Math.tanh(c * (v + 0.044715 * v ** 3))));
+  }
+
+  /** Softmax along `axis` (default: last axis). Numerically stable (subtracts the per-row max first). */
+  softmax(axis: Axis = -1): Tensor {
+    if (isBigIntDType(this.dtype)) {
+      throw new TypeError(`softmax requires a float dtype, got ${this.dtype}`);
+    }
+    const ax = this.#normalizeAxis(axis);
+    const shifted = this.sub(this.max(ax).unsqueeze(ax).broadcastTo(this.shape).contiguous());
+    const expd = shifted.#unaryFloat(Math.exp);
+    return expd.div(expd.sum(ax).unsqueeze(ax).broadcastTo(this.shape).contiguous());
+  }
+
   // ---- matmul (issue #2) ---------------------------------------------------
 
   /**

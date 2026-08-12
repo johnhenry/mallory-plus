@@ -461,4 +461,27 @@ test("differential vs NumPy", { skip }, async (t) => {
     });
     assertClose(Tensor.where(cond, a, b), expected, "where");
   });
+
+  await t.test("relu/sigmoid/gelu match NumPy", () => {
+    const a = randomTensor([6], "f64");
+    const aPath = saveTensor(dir, "act-a", a);
+    for (const op of ["relu", "sigmoid", "gelu"] as const) {
+      assertClose(a[op](), runOracle(dir, { op, inputs: [aPath] }), op);
+    }
+  });
+
+  await t.test("softmax matches NumPy, default and explicit axis, sums to 1", () => {
+    const a = randomTensor([4, 5], "f64");
+    const aPath = saveTensor(dir, "softmax-a", a);
+    assertClose(a.softmax(), runOracle(dir, { op: "softmax", inputs: [aPath] }), "softmax");
+    assertClose(
+      a.softmax(0),
+      runOracle(dir, { op: "softmax", inputs: [aPath], axis: 0 }),
+      "softmax",
+    );
+    const rowSums = a.softmax().sum(1);
+    for (const v of rowSums.toArray() as number[]) {
+      assert.ok(Math.abs(v - 1) < 1e-9, `row sum ${v} != 1`);
+    }
+  });
 });
