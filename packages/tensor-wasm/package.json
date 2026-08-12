@@ -19,7 +19,8 @@
   "scripts": {
     "build:wasm": "cargo build --release --target wasm32-unknown-unknown -p tensor-wasm-kernels && node scripts/copy-wasm.mjs",
     "build": "tsc -p tsconfig.json",
-    "test": "node --test test/*.test.ts"
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
+    "test": "npm run typecheck && node --test test/*.test.ts"
   },
   "repository": {
     "type": "git",
