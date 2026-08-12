@@ -74,6 +74,7 @@ const TOLERANCES: Record<string, { rtol: number; atol: number }> = {
   "default:f32": { rtol: 1e-5, atol: 1e-6 },
   "default:f64": { rtol: 1e-12, atol: 1e-12 },
   "sum:f32": { rtol: 1e-4, atol: 1e-5 },
+  "matmul:f32": { rtol: 1e-4, atol: 1e-5 },
   "mean:f32": { rtol: 1e-4, atol: 1e-5 },
 };
 
@@ -235,5 +236,74 @@ test("differential vs NumPy", { skip }, async (t) => {
       { step: -1 },
     );
     assertClose(sliced.contiguous(), expected, "slice");
+  });
+
+  await t.test("matmul 2-D matches NumPy", () => {
+    const a = randomTensor([4, 3], "f64");
+    const b = randomTensor([3, 5], "f64");
+    const expected = runOracle(dir, {
+      op: "matmul",
+      inputs: [saveTensor(dir, "mm-a", a), saveTensor(dir, "mm-b", b)],
+    });
+    assertClose(a.matmul(b), expected, "matmul");
+  });
+
+  await t.test("matmul on transposed (non-contiguous) operands matches NumPy", () => {
+    const a = randomTensor([3, 4], "f64"); // will use a.T: (4,3)
+    const b = randomTensor([3, 5], "f64"); // will use b.T: (5,3), then .T again isn't needed
+    const aTPath = saveTensor(dir, "mm-aT", a.permute([1, 0])); // packs transposed
+    const bPath = saveTensor(dir, "mm-b2", b);
+    const expected = runOracle(dir, { op: "matmul", inputs: [aTPath, bPath] });
+    // a.permute([1,0]) is a non-contiguous (4,3) view; matmul must not copy it first.
+    assertClose(a.permute([1, 0]).matmul(b), expected, "matmul");
+  });
+
+  await t.test("matmul batched (leading-axis broadcast) matches NumPy", () => {
+    const a = randomTensor([2, 3, 4], "f64"); // batch=2
+    const b = randomTensor([4, 5], "f64"); // broadcasts across the batch
+    const expected = runOracle(dir, {
+      op: "matmul",
+      inputs: [saveTensor(dir, "mm-batch-a", a), saveTensor(dir, "mm-batch-b", b)],
+    });
+    assertClose(a.matmul(b), expected, "matmul");
+  });
+
+  await t.test("matmul with a 1-D operand matches NumPy's squeeze rules", () => {
+    const mat = randomTensor([4, 3], "f64");
+    const vecK = randomTensor([3], "f64");
+    const vecM = randomTensor([4], "f64");
+
+    const mv = runOracle(dir, {
+      op: "matmul",
+      inputs: [saveTensor(dir, "mv-a", mat), saveTensor(dir, "mv-b", vecK)],
+    });
+    assertClose(mat.matmul(vecK), mv, "matmul"); // (4,3)@(3,) -> (4,)
+
+    const vm = runOracle(dir, {
+      op: "matmul",
+      inputs: [saveTensor(dir, "vm-a", vecM), saveTensor(dir, "vm-b", mat)],
+    });
+    assertClose(vecM.matmul(mat), vm, "matmul"); // (4,)@(4,3) -> (3,)
+  });
+
+  await t.test("dot on 1-D operands matches NumPy (0-d result)", () => {
+    const a = randomTensor([6], "f64");
+    const b = randomTensor([6], "f64");
+    const expected = runOracle(dir, {
+      op: "dot",
+      inputs: [saveTensor(dir, "dot-a", a), saveTensor(dir, "dot-b", b)],
+    });
+    assertClose(a.dot(b), expected, "dot");
+  });
+
+  await t.test("matmul on i64 operands matches NumPy exactly", () => {
+    const a = randomTensor([3, 4], "i64");
+    const b = randomTensor([4, 2], "i64");
+    const expected = runOracle(dir, {
+      op: "matmul",
+      inputs: [saveTensor(dir, "mm-i64-a", a), saveTensor(dir, "mm-i64-b", b)],
+    });
+    assert.equal(expected.dtype, "i64");
+    assertClose(a.matmul(b), expected, "matmul");
   });
 });

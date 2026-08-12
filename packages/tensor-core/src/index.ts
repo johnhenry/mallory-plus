@@ -649,6 +649,132 @@ export class Tensor {
     return this.#binary("div", other);
   }
 
+  // ---- matmul (issue #2) ---------------------------------------------------
+
+  /**
+   * NumPy `matmul` semantics: the last two axes of each operand are treated
+   * as matrices, leading axes broadcast (batched matmul). A 1-D operand gets
+   * a size-1 axis prepended (lhs) or appended (rhs) for the multiply, then
+   * that axis is squeezed back out of the result — so `(n,) @ (n,)` yields a
+   * 0-d scalar, `(n,) @ (n,k)` yields `(k,)`, `(m,n) @ (n,)` yields `(m,)`.
+   *
+   * Pure-JS reference (naive triple loop); operates directly on strided
+   * views — a transposed operand is never implicitly copied. A WASM GEMM
+   * kernel swaps in underneath this same signature later (issue #3).
+   */
+  matmul(other: Tensor): Tensor {
+    if (other.dtype !== this.dtype) {
+      throw new TypeError(
+        `dtype mismatch: ${this.dtype} vs ${other.dtype} (no implicit promotion; cast() first)`,
+      );
+    }
+    if (this.ndim === 0 || other.ndim === 0) {
+      throw new RangeError("matmul operands must have ndim >= 1 (scalars aren't matrices)");
+    }
+
+    const lhsIs1D = this.ndim === 1;
+    const rhsIs1D = other.ndim === 1;
+    const lhsShape = lhsIs1D ? [1, this.shape[0] as number] : [...this.shape];
+    const rhsShape = rhsIs1D
+      ? [other.shape[0] as number, 1]
+      : [...other.shape];
+
+    const m = lhsShape[lhsShape.length - 2] as number;
+    const k = lhsShape[lhsShape.length - 1] as number;
+    const k2 = rhsShape[rhsShape.length - 2] as number;
+    const n = rhsShape[rhsShape.length - 1] as number;
+    if (k !== k2) {
+      throw new RangeError(
+        `matmul: inner dimensions ${k} and ${k2} do not match (shapes [${this.shape}] @ [${other.shape}])`,
+      );
+    }
+
+    const lhsBatch = lhsShape.slice(0, -2);
+    const rhsBatch = rhsShape.slice(0, -2);
+    const batchShape = broadcastShapes(lhsBatch, rhsBatch);
+
+    const fullOutShape = [...batchShape, m, n];
+    const out = Tensor.zeros(fullOutShape, { dtype: this.dtype });
+
+    const lhsBatchStrides = broadcastStrides(
+      lhsBatch,
+      this.strides.slice(0, lhsBatch.length),
+      batchShape,
+    );
+    const rhsBatchStrides = broadcastStrides(
+      rhsBatch,
+      other.strides.slice(0, rhsBatch.length),
+      batchShape,
+    );
+    const lhsRowStride = this.strides[lhsIs1D ? 0 : this.ndim - 2] as number;
+    const lhsColStride = this.strides[this.ndim - 1] as number;
+    const rhsRowStride = other.strides[other.ndim - (rhsIs1D ? 1 : 2)] as number;
+    const rhsColStride = rhsIs1D ? 0 : (other.strides[other.ndim - 1] as number);
+
+    const batchSize = batchShape.reduce((a, b) => a * b, 1);
+    const batchIndex = new Array<number>(batchShape.length).fill(0);
+    let lhsBatchOffset = this.offset;
+    let rhsBatchOffset = other.offset;
+    const big = isBigIntDType(this.dtype);
+
+    for (let b = 0; b < batchSize; b++) {
+      const outBase = b * m * n;
+      for (let i = 0; i < m; i++) {
+        const lhsRowBase = lhsBatchOffset + i * lhsRowStride;
+        for (let j = 0; j < n; j++) {
+          const rhsColBase = rhsBatchOffset + j * rhsColStride;
+          if (big) {
+            let acc = 0n;
+            for (let p = 0; p < k; p++) {
+              acc +=
+                (this.data[lhsRowBase + p * lhsColStride] as bigint) *
+                (other.data[rhsColBase + p * rhsRowStride] as bigint);
+            }
+            (out.data as BigInt64Array)[outBase + i * n + j] = acc;
+          } else {
+            let acc = 0;
+            for (let p = 0; p < k; p++) {
+              acc +=
+                (this.data[lhsRowBase + p * lhsColStride] as number) *
+                (other.data[rhsColBase + p * rhsRowStride] as number);
+            }
+            (out.data as Float64Array)[outBase + i * n + j] = acc;
+          }
+        }
+      }
+      for (let axis = batchShape.length - 1; axis >= 0; axis--) {
+        batchIndex[axis] = (batchIndex[axis] as number) + 1;
+        lhsBatchOffset += lhsBatchStrides[axis] as number;
+        rhsBatchOffset += rhsBatchStrides[axis] as number;
+        if ((batchIndex[axis] as number) < (batchShape[axis] as number)) break;
+        batchIndex[axis] = 0;
+        lhsBatchOffset -=
+          (batchShape[axis] as number) * (lhsBatchStrides[axis] as number);
+        rhsBatchOffset -=
+          (batchShape[axis] as number) * (rhsBatchStrides[axis] as number);
+      }
+    }
+
+    // Squeeze back the axes synthesized for 1-D operands: drop `m` if the lhs
+    // was 1-D, drop `n` if the rhs was 1-D — independently, so 1-D @ 1-D
+    // collapses batchShape (m, n) all the way down to a 0-d scalar.
+    const tail: number[] = [];
+    if (!lhsIs1D) tail.push(m);
+    if (!rhsIs1D) tail.push(n);
+    const resultShape = [...batchShape, ...tail];
+    return resultShape.length === out.ndim ? out : out.reshape(resultShape);
+  }
+
+  /** Inner product of two 1-D tensors, returned as a 0-d tensor. */
+  dot(other: Tensor): Tensor {
+    if (this.ndim !== 1 || other.ndim !== 1) {
+      throw new RangeError(
+        `dot expects two 1-D tensors, got ndim ${this.ndim} and ${other.ndim} (use matmul for higher rank)`,
+      );
+    }
+    return this.matmul(other);
+  }
+
   // ---- reductions -----------------------------------------------------------
 
   /** Sum over all elements (axis omitted) or along one axis. */

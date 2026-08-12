@@ -343,3 +343,99 @@ test("take/select/mask on non-contiguous views read the correct (view-relative) 
     [0, 3],
   ]);
 });
+
+// ---- matmul (issue #2) ---------------------------------------------------
+
+test("matmul: 2-D x 2-D, deterministic", () => {
+  const a = Tensor.from([1, 2, 3, 4, 5, 6], { dtype: "f64" }).reshape([2, 3]);
+  const b = Tensor.from([7, 8, 9, 10, 11, 12], { dtype: "f64" }).reshape([3, 2]);
+  const c = a.matmul(b);
+  assert.deepEqual([...c.shape], [2, 2]);
+  // [[1,2,3],[4,5,6]] @ [[7,8],[9,10],[11,12]]
+  assert.deepEqual(c.toArray(), [
+    [58, 64],
+    [139, 154],
+  ]);
+});
+
+test("matmul: 1-D @ 1-D collapses to a 0-d scalar", () => {
+  const a = Tensor.from([1, 2, 3], { dtype: "f64" });
+  const b = Tensor.from([4, 5, 6], { dtype: "f64" });
+  const r = a.matmul(b);
+  assert.equal(r.ndim, 0);
+  assert.equal(r.item(), 32); // 1*4+2*5+3*6
+});
+
+test("matmul: 2-D @ 1-D and 1-D @ 2-D squeeze the right axis", () => {
+  const mat = Tensor.from([1, 2, 3, 4, 5, 6], { dtype: "f64" }).reshape([2, 3]);
+  const v3 = Tensor.from([1, 1, 1], { dtype: "f64" });
+  const v2 = Tensor.from([1, 1], { dtype: "f64" });
+  const mv = mat.matmul(v3); // (2,3)@(3,) -> (2,)
+  assert.deepEqual([...mv.shape], [2]);
+  assert.deepEqual(mv.toArray(), [6, 15]);
+  const vm = v2.matmul(mat); // (2,)@(2,3) -> (3,)
+  assert.deepEqual([...vm.shape], [3]);
+  assert.deepEqual(vm.toArray(), [5, 7, 9]);
+});
+
+test("matmul: batched leading axes broadcast", () => {
+  // batch of 2 identity-ish 2x2 matrices times a shared 2x2
+  const batch = Tensor.from([1, 0, 0, 1, 2, 0, 0, 2], { dtype: "f64" }).reshape([
+    2, 2, 2,
+  ]);
+  const shared = Tensor.from([1, 2, 3, 4], { dtype: "f64" }).reshape([2, 2]);
+  const r = batch.matmul(shared);
+  assert.deepEqual([...r.shape], [2, 2, 2]);
+  assert.deepEqual(r.toArray(), [
+    [
+      [1, 2],
+      [3, 4],
+    ],
+    [
+      [2, 4],
+      [6, 8],
+    ],
+  ]);
+});
+
+test("matmul: transposed (non-contiguous) lhs does not copy before computing", () => {
+  const a = Tensor.from([1, 2, 3, 4, 5, 6], { dtype: "f64" }).reshape([2, 3]);
+  const aT = a.permute([1, 0]); // (3,2), non-contiguous
+  assert.equal(aT.isContiguous, false);
+  const b = Tensor.from([1, 0, 0, 1], { dtype: "f64" }).reshape([2, 2]);
+  const r = aT.matmul(b); // (3,2)@(2,2) -> (3,2), should equal aT itself (identity)
+  assert.deepEqual(r.toArray(), aT.toArray());
+});
+
+test("matmul: inner-dimension mismatch throws", () => {
+  const a = Tensor.zeros([2, 3], { dtype: "f64" });
+  const b = Tensor.zeros([4, 2], { dtype: "f64" });
+  assert.throws(() => a.matmul(b), RangeError);
+});
+
+test("matmul: dtype mismatch throws", () => {
+  const a = Tensor.zeros([2, 2], { dtype: "f32" });
+  const b = Tensor.zeros([2, 2], { dtype: "f64" });
+  assert.throws(() => a.matmul(b), TypeError);
+});
+
+test("matmul: rejects 0-d (scalar) operands", () => {
+  const scalar = Tensor.from([5], { dtype: "f64" }).reshape([]);
+  const v = Tensor.from([1, 2], { dtype: "f64" });
+  assert.throws(() => scalar.matmul(v), RangeError);
+});
+
+test("dot: rejects non-1-D operands", () => {
+  const mat = Tensor.zeros([2, 2], { dtype: "f64" });
+  const v = Tensor.from([1, 2], { dtype: "f64" });
+  assert.throws(() => mat.dot(v), RangeError);
+});
+
+test("matmul: i64 exact accumulation, no overflow for modest values", () => {
+  const a = Tensor.from([1, 2, 3, 4], { dtype: "i64" }).reshape([2, 2]);
+  const b = Tensor.from([5, 6, 7, 8], { dtype: "i64" }).reshape([2, 2]);
+  assert.deepEqual(a.matmul(b).toArray(), [
+    [19n, 22n],
+    [43n, 50n],
+  ]);
+});

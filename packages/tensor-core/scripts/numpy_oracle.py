@@ -3,7 +3,7 @@
 
 Reads a JSON job file:
   {
-    "op": "add" | "sub" | "mul" | "div" | "sum" | "mean" | "arange" | "permute" | "slice",
+    "op": "add" | "sub" | "mul" | "div" | "sum" | "mean" | "arange" | "permute" | "slice" | "matmul" | "dot",
     "inputs": ["/path/a.npy", ...],       # .npy files written by tensor-core
     "axis": 1,                            # optional (reductions)
     "permutation": [1, 0],                # optional (permute op)
@@ -56,6 +56,10 @@ def main() -> None:
             for spec in job["specs"]
         )
         result = np.ascontiguousarray(inputs[0][index])
+    elif op == "matmul":
+        result = np.ascontiguousarray(np.matmul(inputs[0], inputs[1]))
+    elif op == "dot":
+        result = np.asarray(np.dot(inputs[0], inputs[1]))
     else:
         raise SystemExit(f"unknown op {op!r}")
 
