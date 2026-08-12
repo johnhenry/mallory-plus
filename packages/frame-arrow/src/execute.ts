@@ -25,11 +25,11 @@ import { columnToArray } from "./access.ts";
 import { describeField } from "./dtype.ts";
 import { AggExpr } from "./expr.ts";
 import { evalRowwise, reduceGroup } from "./eval-expr.ts";
-import { planArrowSchema, planColumnNames, type PlanNode } from "./plan.ts";
+import { planArrowSchema, planColumnNames, type PlanNode, type Wanted } from "./plan.ts";
 import { fieldFor, inferExprType } from "./schema-infer.ts";
 import { buildVector, gatherRows } from "./vector-build.ts";
 
-export type Wanted = "all" | ReadonlySet<string>;
+export type { Wanted } from "./plan.ts";
 
 /** What must `node`'s single input supply, given that `wanted` is requested from `node` itself. */
 function requiredInputColumns(
@@ -113,6 +113,17 @@ export function execute(node: PlanNode, wanted: Wanted): Table {
       const names = (node.table.schema.names as string[]).filter((n) => (wanted as ReadonlySet<string>).has(n));
       return node.table.select(names);
     }
+
+    case "lazySource":
+      // resolveLazySources() (below) always rewrites every "lazySource" leaf
+      // into a "source" node before collectPlanAsync() calls execute() on
+      // the result -- reaching this case means the SYNCHRONOUS collect()/a
+      // terminal accessor was called directly on a Frame whose plan still
+      // has an unresolved lazy source (e.g. built via scanParquetLazy).
+      throw new Error(
+        "this Frame contains an unresolved lazy source (e.g. from scanParquetLazy) -- " +
+          "use collectAsync() instead of collect(), or await a terminal accessor's async equivalent",
+      );
 
     case "select": {
       const inputWanted = requiredInputColumns(node, wanted);
@@ -450,4 +461,66 @@ export function execute(node: PlanNode, wanted: Wanted): Table {
 /** Public entry point: materialize a plan node's full declared output. */
 export function collectPlan(node: PlanNode): Table {
   return execute(node, "all");
+}
+
+/**
+ * Async pre-pass for `Frame.collectAsync()` (issue #32) — rewrites every
+ * `"lazySource"` leaf in `node`'s tree into a real `"source"` node (its
+ * `read(wanted)` awaited and the result wrapped), honoring the EXACT same
+ * per-node-kind pruning `requiredInputColumns()`/`execute()` already
+ * implement, by literally reusing `requiredInputColumns()` here instead of
+ * re-deriving the rules. The rest of the tree is copied structurally
+ * unchanged (a node with no lazy source anywhere below it comes back
+ * identical, just a new object).
+ *
+ * Deliberately does NOT reimplement any of `execute()`'s actual Arrow
+ * manipulation (select/filter/join/aggregate/...) — this only resolves
+ * WHICH DATA gets fetched and with WHICH COLUMN SET, exactly mirroring
+ * execute()'s own top-down wanted-propagation; the real materialization
+ * still happens via the single, already-tested, unmodified `execute()`
+ * once every lazy leaf has been replaced.
+ */
+async function resolveLazySources(node: PlanNode, wanted: Wanted): Promise<PlanNode> {
+  switch (node.kind) {
+    case "source":
+      return node; // nothing lazy here, structurally unchanged
+
+    case "lazySource": {
+      const table = await node.read(wanted);
+      return { kind: "source", table };
+    }
+
+    case "join": {
+      // Matches execute()'s own "join" case: both sides are always resolved
+      // with wanted="all", regardless of what the join's own consumer
+      // asked for (v1 doesn't push pruning through a join — see plan.ts).
+      const [left, right] = await Promise.all([
+        resolveLazySources(node.left, "all"),
+        resolveLazySources(node.right, "all"),
+      ]);
+      return { ...node, left, right };
+    }
+
+    case "concat": {
+      // Matches execute()'s own "concat" case: every input is resolved with
+      // the SAME wanted concat itself was asked for (no narrowing).
+      const inputs = await Promise.all(node.inputs.map((n) => resolveLazySources(n, wanted)));
+      return { ...node, inputs };
+    }
+
+    default: {
+      // Every remaining PlanNode kind has exactly one `.input` — the same
+      // `Extract<PlanNode, {input: PlanNode}>` shape requiredInputColumns()
+      // itself is typed against.
+      const inputWanted = requiredInputColumns(node, wanted);
+      const input = await resolveLazySources(node.input, inputWanted);
+      return { ...node, input };
+    }
+  }
+}
+
+/** Async public entry point (issue #32): like `collectPlan`, but resolves any lazy sources in the tree first. Safe to call on a plan with NO lazy sources too — `resolveLazySources` just returns it structurally unchanged in that case, so this is a strict superset of `collectPlan`, never slower in spirit, only in the (currently unavoidable) cost of one extra tree walk. */
+export async function collectPlanAsync(node: PlanNode): Promise<Table> {
+  const resolved = await resolveLazySources(node, "all");
+  return execute(resolved, "all");
 }

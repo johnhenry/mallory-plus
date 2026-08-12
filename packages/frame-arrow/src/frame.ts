@@ -3,11 +3,11 @@
  * comment for the full explanation of the `.collect()` materialization
  * boundary and which accessors force it.
  */
-import { type Field, Table, tableFromIPC, tableToIPC, type Vector } from "apache-arrow";
+import { type Field, Schema, Table, tableFromIPC, tableToIPC, type Vector } from "apache-arrow";
 import { columnToArray } from "./access.ts";
 import { tableToCSV } from "./csv.ts";
 import { describeField, describeSchema, type DType, type FieldDescriptor } from "./dtype.ts";
-import { collectPlan } from "./execute.ts";
+import { collectPlan, collectPlanAsync } from "./execute.ts";
 import type { Expr } from "./expr.ts";
 import {
   type FillNullValue,
@@ -16,11 +16,12 @@ import {
   planColumnNames,
   type PlanNode,
   type SortKey,
+  type Wanted,
 } from "./plan.ts";
 import { Series } from "./series.ts";
 import { frameToTensor } from "./tensor.ts";
 
-export type { FillNullValue, JoinOptions, JoinHow, SortKey } from "./plan.ts";
+export type { FillNullValue, JoinOptions, JoinHow, SortKey, Wanted } from "./plan.ts";
 export type { FieldDescriptor } from "./dtype.ts";
 
 /** `sortBy(desc('age'))` — descending sort key convenience. */
@@ -54,6 +55,23 @@ export class Frame {
   static fromIPC(bytes: Uint8Array): Frame {
     const table = tableFromIPC(bytes) as Table;
     return Frame.fromArrow(table);
+  }
+
+  /**
+   * Build a Frame backed by a LAZY source (issue #32) — data isn't read
+   * until something downstream actually needs it (`collectAsync()`, not
+   * the synchronous `collect()`/terminal accessors; see plan.ts's module
+   * doc for why the two are separate). `schema` must be resolvable
+   * up-front and cheaply (e.g. from a Parquet file's footer metadata,
+   * never its row data) — `read(wanted)` is what actually materializes
+   * rows, honoring the SAME column-pruning `wanted` conveys to every other
+   * plan node kind.
+   *
+   * Meant for adapter/format packages (e.g. `mallory-frame-parquet`'s
+   * `scanParquetLazy`) to build on, not typical application code.
+   */
+  static fromLazySource(schema: Schema, read: (wanted: Wanted) => Promise<Table>): Frame {
+    return Frame.internalFromPlan({ kind: "lazySource", schema, read });
   }
 
   /** Static form. See also the `.concat(...others)` instance method (a thin wrapper around this). */
@@ -149,6 +167,21 @@ export class Frame {
    */
   collect(): Frame {
     if (!this.cachedTable) this.cachedTable = collectPlan(this.plan);
+    return this;
+  }
+
+  /**
+   * Async twin of `collect()` (issue #32) — required (instead of `collect()`)
+   * for any Frame whose plan contains a lazy source (e.g. from
+   * `scanParquetLazy`); safe to call on any OTHER Frame too, since a plan
+   * with no lazy source resolves through unchanged. Populates the SAME
+   * cache `collect()` does, so once this resolves, every synchronous
+   * terminal accessor below (`toRows()`, `length`, `toArrow()`, ...) works
+   * normally on the returned Frame — there's no need for `toRowsAsync()`/
+   * `lengthAsync()`/etc. twins of each one.
+   */
+  async collectAsync(): Promise<Frame> {
+    if (!this.cachedTable) this.cachedTable = await collectPlanAsync(this.plan);
     return this;
   }
 

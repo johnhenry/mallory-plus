@@ -40,10 +40,50 @@
  * read, never type-checked, and — if it holds a dtype this package doesn't
  * support — never throws. `join` does not push pruning through its two
  * input plans in v1 (see execute.ts for why); everything else does.
+ *
+ * ## Lazy sources (issue #32) and why `collect()` stays synchronous
+ *
+ * `"lazySource"` is a second kind of leaf, alongside `"source"`: instead of
+ * wrapping an already-materialized `Table`, it wraps a `schema` (resolved
+ * EAGERLY, at node-construction time — see `Frame.fromLazySource`) plus a
+ * `read(wanted)` callback that materializes the actual data lazily, on
+ * demand, honoring the same column pruning every other node kind gets.
+ * This exists for `mallory-frame-parquet`'s `scanParquetLazy` (a Parquet
+ * file's rows shouldn't be read from disk until something downstream
+ * actually needs them — the whole point of #32).
+ *
+ * `read()` returns a `Promise<Table>` — genuinely async, since real I/O is
+ * involved. But `Frame`'s entire execution model (`execute()`/`collect()`,
+ * and every terminal accessor built on them: `length`, `toRows()`,
+ * `toArrow()`, ...) is synchronous, and changing that would be a breaking
+ * change to the ALREADY-SHIPPED contract every existing Frame relies on
+ * (issue #19). Rather than force that migration, lazy sources are handled
+ * with a small ADDITIVE async layer instead: `Frame.collectAsync()`
+ * pre-resolves every `"lazySource"` leaf in the plan into a real
+ * `"source"` node (honoring the exact same `requiredInputColumns()`-driven
+ * pruning `execute()` itself uses — see `resolveLazySources` in
+ * execute.ts), THEN hands the now-fully-synchronous, lazy-source-free tree
+ * to the existing, unmodified `execute()`/`collectPlan()`. Every case
+ * body's actual Arrow manipulation logic is reused completely unchanged;
+ * only a small tree-rewriting pre-pass is new. `schema`/`columns` need no
+ * such pre-pass at all — a `"lazySource"` node's `schema` is already a
+ * plain value by the time it exists, so `planArrowSchema()` (fully
+ * synchronous, below) handles it exactly like a `"source"` node's own
+ * `table.schema`, meaning `schema`/`columns` still never collect, even on
+ * a Frame built from `scanParquetLazy` — the same guarantee eager Frames
+ * already have.
+ *
+ * Calling the SYNCHRONOUS `collect()` (or any terminal accessor) directly
+ * on a Frame whose plan still contains an unresolved `"lazySource"` throws
+ * a clear error pointing at `collectAsync()`, rather than silently hanging
+ * or producing wrong results.
  */
 import { Field, Schema, type Table } from "apache-arrow";
 import type { Expr } from "./expr.ts";
 import { inferExprType } from "./schema-infer.ts";
+
+/** Which columns a plan node's OUTPUT must supply — `"all"`, or an explicit set (used to prune everything upstream that isn't in it). */
+export type Wanted = "all" | ReadonlySet<string>;
 
 export interface SortKey {
   readonly column: string;
@@ -64,6 +104,12 @@ export type FillNullValue = unknown | Readonly<Record<string, unknown>>;
 
 export type PlanNode =
   | { readonly kind: "source"; readonly table: Table }
+  | {
+      readonly kind: "lazySource";
+      /** Resolved eagerly at construction time (see this file's module doc) — never a function/Promise, so `planArrowSchema` stays fully synchronous. */
+      readonly schema: Schema;
+      readonly read: (wanted: Wanted) => Promise<Table>;
+    }
   | { readonly kind: "select"; readonly input: PlanNode; readonly columns: readonly string[] }
   | { readonly kind: "drop"; readonly input: PlanNode; readonly columns: readonly string[] }
   | { readonly kind: "rename"; readonly input: PlanNode; readonly mapping: Readonly<Record<string, string>> }
@@ -97,6 +143,9 @@ export function planArrowSchema(node: PlanNode): Schema {
   switch (node.kind) {
     case "source":
       return node.table.schema;
+
+    case "lazySource":
+      return node.schema;
 
     case "select":
       return planArrowSchema(node.input).select(node.columns as string[]);

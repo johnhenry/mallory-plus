@@ -8,7 +8,7 @@
  * boundary / column-pruning design.
  */
 export { Frame, GroupBy, desc } from "./frame.ts";
-export type { FieldDescriptor, FillNullValue, JoinHow, JoinOptions, SortKey } from "./frame.ts";
+export type { FieldDescriptor, FillNullValue, JoinHow, JoinOptions, SortKey, Wanted } from "./frame.ts";
 export { Series } from "./series.ts";
 export {
   AggExpr,
