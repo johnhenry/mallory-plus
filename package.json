@@ -9,8 +9,8 @@
   ],
   "scripts": {
     "build:wasm": "npm run build:wasm -w mallory-tensor-wasm",
-    "build": "npm run build:wasm && npm run build -w mallory-scalar-types -w mallory-tensor-core -w mallory-tensor-wasm -w mallory-tensor-autograd -w mallory-telemetry",
-    "test": "npm run test -w mallory-scalar-types -w mallory-tensor-core -w mallory-tensor-wasm -w mallory-tensor-autograd -w mallory-telemetry",
+    "build": "npm run build:wasm && npm run build -w mallory-scalar-types -w mallory-tensor-core -w mallory-telemetry -w mallory-tensor-wasm -w mallory-tensor-autograd",
+    "test": "npm run test -w mallory-scalar-types -w mallory-tensor-core -w mallory-telemetry -w mallory-tensor-wasm -w mallory-tensor-autograd",
     "check": "npm run check --workspaces --if-present",
     "changeset": "changeset",
     "release": "npm run build && changeset publish"
