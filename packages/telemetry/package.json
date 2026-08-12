@@ -1,7 +1,7 @@
 {
-  "name": "mallory-tensor-autograd",
+  "name": "mallory-telemetry",
   "version": "0.0.1",
-  "description": "Reverse-mode automatic differentiation over mallory-tensor-core Tensors",
+  "description": "Shared event schema + sink registry for mallory-plus (issue #10) — a stable stream any UI can consume later, with a zero-cost no-op default",
   "type": "module",
   "exports": {
     ".": {
@@ -17,17 +17,10 @@
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "test": "npm run typecheck && node --test test/*.test.ts"
   },
-  "dependencies": {
-    "mallory-tensor-core": "0.0.1",
-    "mallory-telemetry": "0.0.1"
-  },
-  "devDependencies": {
-    "mallory-math": "^0.8.0"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/johnhenry/mallory-plus.git",
-    "directory": "packages/tensor-autograd"
+    "directory": "packages/telemetry"
   },
   "license": "MIT",
   "sideEffects": false,

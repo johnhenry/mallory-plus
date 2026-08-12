@@ -142,3 +142,48 @@ test("toy training loop: linear regression converges with plain SGD", () => {
 
   assert.ok(lastLoss < 0.01, `linear regression did not converge: final loss ${lastLoss}`);
 });
+
+// ---- telemetry hooks (issue #10) --------------------------------------------
+
+test("backward() emits a trace span when a sink is installed, nothing by default", async () => {
+  const { setSink } = await import("mallory-telemetry");
+  const events: unknown[] = [];
+  setSink((e) => events.push(e));
+  try {
+    const x = variable(Tensor.from([2, 3], { dtype: "f64" }));
+    x.mul(x).sum().backward(undefined, { runId: "r1", step: 5 });
+    assert.equal(events.length, 1);
+    const e = events[0] as { type: string; runId: string; step: number; spans: Array<{ name: string }> };
+    assert.equal(e.type, "trace");
+    assert.equal(e.runId, "r1");
+    assert.equal(e.step, 5);
+    assert.equal(e.spans[0]?.name, "backward");
+  } finally {
+    setSink(null);
+  }
+
+  // default: no sink installed, backward() still works exactly as before.
+  const x2 = variable(Tensor.from([2, 3], { dtype: "f64" }));
+  x2.mul(x2).sum().backward();
+  assert.deepEqual(x2.grad?.toArray(), [4, 6]);
+});
+
+test("optim.step() emits an optim/gradNorm metric when a sink is installed", async () => {
+  const { setSink } = await import("mallory-telemetry");
+  const events: unknown[] = [];
+  setSink((e) => events.push(e));
+  try {
+    const linear = new nn.Linear(2, 1, { rng: random.seed(1) });
+    const opt = new optim.SGD(linear.parameters(), { lr: 0.1 });
+    const x = variable(random.uniform([1, 2], { rng: random.seed(2), dtype: "f64" }));
+    linear.forward(x).sum().backward(); // also emits a "backward" trace span, since the sink is already active
+    opt.step({ runId: "r1", step: 0 });
+    assert.equal(events.length, 2); // 1 trace (backward) + 1 metric (optim.step)
+    const e = events[1] as { type: string; name: string; value: number };
+    assert.equal(e.type, "metric");
+    assert.equal(e.name, "optim/gradNorm");
+    assert.ok(Number.isFinite(e.value) && e.value >= 0);
+  } finally {
+    setSink(null);
+  }
+});

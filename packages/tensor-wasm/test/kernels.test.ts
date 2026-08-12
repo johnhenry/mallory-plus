@@ -104,3 +104,29 @@ test("addInto over resident buffers beats a pure-JS loop at N=1e6 (reproduces th
     `expected addInto to beat pure JS meaningfully at N=1e6, got ${speedup.toFixed(2)}x (js=${jsTime.toFixed(3)}ms, wasm=${wasmTime.toFixed(3)}ms)`,
   );
 });
+
+// ---- telemetry hook (issue #10) --------------------------------------------
+
+test("allocator emits wasm/alloc.bytes and wasm/alloc.calls metrics when a sink is installed", async () => {
+  const { setSink } = await import("mallory-telemetry");
+  const events: unknown[] = [];
+  setSink((e) => events.push(e));
+  try {
+    const kernels = await Kernels.load();
+    kernels.zeros([10]); // one alloc call
+    assert.equal(events.length, 2); // bytes + calls, per alloc
+    const names = events.map((e) => (e as { name: string }).name);
+    assert.deepEqual(names, ["wasm/alloc.bytes", "wasm/alloc.calls"]);
+  } finally {
+    setSink(null);
+  }
+});
+
+test("allocator emits NOTHING when no sink is installed (default, zero-cost)", async () => {
+  const kernels = await Kernels.load();
+  kernels.zeros([10]);
+  kernels.zeros([20]);
+  // No assertion possible on "no events" without a sink to observe them --
+  // this test's job is just to prove it doesn't throw/misbehave by default.
+  assert.equal(kernels.allocCallCount, 2);
+});

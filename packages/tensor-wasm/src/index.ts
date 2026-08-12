@@ -17,6 +17,7 @@
  * in isolation first.
  */
 import { readFile } from "node:fs/promises";
+import { hasSink, metric } from "mallory-telemetry";
 
 interface KernelExports {
   memory: WebAssembly.Memory;
@@ -221,6 +222,15 @@ export class Kernels {
       memory: rawExports.memory,
       alloc: (len: number, align: number) => {
         counter.count++;
+        // Opt-in telemetry (issue #10): the differentiated panel this
+        // enables isn't loss curves, it's JS<->WASM memory residency --
+        // which tensors live in linear memory and how many bytes cross
+        // the boundary. Guarded by hasSink() so the zero-allocation
+        // ...Into path (issue #3) stays exactly zero-cost when unused.
+        if (hasSink()) {
+          metric("wasm", counter.count, "wasm/alloc.bytes", len);
+          metric("wasm", counter.count, "wasm/alloc.calls", counter.count);
+        }
         return rawAlloc(len, align);
       },
       dealloc: rawExports.dealloc.bind(rawExports),

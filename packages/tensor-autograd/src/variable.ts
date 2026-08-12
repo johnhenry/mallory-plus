@@ -24,6 +24,7 @@
  * mutating method doesn't exist.
  */
 import { Tensor, type Axis } from "mallory-tensor-core";
+import { timed } from "mallory-telemetry";
 import { sumToShape } from "./shape-utils.ts";
 
 let gradEnabled = true;
@@ -131,47 +132,56 @@ export class Variable {
    * defaults to a ones-tensor and requires `this` be scalar (size 1) —
    * matching PyTorch's `.backward()` contract.
    */
-  backward(gradOutput?: Tensor): void {
-    const seed =
-      gradOutput ??
-      (this.value.size === 1
-        ? Tensor.ones(this.value.shape, { dtype: this.value.dtype })
-        : (() => {
-            throw new RangeError(
-              "backward() with no argument requires a scalar (size-1) output; pass an explicit gradOutput for non-scalar tensors",
-            );
-          })());
+  /**
+   * `options` is entirely opt-in telemetry (issue #10): when no sink is
+   * installed (the default), `timed()` skips even the `performance.now()`
+   * call, so this costs nothing beyond the two extra `?.`/`??` reads.
+   */
+  backward(gradOutput?: Tensor, options: { runId?: string; step?: number } = {}): void {
+    const runId = options.runId ?? "default";
+    const step = options.step ?? 0;
+    timed(runId, step, "backward", "autograd", () => {
+      const seed =
+        gradOutput ??
+        (this.value.size === 1
+          ? Tensor.ones(this.value.shape, { dtype: this.value.dtype })
+          : (() => {
+              throw new RangeError(
+                "backward() with no argument requires a scalar (size-1) output; pass an explicit gradOutput for non-scalar tensors",
+              );
+            })());
 
-    const order: Variable[] = [];
-    const visited = new Set<number>();
-    const visit = (v: Variable): void => {
-      if (visited.has(v.id)) return;
-      visited.add(v.id);
-      if (v.node) for (const input of v.node.inputs) visit(input);
-      order.push(v);
-    };
-    visit(this);
+      const order: Variable[] = [];
+      const visited = new Set<number>();
+      const visit = (v: Variable): void => {
+        if (visited.has(v.id)) return;
+        visited.add(v.id);
+        if (v.node) for (const input of v.node.inputs) visit(input);
+        order.push(v);
+      };
+      visit(this);
 
-    const grads = new Map<number, Tensor>();
-    grads.set(this.id, seed);
+      const grads = new Map<number, Tensor>();
+      grads.set(this.id, seed);
 
-    for (let i = order.length - 1; i >= 0; i--) {
-      const v = order[i] as Variable;
-      const g = grads.get(v.id);
-      if (g === undefined) continue; // not reachable via any actual gradient path
-      if (v.requiresGrad) {
-        v.grad = v.grad ? v.grad.add(g) : g;
+      for (let i = order.length - 1; i >= 0; i--) {
+        const v = order[i] as Variable;
+        const g = grads.get(v.id);
+        if (g === undefined) continue; // not reachable via any actual gradient path
+        if (v.requiresGrad) {
+          v.grad = v.grad ? v.grad.add(g) : g;
+        }
+        if (v.node) {
+          const inputGrads = v.node.backwardFn(g);
+          v.node.inputs.forEach((input, idx) => {
+            const contribution = inputGrads[idx];
+            if (contribution === undefined) return;
+            const existing = grads.get(input.id);
+            grads.set(input.id, existing ? existing.add(contribution) : contribution);
+          });
+        }
       }
-      if (v.node) {
-        const inputGrads = v.node.backwardFn(g);
-        v.node.inputs.forEach((input, idx) => {
-          const contribution = inputGrads[idx];
-          if (contribution === undefined) return;
-          const existing = grads.get(input.id);
-          grads.set(input.id, existing ? existing.add(contribution) : contribution);
-        });
-      }
-    }
+    });
   }
 
   // ---- differentiable ops ----------------------------------------------------

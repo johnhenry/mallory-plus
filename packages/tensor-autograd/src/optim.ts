@@ -5,7 +5,28 @@
  * place between steps (see the doc comment on `Variable.value`).
  */
 import { Tensor } from "mallory-tensor-core";
+import { hasSink, metric } from "mallory-telemetry";
 import type { Parameter } from "./nn.ts";
+
+/** Opt-in telemetry (issue #10) shared by every optimizer's step(). */
+export interface StepOptions {
+  runId?: string;
+  step?: number;
+}
+
+/**
+ * Global L2 grad norm across every parameter that has one — only computed
+ * when a sink is installed (`hasSink()`), since it's extra tensor work
+ * nothing needs on the hot path by default.
+ */
+function gradNorm(params: readonly Parameter[]): number {
+  let sumSquares = 0;
+  for (const p of params) {
+    if (!p.grad) continue;
+    sumSquares += (p.grad.mul(p.grad).sum().item() as number);
+  }
+  return Math.sqrt(sumSquares);
+}
 
 export class SGD {
   readonly params: readonly Parameter[];
@@ -16,10 +37,15 @@ export class SGD {
     this.lr = options.lr;
   }
 
-  step(): void {
+  step(options: StepOptions = {}): void {
     for (const p of this.params) {
       if (!p.grad) continue;
       p.value = p.value.sub(p.grad.mul(this.lr));
+    }
+    if (hasSink()) {
+      const runId = options.runId ?? "default";
+      const step = options.step ?? 0;
+      metric(runId, step, "optim/gradNorm", gradNorm(this.params));
     }
   }
 
@@ -55,7 +81,7 @@ export class AdamW {
     this.weightDecay = options.weightDecay ?? 0.01;
   }
 
-  step(): void {
+  step(options: StepOptions = {}): void {
     for (const p of this.params) {
       if (!p.grad) continue;
       let state = this.#state.get(p.id);
@@ -82,6 +108,11 @@ export class AdamW {
       const decayed = this.weightDecay !== 0 ? p.value.mul(1 - this.lr * this.weightDecay) : p.value;
       const update = mHat.div(vHat.sqrt().add(this.eps)).mul(this.lr);
       p.value = decayed.sub(update);
+    }
+    if (hasSink()) {
+      const runId = options.runId ?? "default";
+      const step = options.step ?? 0;
+      metric(runId, step, "optim/gradNorm", gradNorm(this.params));
     }
   }
 
