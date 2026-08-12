@@ -19,8 +19,10 @@
  *
  * - `readParquet(path, options)` -> `Promise<Frame>`, built via the public
  *   `Frame.fromArrow(table)` entry point.
- * - `scanParquet(pattern, options)` -> `Promise<Frame>` (glob scans; see
- *   scan.ts's module doc for the eager-vs-lazy decision).
+ * - `scanParquet(pattern, options)` -> `Promise<Frame>` (glob scans, EAGER;
+ *   see scan.ts's module doc for that decision).
+ * - `scanParquetLazy(pattern, options)` -> `Promise<Frame>` (glob scans,
+ *   genuinely LAZY row data — issue #32; see scan-lazy.ts's module doc).
  * - `writeParquet(frame, path, options)` -> `Promise<void>`.
  *
  * `readParquetFile`/`writeParquetBuffer` are also exported: lower-level,
@@ -30,6 +32,7 @@
  */
 export { readParquet, readParquetFile, type ReadParquetOptions } from "./read.ts";
 export { scanParquet, type ScanParquetOptions } from "./scan.ts";
+export { lazyParquetFrame, scanParquetLazy, type ScanParquetLazyOptions } from "./scan-lazy.ts";
 export { writeParquet, writeParquetBuffer, type WriteCodec, type WriteParquetOptions } from "./write.ts";
 export { mapLeafElement, mapTopLevelColumns, UnsupportedParquetTypeError } from "./schema.ts";
 export type { ParquetColumnSchema, ParquetColumnType } from "./schema.ts";

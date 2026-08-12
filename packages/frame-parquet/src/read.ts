@@ -75,7 +75,11 @@ function unreachableParser(kind: string): () => never {
   };
 }
 
-const READ_PARSERS: ParquetParsers = {
+/** Exported so scan-lazy.ts's schema-only metadata fetch uses the exact same
+ * parsers as the real row read that follows it later (e.g. timestamp
+ * statistics in the footer decode consistently either way), even though
+ * that call never reaches a `filter` that would actually need them. */
+export const READ_PARSERS: ParquetParsers = {
   timestampFromMilliseconds: (millis: bigint) => millis,
   timestampFromMicroseconds: (micros: bigint) => micros,
   timestampFromNanoseconds: unreachableParser("TIMESTAMP[NANOS]"),

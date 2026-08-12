@@ -9,18 +9,13 @@
  * — nothing is deferred to `.collect()`.
  *
  * True laziness — registering multiple files as plan-level sources and only
- * touching the ones a later `.collect()` actually needs — would require a
- * new `PlanNode` variant (e.g. a "parquetSource" kind alongside plan.ts's
- * existing `"source"`) that `execute.ts` and `plan.ts`'s `planArrowSchema`
- * both know how to handle. That's a change to mallory-frame-arrow itself
- * (an already-merged, closed package from issue #19), not something
- * frame-parquet can bolt on from outside — Frame's plan is a closed
- * discriminated union with no source-level extension point, and its
- * constructor is private. Reopening frame-arrow's plan machinery for this
- * is a well-defined but separable piece of work (tracked as a follow-up
- * issue); the eager fallback here is honestly scoped, matches the
- * concat-based pattern issue #20 itself allows, and is not a lot of code to
- * later replace once frame-arrow grows a source-level extension point.
+ * reading the row data a later `.collect()`-equivalent actually needs — DID
+ * require a new plan-level extension point in mallory-frame-arrow itself
+ * (`"lazySource"`, `Frame.fromLazySource()`/`collectAsync()`), tracked as a
+ * follow-up and now shipped (issue #32). See `scan-lazy.ts`'s
+ * `scanParquetLazy` for that genuinely-lazy counterpart to this function.
+ * This eager `scanParquet` stays as-is — a well-scoped, honest v1 and still
+ * the simpler choice for a caller who's going to read every column anyway.
  *
  * Uses Node's built-in `fs.promises.glob` (stable-enough since Node 22.0,
  * comfortably covered by this repo's `engines.node: ">=22.12.0"` floor;
@@ -47,10 +42,19 @@ import { readParquet, type ReadParquetOptions } from "./read.ts";
 
 export type ScanParquetOptions = ReadParquetOptions;
 
-export async function scanParquet(pattern: string, options: ScanParquetOptions = {}): Promise<Frame> {
+/** Shared by `scanParquet` and `scan-lazy.ts`'s `scanParquetLazy` — resolves
+ * a glob pattern to a deterministically-ordered list of matching paths
+ * (filesystem readdir order isn't guaranteed, so both scanners need the same
+ * explicit sort for reproducible results/tests). */
+export async function globSortedParquetPaths(pattern: string): Promise<string[]> {
   const paths: string[] = [];
   for await (const p of glob(pattern)) paths.push(p);
-  paths.sort(); // deterministic order regardless of filesystem readdir order
+  paths.sort();
+  return paths;
+}
+
+export async function scanParquet(pattern: string, options: ScanParquetOptions = {}): Promise<Frame> {
+  const paths = await globSortedParquetPaths(pattern);
   if (paths.length === 0) {
     throw new Error(`scanParquet: no files matched pattern "${pattern}"`);
   }
