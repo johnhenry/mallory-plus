@@ -8,3 +8,4 @@ export { fromMatrix, fromVector, toMatrix, toVector, type ConvertOptions } from 
 export { compileExpr, UnsupportedExprError, type CompileExprOptions } from "./expr.ts";
 export * as linalg from "./linalg.ts";
 export { toCSR, toDense, type CSRGraph, type ToDenseOptions } from "./csr.ts";
+export { convolve, fft, fftPadded, ifft, realSignal, type ComplexSignal } from "./fft.ts";
