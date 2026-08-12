@@ -53,6 +53,16 @@ interface OracleJob {
   output: string;
 }
 
+function assertBoolEqual(actual: Tensor, expected: Tensor, op: string): void {
+  assert.equal(actual.dtype, "bool", `${op}: dtype`);
+  assert.deepEqual([...actual.shape], [...expected.shape], `${op}: shape`);
+  const a = actual.contiguous();
+  const e = expected.contiguous();
+  for (let i = 0; i < a.size; i++) {
+    assert.equal(a.data[a.offset + i], e.data[e.offset + i], `${op}: element ${i}`);
+  }
+}
+
 function runOracle(dir: string, job: Omit<OracleJob, "output">): Tensor {
   const output = join(dir, `out-${Math.random().toString(36).slice(2)}.npy`);
   const jobPath = join(dir, "job.json");
@@ -305,5 +315,25 @@ test("differential vs NumPy", { skip }, async (t) => {
     });
     assert.equal(expected.dtype, "i64");
     assertClose(a.matmul(b), expected, "matmul");
+  });
+
+  await t.test("cast matches NumPy astype across dtype pairs", () => {
+    const a = randomTensor([5], "f64");
+    const aPath = saveTensor(dir, "cast-a", a);
+    for (const dtype of ["f32", "i32", "i64", "u8"] as const) {
+      const expected = runOracle(dir, { op: "cast", inputs: [aPath], dtype });
+      assertClose(a.cast(dtype), expected, "cast");
+    }
+  });
+
+  await t.test("comparisons match NumPy, incl. broadcasting", () => {
+    const a = randomTensor([4, 3], "f64");
+    const b = randomTensor([3], "f64");
+    const aPath = saveTensor(dir, "cmp-a", a);
+    const bPath = saveTensor(dir, "cmp-b", b);
+    for (const op of ["eq", "ne", "lt", "lte", "gt", "gte"] as const) {
+      const expected = runOracle(dir, { op, inputs: [aPath, bPath] });
+      assertBoolEqual(a[op](b), expected, op);
+    }
   });
 });

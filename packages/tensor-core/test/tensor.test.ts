@@ -439,3 +439,92 @@ test("matmul: i64 exact accumulation, no overflow for modest values", () => {
     [43n, 50n],
   ]);
 });
+
+// ---- cast (issue #4) ------------------------------------------------------
+
+test("cast converts values and always copies", () => {
+  const f = Tensor.from([1.7, -2.3, 3.5], { dtype: "f64" });
+  const i = f.cast("i32");
+  assert.notEqual(i.data, f.data);
+  assert.equal(i.dtype, "i32");
+  assert.deepEqual(i.toArray(), [1, -2, 3]); // truncation toward zero, not rounding
+});
+
+test("cast to/from i64 crosses the number<->bigint boundary", () => {
+  const nums = Tensor.from([1, 2, 3], { dtype: "i32" });
+  const big = nums.cast("i64");
+  assert.deepEqual(big.toArray(), [1n, 2n, 3n]);
+  const back = big.cast("f64");
+  assert.deepEqual(back.toArray(), [1, 2, 3]);
+});
+
+test("cast to bool maps non-zero to 1", () => {
+  const t = Tensor.from([0, 5, -3, 0], { dtype: "f64" });
+  assert.deepEqual(t.cast("bool").toArray(), [0, 1, 1, 0]);
+});
+
+test("cast preserves shape and works on non-contiguous views", () => {
+  const t = Tensor.arange(6).reshape([2, 3]).permute([1, 0]);
+  const casted = t.cast("i32");
+  assert.deepEqual([...casted.shape], [3, 2]);
+  assert.deepEqual(casted.toArray(), t.toArray());
+});
+
+// ---- comparisons (issue #4) ------------------------------------------------
+
+test("eq/ne/lt/lte/gt/gte produce bool tensors with broadcasting", () => {
+  const a = Tensor.from([1, 2, 3, 4], { dtype: "f64" });
+  const b = Tensor.from([1, 5, 2, 4], { dtype: "f64" });
+  assert.equal(a.eq(b).dtype, "bool");
+  assert.deepEqual(a.eq(b).toArray(), [1, 0, 0, 1]);
+  assert.deepEqual(a.ne(b).toArray(), [0, 1, 1, 0]);
+  assert.deepEqual(a.lt(b).toArray(), [0, 1, 0, 0]);
+  assert.deepEqual(a.lte(b).toArray(), [1, 1, 0, 1]);
+  assert.deepEqual(a.gt(b).toArray(), [0, 0, 1, 0]);
+  assert.deepEqual(a.gte(b).toArray(), [1, 0, 1, 1]);
+  // broadcasting against a scalar
+  assert.deepEqual(a.gt(2).toArray(), [0, 0, 1, 1]);
+});
+
+test("comparisons on i64 tensors work via BigInt comparison", () => {
+  const a = Tensor.from([1, 5, 3], { dtype: "i64" });
+  const b = Tensor.from([2, 5, 1], { dtype: "i64" });
+  assert.deepEqual(a.lt(b).toArray(), [1, 0, 0]);
+  assert.deepEqual(a.eq(b).toArray(), [0, 1, 0]);
+});
+
+test("comparisons require matching dtypes", () => {
+  const a = Tensor.from([1], { dtype: "f32" });
+  const b = Tensor.from([1], { dtype: "f64" });
+  assert.throws(() => a.eq(b), TypeError);
+});
+
+// ---- logicals & any/all (issue #4) -----------------------------------------
+
+test("logicalAnd/logicalOr/logicalNot on bool tensors", () => {
+  const a = Tensor.from([1, 1, 0, 0], { dtype: "bool" });
+  const b = Tensor.from([1, 0, 1, 0], { dtype: "bool" });
+  assert.deepEqual(a.logicalAnd(b).toArray(), [1, 0, 0, 0]);
+  assert.deepEqual(a.logicalOr(b).toArray(), [1, 1, 1, 0]);
+  assert.deepEqual(a.logicalNot().toArray(), [0, 0, 1, 1]);
+});
+
+test("logical ops reject non-bool tensors", () => {
+  const a = Tensor.from([1, 0], { dtype: "f64" });
+  assert.throws(() => a.logicalNot(), TypeError);
+});
+
+test("any/all over all elements and per-axis", () => {
+  const t = Tensor.from([1, 0, 1, 1, 1, 1], { dtype: "bool" }).reshape([2, 3]);
+  assert.equal(t.any().item(), 1);
+  assert.equal(t.all().item(), 0);
+  assert.deepEqual(t.any(0).toArray(), [1, 1, 1]);
+  assert.deepEqual(t.all(0).toArray(), [1, 0, 1]);
+  assert.deepEqual(t.all(1).toArray(), [0, 1]);
+});
+
+test("any/all work directly on non-bool tensors via truthiness", () => {
+  const t = Tensor.from([0, 0, 3], { dtype: "f64" });
+  assert.equal(t.any().item(), 1);
+  assert.equal(t.all().item(), 0);
+});

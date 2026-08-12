@@ -145,6 +145,26 @@ const BIGINT_OPS: Partial<Record<BinaryOp, (a: bigint, b: bigint) => bigint>> =
     // division (i64/i64 -> f64); cast to a float dtype first.
   };
 
+type CompareOp = "eq" | "ne" | "lt" | "lte" | "gt" | "gte";
+
+const NUMBER_CMP: Record<CompareOp, (a: number, b: number) => boolean> = {
+  eq: (a, b) => a === b,
+  ne: (a, b) => a !== b,
+  lt: (a, b) => a < b,
+  lte: (a, b) => a <= b,
+  gt: (a, b) => a > b,
+  gte: (a, b) => a >= b,
+};
+
+const BIGINT_CMP: Record<CompareOp, (a: bigint, b: bigint) => boolean> = {
+  eq: (a, b) => a === b,
+  ne: (a, b) => a !== b,
+  lt: (a, b) => a < b,
+  lte: (a, b) => a <= b,
+  gt: (a, b) => a > b,
+  gte: (a, b) => a >= b,
+};
+
 export interface TensorOptions {
   dtype?: DType;
 }
@@ -773,6 +793,237 @@ export class Tensor {
       );
     }
     return this.matmul(other);
+  }
+
+  // ---- dtype conversion (issue #4) ------------------------------------------
+
+  /**
+   * Explicit dtype conversion — the only way values cross dtypes (no
+   * implicit promotion anywhere else, per non-goal). Truncates toward zero
+   * when converting to an integer type (matches `Math.trunc`, not rounding);
+   * `bool` maps any non-zero value to 1. Always a copy, even when `dtype`
+   * equals `this.dtype`, so callers can rely on `cast()` never aliasing.
+   */
+  cast(dtype: DType): Tensor {
+    const out = Tensor.zeros(this.shape, { dtype });
+    const outBig = isBigIntDType(dtype);
+    const srcBig = isBigIntDType(this.dtype);
+    const targetOffsets = out.elementOffsets();
+    const sourceOffsets = this.elementOffsets();
+    let t = targetOffsets.next();
+    let s = sourceOffsets.next();
+    while (!t.done && !s.done) {
+      const raw = this.data[s.value];
+      let converted: number | bigint;
+      if (outBig) {
+        converted = srcBig ? (raw as bigint) : BigInt(Math.trunc(raw as number));
+      } else {
+        const num = srcBig ? Number(raw as bigint) : (raw as number);
+        converted =
+          dtype === "bool"
+            ? (num !== 0 ? 1 : 0)
+            : dtype === "f32" || dtype === "f64"
+              ? num
+              : Math.trunc(num);
+      }
+      out.data[t.value] = converted as never;
+      t = targetOffsets.next();
+      s = sourceOffsets.next();
+    }
+    return out;
+  }
+
+  // ---- comparisons & logicals (issue #4) -------------------------------------
+
+  #compare(op: CompareOp, other: Tensor | number): Tensor {
+    const rhs =
+      typeof other === "number"
+        ? Tensor.full([], other, { dtype: this.dtype })
+        : other;
+    if (rhs.dtype !== this.dtype) {
+      throw new TypeError(
+        `dtype mismatch: ${this.dtype} vs ${rhs.dtype} (no implicit promotion; cast() first)`,
+      );
+    }
+    const outShape = broadcastShapes(this.shape, rhs.shape);
+    const out = Tensor.zeros(outShape, { dtype: "bool" });
+    const aStrides = broadcastStrides(this.shape, this.strides, outShape);
+    const bStrides = broadcastStrides(rhs.shape, rhs.strides, outShape);
+    const ndim = outShape.length;
+    const index = new Array<number>(ndim).fill(0);
+    let aOff = this.offset;
+    let bOff = rhs.offset;
+    const big = isBigIntDType(this.dtype);
+    const numFn = NUMBER_CMP[op];
+    const bigFn = BIGINT_CMP[op];
+    const outData = out.data as Uint8Array;
+
+    for (let i = 0; i < out.size; i++) {
+      outData[i] = big
+        ? bigFn(this.data[aOff] as bigint, rhs.data[bOff] as bigint)
+          ? 1
+          : 0
+        : numFn(this.data[aOff] as number, rhs.data[bOff] as number)
+          ? 1
+          : 0;
+      for (let axis = ndim - 1; axis >= 0; axis--) {
+        index[axis] = (index[axis] as number) + 1;
+        aOff += aStrides[axis] as number;
+        bOff += bStrides[axis] as number;
+        if ((index[axis] as number) < (outShape[axis] as number)) break;
+        index[axis] = 0;
+        aOff -= (outShape[axis] as number) * (aStrides[axis] as number);
+        bOff -= (outShape[axis] as number) * (bStrides[axis] as number);
+      }
+    }
+    return out;
+  }
+
+  eq(other: Tensor | number): Tensor {
+    return this.#compare("eq", other);
+  }
+  ne(other: Tensor | number): Tensor {
+    return this.#compare("ne", other);
+  }
+  lt(other: Tensor | number): Tensor {
+    return this.#compare("lt", other);
+  }
+  lte(other: Tensor | number): Tensor {
+    return this.#compare("lte", other);
+  }
+  gt(other: Tensor | number): Tensor {
+    return this.#compare("gt", other);
+  }
+  gte(other: Tensor | number): Tensor {
+    return this.#compare("gte", other);
+  }
+
+  #assertBool(name: string): void {
+    if (this.dtype !== "bool") {
+      throw new TypeError(`${name} expects a bool tensor, got ${this.dtype}`);
+    }
+  }
+
+  /** Elementwise logical AND. Both operands must be `bool` tensors (cast() first). */
+  logicalAnd(other: Tensor): Tensor {
+    this.#assertBool("logicalAnd");
+    other.#assertBool("logicalAnd");
+    const outShape = broadcastShapes(this.shape, other.shape);
+    const out = Tensor.zeros(outShape, { dtype: "bool" });
+    const aStrides = broadcastStrides(this.shape, this.strides, outShape);
+    const bStrides = broadcastStrides(other.shape, other.strides, outShape);
+    const index = new Array<number>(outShape.length).fill(0);
+    let aOff = this.offset;
+    let bOff = other.offset;
+    const outData = out.data as Uint8Array;
+    for (let i = 0; i < out.size; i++) {
+      outData[i] =
+        (this.data[aOff] as number) !== 0 && (other.data[bOff] as number) !== 0
+          ? 1
+          : 0;
+      for (let axis = outShape.length - 1; axis >= 0; axis--) {
+        index[axis] = (index[axis] as number) + 1;
+        aOff += aStrides[axis] as number;
+        bOff += bStrides[axis] as number;
+        if ((index[axis] as number) < (outShape[axis] as number)) break;
+        index[axis] = 0;
+        aOff -= (outShape[axis] as number) * (aStrides[axis] as number);
+        bOff -= (outShape[axis] as number) * (bStrides[axis] as number);
+      }
+    }
+    return out;
+  }
+
+  /** Elementwise logical OR. Both operands must be `bool` tensors (cast() first). */
+  logicalOr(other: Tensor): Tensor {
+    this.#assertBool("logicalOr");
+    other.#assertBool("logicalOr");
+    const outShape = broadcastShapes(this.shape, other.shape);
+    const out = Tensor.zeros(outShape, { dtype: "bool" });
+    const aStrides = broadcastStrides(this.shape, this.strides, outShape);
+    const bStrides = broadcastStrides(other.shape, other.strides, outShape);
+    const index = new Array<number>(outShape.length).fill(0);
+    let aOff = this.offset;
+    let bOff = other.offset;
+    const outData = out.data as Uint8Array;
+    for (let i = 0; i < out.size; i++) {
+      outData[i] =
+        (this.data[aOff] as number) !== 0 || (other.data[bOff] as number) !== 0
+          ? 1
+          : 0;
+      for (let axis = outShape.length - 1; axis >= 0; axis--) {
+        index[axis] = (index[axis] as number) + 1;
+        aOff += aStrides[axis] as number;
+        bOff += bStrides[axis] as number;
+        if ((index[axis] as number) < (outShape[axis] as number)) break;
+        index[axis] = 0;
+        aOff -= (outShape[axis] as number) * (aStrides[axis] as number);
+        bOff -= (outShape[axis] as number) * (bStrides[axis] as number);
+      }
+    }
+    return out;
+  }
+
+  /** Elementwise logical NOT. Must be a `bool` tensor (cast() first). */
+  logicalNot(): Tensor {
+    this.#assertBool("logicalNot");
+    const out = Tensor.zeros(this.shape, { dtype: "bool" });
+    const outData = out.data as Uint8Array;
+    const sourceOffsets = this.elementOffsets();
+    let i = 0;
+    for (const off of sourceOffsets) {
+      outData[i++] = (this.data[off] as number) === 0 ? 1 : 0;
+    }
+    return out;
+  }
+
+  /** True if any element is non-zero/true (axis omitted) or along one axis. */
+  any(axis?: Axis): Tensor {
+    return this.#boolReduce(axis, false);
+  }
+
+  /** True if every element is non-zero/true (axis omitted) or along one axis. */
+  all(axis?: Axis): Tensor {
+    return this.#boolReduce(axis, true);
+  }
+
+  #boolReduce(axis: Axis | undefined, requireAll: boolean): Tensor {
+    if (axis === undefined) {
+      let result = requireAll;
+      for (const off of this.elementOffsets()) {
+        const truthy = (this.data[off] as number | bigint) != 0;
+        result = requireAll ? result && truthy : result || truthy;
+      }
+      const out = Tensor.zeros([], { dtype: "bool" });
+      (out.data as Uint8Array)[0] = result ? 1 : 0;
+      return out;
+    }
+    const ax = this.#normalizeAxis(axis);
+    const outShape = this.shape.filter((_, i) => i !== ax);
+    const reduceDim = this.shape[ax] as number;
+    const reduceStride = this.strides[ax] as number;
+    const out = Tensor.zeros(outShape, { dtype: "bool" });
+    const leadStrides = this.strides.filter((_, i) => i !== ax);
+    const leadSize = shapeSize(outShape);
+    const index = new Array<number>(outShape.length).fill(0);
+    let base = this.offset;
+    const outData = out.data as Uint8Array;
+    for (let i = 0; i < leadSize; i++) {
+      let result = requireAll;
+      for (let j = 0; j < reduceDim; j++) {
+        const truthy = (this.data[base + j * reduceStride] as number | bigint) != 0;
+        result = requireAll ? result && truthy : result || truthy;
+      }
+      outData[i] = result ? 1 : 0;
+      for (let a = outShape.length - 1; a >= 0; a--) {
+        index[a] = (index[a] as number) + 1;
+        base += leadStrides[a] as number;
+        if ((index[a] as number) < (outShape[a] as number)) break;
+        index[a] = 0;
+        base -= (outShape[a] as number) * (leadStrides[a] as number);
+      }
+    }
+    return out;
   }
 
   // ---- reductions -----------------------------------------------------------
