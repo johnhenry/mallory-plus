@@ -46,5 +46,7 @@ package exists, the source design conversation, non-goals, risk register), see
 
 ## Cross-repo dependencies
 
+See [`docs/FAMILY.md`](docs/FAMILY.md) for the full picture of how the Mallory family of repos relates (why they stay separate, what's actually connected today, and open interop opportunities).
+
 - [`johnhenry/mallory`](https://github.com/johnhenry/mallory) — `mallory-math` (pure-TS science/CAS library) and `mallory-iteration` (the future `data` namespace's foundation). [Issue #13](https://github.com/johnhenry/mallory/issues/13) tracks JSR-publishing `mallory-math`/`mallory-iteration` to unblock this repo's own dual npm+JSR distribution.
-- [`johnhenry/mallory-graph`](https://github.com/johnhenry/mallory-graph) — an unrelated app whose `CellGraph` reactive store was studied as design prior art for `frame-arrow`'s lazy planner (verdict: reference only, see `docs/spikes/cellgraph-study.md`). 5 sharp edges found during that spike were reported upstream as issues #12–#16; all fixed and closed.
+- [`johnhenry/mallory-graph`](https://github.com/johnhenry/mallory-graph) — a reactive graphing-calculator app (own `CellGraph` store, unrelated to `mallory-math`'s `Graph<T>` — see `docs/FAMILY.md`'s naming note) that depends on `mallory-math` directly for its formula language. Its `CellGraph` was separately studied as design prior art for `frame-arrow`'s lazy planner (reference only, see `docs/spikes/cellgraph-study.md`); 5 sharp edges found during that spike were reported upstream as issues #12–#16, all fixed and closed.
