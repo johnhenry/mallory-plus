@@ -12,7 +12,7 @@ package exists, the source design conversation, non-goals, risk register), see
 | Package | What it is |
 |---|---|
 | `mallory-tensor-core` | Typed n-D arrays: dtypes, shapes, broadcasting, views, reductions, `.npy` |
-| `mallory-tensor-wasm` | Rust/WASM kernels under tensor-core's hot paths (flat extern-C ABI, no wasm-bindgen) |
+| `mallory-tensor-wasm` | Rust/WASM kernels under tensor-core's hot paths (flat extern-C ABI, no wasm-bindgen), incl. a measured SIMD128 fast path (~2.6-3x for contiguous elementwise add/mul, feature-detected, separate `.wasm` artifact) |
 | `mallory-tensor-autograd` | Reverse-mode tape, `nn.Linear/Embedding/LayerNorm`, `optim.SGD/AdamW` |
 | `mallory-scalar-types` | Re-exports mallory-math's `ComplexNumber`/`Rational`/`Decimal` at the tensor boundary |
 | `mallory-unit` | Dimensioned quantities (`Unit.of(55, "cm").to("m")`), dimensional-analysis-checked arithmetic |

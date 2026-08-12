@@ -130,3 +130,96 @@ test("allocator emits NOTHING when no sink is installed (default, zero-cost)", a
   // this test's job is just to prove it doesn't throw/misbehave by default.
   assert.equal(kernels.allocCallCount, 2);
 });
+
+// ---- SIMD128 fast path (issue #13) -----------------------------------------
+
+test("simdAvailable is true on this runtime (Node supports WASM SIMD) — the fast path is actually exercised, not silently skipped", async () => {
+  const kernels = await Kernels.load();
+  assert.equal(kernels.simdAvailable, true);
+});
+
+test("Kernels.load() degrades gracefully when the SIMD artifact is unusable — simdAvailable false, addInto still correct via the scalar fallback", async () => {
+  const kernels = await Kernels.load(undefined, new Uint8Array([0, 1, 2, 3])); // not a valid WASM module
+  assert.equal(kernels.simdAvailable, false);
+  const a = kernels.fromArray(new Float32Array([1, 2, 3, 4]), [4]);
+  const b = kernels.fromArray(new Float32Array([10, 20, 30, 40]), [4]);
+  const out = kernels.zeros([4]);
+  kernels.addInto(out, a, b);
+  assert.deepEqual([...out.toFloat32Array()], [11, 22, 33, 44]);
+});
+
+test("addInto/mulInto: SIMD-accelerated result is bit-for-bit identical to the scalar fallback, contiguous case", async () => {
+  const withSimd = await Kernels.load();
+  const scalarOnly = await Kernels.load(undefined, new Uint8Array([0, 1, 2, 3]));
+  assert.equal(withSimd.simdAvailable, true);
+  assert.equal(scalarOnly.simdAvailable, false);
+
+  const N = 4001; // deliberately not a multiple of 4 -- exercises the SIMD kernel's scalar tail loop
+  const aData = Float32Array.from({ length: N }, (_, i) => Math.sin(i) * 100);
+  const bData = Float32Array.from({ length: N }, (_, i) => Math.cos(i) * 50);
+
+  for (const [name, op] of [
+    ["addInto", (k: Kernels, out: ReturnType<Kernels["zeros"]>, a: ReturnType<Kernels["zeros"]>, b: ReturnType<Kernels["zeros"]>) => k.addInto(out, a, b)],
+    ["mulInto", (k: Kernels, out: ReturnType<Kernels["zeros"]>, a: ReturnType<Kernels["zeros"]>, b: ReturnType<Kernels["zeros"]>) => k.mulInto(out, a, b)],
+  ] as const) {
+    const aSimd = withSimd.fromArray(aData, [N]);
+    const bSimd = withSimd.fromArray(bData, [N]);
+    const outSimd = withSimd.zeros([N]);
+    op(withSimd, outSimd, aSimd, bSimd);
+
+    const aScalar = scalarOnly.fromArray(aData, [N]);
+    const bScalar = scalarOnly.fromArray(bData, [N]);
+    const outScalar = scalarOnly.zeros([N]);
+    op(scalarOnly, outScalar, aScalar, bScalar);
+
+    assert.deepEqual([...outSimd.toFloat32Array()], [...outScalar.toFloat32Array()], `${name}: SIMD vs scalar mismatch`);
+  }
+});
+
+test("addInto: a non-contiguous (strided) view is NOT eligible for the SIMD path but still computes correctly via the fallback", async () => {
+  const kernels = await Kernels.load();
+  assert.equal(kernels.simdAvailable, true);
+  // Every other element of a 6-element buffer -- view1D reports stride=2,
+  // disqualifying it from the contiguous-only SIMD kernel (flatSpec's
+  // stride === 1 check in addInto/mulInto).
+  const full = kernels.fromArray(new Float32Array([1, 10, 2, 20, 3, 30]), [6]);
+  const strided = full.view1D(0, 3, 2); // offset=0, length=3, stride=2 -> [1, 2, 3]
+  const b = kernels.fromArray(new Float32Array([100, 200, 300]), [3]);
+  const out = kernels.zeros([3]);
+  kernels.addInto(out, strided, b);
+  assert.deepEqual([...out.toFloat32Array()], [101, 202, 303]);
+});
+
+test("addInto: SIMD is a real, measured speedup over the scalar fallback at N=1e6 (issue #13 — docs/spikes/wasm-simd.md)", async () => {
+  const withSimd = await Kernels.load();
+  const scalarOnly = await Kernels.load(undefined, new Uint8Array([0, 1, 2, 3]));
+  const N = 1_000_000;
+  const aData = new Float32Array(N).fill(1.5);
+  const bData = new Float32Array(N).fill(2.5);
+
+  const bench = (kernels: Kernels, iters: number): number => {
+    const a = kernels.fromArray(aData, [N]);
+    const b = kernels.fromArray(bData, [N]);
+    const out = kernels.zeros([N]);
+    for (let i = 0; i < 3; i++) kernels.addInto(out, a, b); // warm up
+    const start = process.hrtime.bigint();
+    for (let i = 0; i < iters; i++) kernels.addInto(out, a, b);
+    return Number(process.hrtime.bigint() - start) / iters / 1e6; // ms/call
+  };
+
+  const scalarTime = bench(scalarOnly, 20);
+  const simdTime = bench(withSimd, 20);
+
+  // docs/spikes/wasm-simd.md measured a stable ~2.6-3x SIMD-only speedup
+  // (apples-to-apples, contiguous-scalar baseline) on this machine. Matches
+  // this package's OTHER benchmark test's own proven-non-flaky threshold
+  // (>1.15x, chosen there for the same reason: tolerate contended CI/dev
+  // hardware — observed here to still flake occasionally above 1.2x under
+  // real concurrent CPU load on this dev machine) while still failing if
+  // the SIMD path regresses all the way back toward parity.
+  const speedup = scalarTime / simdTime;
+  assert.ok(
+    speedup > 1.15,
+    `expected SIMD addInto to beat the scalar fallback meaningfully at N=1e6, got ${speedup.toFixed(2)}x (scalar=${scalarTime.toFixed(3)}ms, simd=${simdTime.toFixed(3)}ms)`,
+  );
+});

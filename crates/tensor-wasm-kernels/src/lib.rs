@@ -129,6 +129,96 @@ pub unsafe extern "C" fn gemm_f32(
     }
 }
 
+/// SIMD128 kernels (issue #13) — measured, then shipped: `docs/spikes/
+/// wasm-simd.md` records a stable ~2.6-3x SIMD-only speedup over an
+/// apples-to-apples contiguous-scalar baseline (~3.2-4.4x total vs. the
+/// strided kernel these replace for the contiguous case), well above any
+/// reasonable bar for "a real speedup," so this ships as a SEPARATE build
+/// (Cargo `simd` feature) rather than staying scalar-only.
+///
+/// Built as a second .wasm artifact, never merged into the default build:
+/// a wasm32 module containing ANY v128 instruction fails WebAssembly
+/// validation in its ENTIRETY on a runtime without SIMD support — module
+/// loading is all-or-nothing, unlike native code's per-call feature
+/// detection, so there is no way to ship one module with both a SIMD path
+/// and a guaranteed-always-loadable fallback. `mallory-tensor-wasm`'s
+/// `Kernels.load()` feature-detects at runtime (`WebAssembly.validate()`)
+/// and picks whichever of the two built .wasm files is appropriate,
+/// falling back to the always-present scalar/strided kernels above for
+/// every case this module doesn't cover (non-contiguous views, and any
+/// runtime without SIMD support).
+///
+/// The `simd`-featured build (`npm run build:wasm:simd`) also passes
+/// `RUSTFLAGS="-C link-args=--import-memory"` — WITHOUT it, this module
+/// would allocate and export its OWN separate WASM linear memory, and
+/// `WasmTensor` data (allocated via the always-loaded scalar module's
+/// `alloc`) would live in a completely different buffer these SIMD
+/// kernels can't see, defeating the entire point of a zero-copy fast
+/// path. `--import-memory` makes this module IMPORT `env.memory` instead
+/// of exporting its own; the JS loader instantiates it passing the
+/// SCALAR module's `memory` export as that import, so both modules
+/// genuinely share one linear memory / one `ArrayBuffer`.
+#[cfg(feature = "simd")]
+mod simd {
+    use std::arch::wasm32::{f32x4_add, f32x4_mul, v128, v128_load, v128_store};
+
+    /// Contiguous-only f32 elementwise add via WASM SIMD128 (4 lanes/store).
+    /// Deliberately has NO offset/stride params (unlike `add_f32_strided`):
+    /// SIMD loads need contiguous memory, and there is no benefit to a
+    /// strided variant — the caller already applies any offset to the base
+    /// pointers before calling. A scalar tail loop handles `len % 4 != 0`.
+    ///
+    /// # Safety
+    /// `a_ptr`/`b_ptr`/`out_ptr` must each describe `len` valid, contiguous,
+    /// non-overlapping-with-`out` f32 slots.
+    #[no_mangle]
+    #[target_feature(enable = "simd128")]
+    pub unsafe extern "C" fn add_f32_contiguous_simd128(
+        a_ptr: *const f32,
+        b_ptr: *const f32,
+        out_ptr: *mut f32,
+        len: usize,
+    ) {
+        let chunks = len / 4;
+        for i in 0..chunks {
+            let idx = i * 4;
+            let av = v128_load(a_ptr.add(idx) as *const v128);
+            let bv = v128_load(b_ptr.add(idx) as *const v128);
+            let sum = f32x4_add(av, bv);
+            v128_store(out_ptr.add(idx) as *mut v128, sum);
+        }
+        for i in (chunks * 4)..len {
+            *out_ptr.add(i) = *a_ptr.add(i) + *b_ptr.add(i);
+        }
+    }
+
+    /// Contiguous-only f32 elementwise multiply — same contract as
+    /// `add_f32_contiguous_simd128`.
+    ///
+    /// # Safety
+    /// Same requirements as `add_f32_contiguous_simd128`.
+    #[no_mangle]
+    #[target_feature(enable = "simd128")]
+    pub unsafe extern "C" fn mul_f32_contiguous_simd128(
+        a_ptr: *const f32,
+        b_ptr: *const f32,
+        out_ptr: *mut f32,
+        len: usize,
+    ) {
+        let chunks = len / 4;
+        for i in 0..chunks {
+            let idx = i * 4;
+            let av = v128_load(a_ptr.add(idx) as *const v128);
+            let bv = v128_load(b_ptr.add(idx) as *const v128);
+            let product = f32x4_mul(av, bv);
+            v128_store(out_ptr.add(idx) as *mut v128, product);
+        }
+        for i in (chunks * 4)..len {
+            *out_ptr.add(i) = *a_ptr.add(i) * *b_ptr.add(i);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

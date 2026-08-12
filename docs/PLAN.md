@@ -138,7 +138,7 @@ Where Changesets doesn't reach:
 | Package | Depends on | Why here | Status |
 |---|---|---|---|
 | `tensor-core` | — | Root of the graph: storage, dtypes, shapes, broadcasting, elementwise, reductions, `.npy` | ✅ Shipped (#1 #2 #4 #5) |
-| `tensor-wasm` | `tensor-core` | Rust kernels/allocator/SIMD under tensor-core's hot paths | ✅ Shipped (#6 #7 #3); SIMD (#13) deferred, no measured win yet |
+| `tensor-wasm` | `tensor-core` | Rust kernels/allocator/SIMD under tensor-core's hot paths | ✅ Shipped, incl. SIMD (#6 #7 #3 #13) — SIMD128 measured at a stable ~2.6-3x win for contiguous elementwise add/mul (`docs/spikes/wasm-simd.md`), shipped as a separate feature-detected `.wasm` artifact |
 | `tensor-autograd` | `tensor-core` | Reverse tape, `nn.Linear/Embedding/LayerNorm`, `optim.AdamW` | ✅ Shipped (#8 #9 #10, incl. telemetry) |
 | `packages/scalar-types` | `mallory-math@^0.8` | Thin re-export of `ComplexNumber`/`Rational`/`Decimal` + tensor-boundary converters — near-zero work; the single import point for mallory-math types so a future swap touches one package | ✅ Shipped |
 | `scalars/unit` | — | Only net-new scalar package (mallory-math has no Unit type); non-blocking, can slip | ✅ Shipped (#23) |

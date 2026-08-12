@@ -15,6 +15,20 @@
  * mallory-tensor-core's `Tensor` (that storage-model merge is bigger scope,
  * tracked separately) — this package proves the seam and its performance
  * in isolation first.
+ *
+ * SIMD128 fast path (issue #13): docs/spikes/wasm-simd.md measured a real,
+ * stable ~2.6-3x speedup for contiguous elementwise add/mul, so `addInto`/
+ * `mulInto` use it automatically when the runtime supports WASM SIMD AND
+ * every operand is contiguous (stride 1) — falling back to the always-
+ * present scalar/strided kernels otherwise (non-contiguous views, or a
+ * runtime without SIMD support). This is a SEPARATE .wasm artifact
+ * (`tensor_wasm_kernels_simd128.wasm`, built by `npm run build:wasm:simd`),
+ * never merged into the default build: a wasm32 module containing ANY v128
+ * instruction fails WebAssembly validation in its ENTIRETY on a runtime
+ * without SIMD support (module loading is all-or-nothing), so shipping one
+ * module covering both cases isn't possible — `Kernels.load()` feature-
+ * detects via `WebAssembly.validate()` and loads the SIMD module only when
+ * it'll actually instantiate.
  */
 import { readFile } from "node:fs/promises";
 import { hasSink, metric } from "mallory-telemetry";
@@ -68,6 +82,14 @@ interface KernelExports {
   ): void;
 }
 
+/** The SIMD128 module's export surface — only the two contiguous-fast-path kernels (issue #13); everything else still goes through `KernelExports`' scalar/strided kernels, which stay resident in a separate always-loaded module. */
+interface SimdKernelExports {
+  memory: WebAssembly.Memory;
+  add_f32_contiguous_simd128(aPtr: number, bPtr: number, outPtr: number, len: number): void;
+  mul_f32_contiguous_simd128(aPtr: number, bPtr: number, outPtr: number, len: number): void;
+}
+
+
 const F32_ALIGN = 4;
 
 /**
@@ -116,6 +138,21 @@ export class WasmTensor {
     const t = WasmTensor.allocate(kernels, shape);
     new Float32Array(kernels.exports.memory.buffer, t.bufferPtr, data.length).set(data);
     return t;
+  }
+
+  /** A strided 1-D VIEW into this tensor's own buffer — zero copy. `elementOffset`/`stride` are relative to THIS tensor's own element 0 (composes with an existing view's own offset). Mainly for tests exercising the non-contiguous fallback path (issue #13's SIMD fast path only applies to `stride === 1`); real strided access normally comes from `mallory-tensor-core`. */
+  view1D(elementOffset: number, length: number, stride: number): WasmTensor {
+    if (this.shape.length !== 1) {
+      throw new RangeError("view1D is only defined on an already-1-D tensor in v1");
+    }
+    return new WasmTensor(
+      this.kernels,
+      this.bufferPtr,
+      this.byteLength,
+      [length],
+      [stride],
+      this.elementOffset + elementOffset,
+    );
   }
 
   /** A transposed 2-D VIEW — swaps strides, shares the same WASM buffer, zero copy. */
@@ -196,18 +233,25 @@ function flatSpec(t: WasmTensor): { bufferPtr: number; offset: number; stride: n
 export class Kernels {
   readonly exports: KernelExports;
   readonly #allocCounter: { count: number };
+  readonly #simd: SimdKernelExports | undefined;
 
   /** Calls to the WASM `alloc` export since load() — proves the `...Into` path allocates zero times. */
   get allocCallCount(): number {
     return this.#allocCounter.count;
   }
 
-  private constructor(exports: KernelExports, allocCounter: { count: number }) {
-    this.exports = exports;
-    this.#allocCounter = allocCounter;
+  /** Whether the SIMD128 fast path (issue #13) is active for this instance — false if the runtime doesn't support WASM SIMD, or the SIMD .wasm artifact wasn't built/found. `addInto`/`mulInto` fall back to the scalar/strided kernels transparently either way; this is exposed for tests/diagnostics. */
+  get simdAvailable(): boolean {
+    return this.#simd !== undefined;
   }
 
-  static async load(wasmBytes?: Uint8Array): Promise<Kernels> {
+  private constructor(exports: KernelExports, allocCounter: { count: number }, simd: SimdKernelExports | undefined) {
+    this.exports = exports;
+    this.#allocCounter = allocCounter;
+    this.#simd = simd;
+  }
+
+  static async load(wasmBytes?: Uint8Array, simdWasmBytes?: Uint8Array): Promise<Kernels> {
     const bytes =
       wasmBytes ??
       (await readFile(new URL("../wasm/tensor_wasm_kernels.wasm", import.meta.url)));
@@ -238,7 +282,39 @@ export class Kernels {
       mul_f32_strided: rawExports.mul_f32_strided.bind(rawExports),
       gemm_f32: rawExports.gemm_f32.bind(rawExports),
     };
-    return new Kernels(wrapped, counter);
+
+    // SIMD128 fast path (issue #13) — best-effort, never fatal. Any failure
+    // (unsupported runtime, missing/not-yet-built artifact, a bad import
+    // object) just leaves simdExports undefined and addInto/mulInto fall
+    // back to the always-present scalar/strided kernels above.
+    //
+    // Feature-detected by validating the REAL simd .wasm module's bytes
+    // directly (`WebAssembly.validate()`, which never throws — it returns
+    // `false` on a runtime that doesn't recognize the v128 opcodes actually
+    // present in this specific module) rather than a separate hand-crafted
+    // minimal probe module: one less thing to get the bytes wrong on, and
+    // it's checking the exact module that's about to be instantiated.
+    let simdExports: SimdKernelExports | undefined;
+    try {
+      const simdBytes =
+        simdWasmBytes ??
+        (await readFile(new URL("../wasm/tensor_wasm_kernels_simd128.wasm", import.meta.url)));
+      if (WebAssembly.validate(simdBytes as BufferSource)) {
+        // Imports the SCALAR module's own memory (see lib.rs's simd module
+        // doc comment for why --import-memory is required at build time) --
+        // both modules genuinely share one linear memory / one ArrayBuffer,
+        // so the SIMD kernels operate on the exact same resident WasmTensor
+        // data, zero-copy.
+        const { instance: simdInstance } = await WebAssembly.instantiate(simdBytes as BufferSource, {
+          env: { memory: rawExports.memory },
+        });
+        simdExports = simdInstance.exports as unknown as SimdKernelExports;
+      }
+    } catch {
+      simdExports = undefined;
+    }
+
+    return new Kernels(wrapped, counter, simdExports);
   }
 
   zeros(shape: readonly number[]): WasmTensor {
@@ -249,11 +325,21 @@ export class Kernels {
     return WasmTensor.fromArray(this, data, shape);
   }
 
-  /** out[i] = a[i] + b[i], writing directly into `out`'s WASM buffer. Zero allocation. */
+  /** out[i] = a[i] + b[i], writing directly into `out`'s WASM buffer. Zero allocation. Uses the SIMD128 fast path (issue #13) when available and every operand is contiguous (stride 1); falls back to the general strided kernel otherwise. */
   addInto(out: WasmTensor, a: WasmTensor, b: WasmTensor): WasmTensor {
     const A = flatSpec(a);
     const B = flatSpec(b);
     const O = flatSpec(out);
+    const len = out.shape.reduce((x, y) => x * y, 1);
+    if (this.#simd && A.stride === 1 && B.stride === 1 && O.stride === 1) {
+      this.#simd.add_f32_contiguous_simd128(
+        A.bufferPtr + A.offset * 4,
+        B.bufferPtr + B.offset * 4,
+        O.bufferPtr + O.offset * 4,
+        len,
+      );
+      return out;
+    }
     this.exports.add_f32_strided(
       A.bufferPtr,
       A.offset,
@@ -264,16 +350,26 @@ export class Kernels {
       O.bufferPtr,
       O.offset,
       O.stride,
-      out.shape.reduce((x, y) => x * y, 1),
+      len,
     );
     return out;
   }
 
-  /** out[i] = a[i] * b[i], writing directly into `out`'s WASM buffer. Zero allocation. */
+  /** out[i] = a[i] * b[i], writing directly into `out`'s WASM buffer. Zero allocation. Uses the SIMD128 fast path (issue #13) when available and every operand is contiguous (stride 1); falls back to the general strided kernel otherwise. */
   mulInto(out: WasmTensor, a: WasmTensor, b: WasmTensor): WasmTensor {
     const A = flatSpec(a);
     const B = flatSpec(b);
     const O = flatSpec(out);
+    const len = out.shape.reduce((x, y) => x * y, 1);
+    if (this.#simd && A.stride === 1 && B.stride === 1 && O.stride === 1) {
+      this.#simd.mul_f32_contiguous_simd128(
+        A.bufferPtr + A.offset * 4,
+        B.bufferPtr + B.offset * 4,
+        O.bufferPtr + O.offset * 4,
+        len,
+      );
+      return out;
+    }
     this.exports.mul_f32_strided(
       A.bufferPtr,
       A.offset,
@@ -284,7 +380,7 @@ export class Kernels {
       O.bufferPtr,
       O.offset,
       O.stride,
-      out.shape.reduce((x, y) => x * y, 1),
+      len,
     );
     return out;
   }
