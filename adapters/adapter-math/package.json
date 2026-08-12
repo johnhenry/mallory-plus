@@ -7,6 +7,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./test-utils": {
+      "types": "./dist/test-utils.d.ts",
+      "default": "./dist/test-utils.js"
     }
   },
   "files": [
@@ -21,6 +25,9 @@
     "mallory-math": "^0.8.0",
     "mallory-tensor-core": "0.0.1",
     "mallory-tensor-compile": "0.0.1"
+  },
+  "devDependencies": {
+    "mallory-tensor-autograd": "0.0.1"
   },
   "repository": {
     "type": "git",
