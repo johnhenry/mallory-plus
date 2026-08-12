@@ -17,6 +17,15 @@ name: Release
 # FIRST RUN: with no changesets pending, this publishes every non-private
 # package at its CURRENT version (0.0.1 today). See docs/RELEASING.md before
 # adding the NPM_TOKEN secret — that secret is what arms this workflow.
+#
+# Also dual-publishes to JSR (issue #25: npm is the baseline, JSR adds
+# first-class Deno reach) via the `jsr-release` job below. JSR publishing
+# uses GitHub's OIDC "Trusted Publishing" — no secret to configure here, but
+# it DOES require a one-time manual step on jsr.io (claim the @johnhenry
+# scope, link this repo as a trusted publisher for each package) before
+# it'll do anything; see docs/RELEASING.md's JSR section. Until that's done,
+# `jsr-release` fails harmlessly (continue-on-error) and npm publishing is
+# completely unaffected — the two are independent jobs.
 
 on:
   push:
@@ -26,7 +35,7 @@ on:
 permissions:
   contents: write # version-bump commits and tags
   pull-requests: write # the "Version Packages" PR
-  id-token: write # npm provenance attestation
+  id-token: write # npm provenance attestation + JSR OIDC trusted publishing
 
 concurrency:
   group: release
@@ -78,3 +87,49 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  jsr-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for JSR's OIDC Trusted Publishing — no token/secret needed
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Set up Rust wasm target
+        run: |
+          rustup target add wasm32-unknown-unknown
+          sudo apt-get update && sudo apt-get install -y lld
+
+      - run: npm ci
+
+      - name: Build (needed so package.json versions reflect the just-published npm state)
+        run: npm run build
+
+      # jsr.json's version is generated FROM package.json (scripts/sync-jsr-configs.mjs),
+      # never hand-edited — this keeps the two registries' versions from drifting apart.
+      - name: Sync jsr.json versions from package.json
+        run: node scripts/sync-jsr-configs.mjs
+
+      # Each package publishes independently; `npx jsr publish` no-ops (nonzero exit)
+      # if that exact version is already on JSR, which is expected on every run where
+      # only SOME packages bumped — continue-on-error keeps one already-published
+      # package from blocking the rest. This whole job is a no-op until the @johnhenry
+      # scope on jsr.io has this repo configured as a trusted publisher for each
+      # package name (one-time manual setup, see docs/RELEASING.md).
+      - name: Publish every package to JSR
+        continue-on-error: true
+        run: |
+          for dir in packages/frame-arrow packages/scalar-types packages/telemetry \
+                     packages/tensor-autograd packages/tensor-compile packages/tensor-core \
+                     packages/tensor-wasm adapters/adapter-math adapters/adapter-onnx scalars/unit; do
+            echo "::group::jsr publish — $dir"
+            (cd "$dir" && npx --yes jsr publish --allow-slow-types) || \
+              echo "::warning title=JSR publish skipped/failed::$dir (already published, or JSR trusted publishing isn't configured yet — see docs/RELEASING.md)"
+            echo "::endgroup::"
+          done

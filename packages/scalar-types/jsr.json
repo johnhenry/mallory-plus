@@ -1,0 +1,8 @@
+{
+  "name": "@johnhenry/mallory-scalar-types",
+  "version": "0.0.1",
+  "exports": "./src/index.ts",
+  "imports": {
+    "mallory-math": "jsr:@johnhenry/mallory-math@^0.8.0"
+  }
+}

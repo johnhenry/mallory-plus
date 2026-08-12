@@ -1,0 +1,9 @@
+{
+  "name": "@johnhenry/mallory-tensor-autograd",
+  "version": "0.0.1",
+  "exports": "./src/index.ts",
+  "imports": {
+    "mallory-tensor-core": "jsr:@johnhenry/mallory-tensor-core@^0.0.1",
+    "mallory-telemetry": "jsr:@johnhenry/mallory-telemetry@^0.0.1"
+  }
+}

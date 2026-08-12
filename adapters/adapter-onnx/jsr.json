@@ -1,0 +1,9 @@
+{
+  "name": "@johnhenry/mallory-adapter-onnx",
+  "version": "0.0.1",
+  "exports": "./src/index.ts",
+  "imports": {
+    "mallory-tensor-core": "jsr:@johnhenry/mallory-tensor-core@^0.0.1",
+    "onnxruntime-web": "npm:onnxruntime-web@^1.27.0"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@johnhenry/mallory-frame-arrow",
+  "version": "0.0.1",
+  "exports": "./src/index.ts",
+  "imports": {
+    "apache-arrow": "npm:apache-arrow@21.2.0",
+    "mallory-tensor-core": "jsr:@johnhenry/mallory-tensor-core@^0.0.1"
+  }
+}
