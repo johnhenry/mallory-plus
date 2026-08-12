@@ -44,10 +44,12 @@
  * - Deferred, throws {@link UnsupportedParquetTypeError}: INT96, INT64 with
  *   NANOS unit or unsigned width, DATE/TIME/DECIMAL/JSON/BSON/ENUM/UUID/
  *   FLOAT16/GEOMETRY/GEOGRAPHY/VARIANT converted or logical types, MAP
- *   columns (legacy `converted_type: 'MAP'`/`'MAP_KEY_VALUE'` or
- *   `logical_type: { type: 'MAP' }`) — a real gap, not attempted here since
- *   frame-arrow has no map DType to map it to — and the deeply-nested
- *   LIST/STRUCT combinations described above.
+ *   columns (the outer group carries legacy `converted_type: 'MAP'` and/or
+ *   `logical_type: { type: 'MAP' }` — `MAP_KEY_VALUE` only ever shows up one
+ *   level down, on the inner repeated group, so it's not part of THIS check)
+ *   — a real gap, not attempted here since frame-arrow has no map DType to
+ *   map it to — and the deeply-nested LIST/STRUCT combinations described
+ *   above.
  *
  * Dictionary-encoded parquet columns are NOT surfaced as frame-arrow's
  * `"dictionary"` DType — hyparquet materializes them to plain strings with
