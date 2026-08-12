@@ -9,3 +9,20 @@ export { compileExpr, UnsupportedExprError, type CompileExprOptions } from "./ex
 export * as linalg from "./linalg.ts";
 export { toCSR, toDense, type CSRGraph, type ToDenseOptions } from "./csr.ts";
 export { convolve, fft, fftPadded, ifft, realSignal, type ComplexSignal } from "./fft.ts";
+export {
+  correlation,
+  Distributions,
+  HypothesisTests,
+  linearRegression,
+  mean,
+  median,
+  percentile,
+  populationStandardDeviation,
+  populationVariance,
+  SpecialFunctions,
+  standardDeviation,
+  variance,
+  type ContinuousDistribution,
+  type DiscreteDistribution,
+  type LinearFit,
+} from "./stats.ts";
