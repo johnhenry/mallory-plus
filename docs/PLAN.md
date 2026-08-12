@@ -2,7 +2,7 @@
 title: "Mallory Plus — Implementation Plan"
 source: docs/perplexity-conversation.md
 generated: 2026-08-10
-status: draft — for review before any implementation work starts
+status: "in progress — v1 shipped in full, v2 underway. This document is the design record; ROADMAP.md and the GitHub issue tracker are the live status source (updated 2026-08-11, see below)."
 ---
 
 # Mallory Plus — Implementation Plan
@@ -131,42 +131,44 @@ Where Changesets doesn't reach:
 
 ## 5. Phased Roadmap
 
+**Live status (2026-08-11):** the tables below are the original design-time plan, kept as-written for historical context. For what's actually shipped vs. open, see [`ROADMAP.md`](../ROADMAP.md) and the [GitHub issue tracker](https://github.com/johnhenry/mallory-plus/issues) — those are the source of truth going forward, not this document. Short version: **v1 is fully shipped**, v2 is substantially shipped (compile/autograd/frame-arrow/adapter-math all done; frame-parquet in progress).
+
 ### v1 — Tensor foundation + parallel dataframe start
 
-| Package | Depends on | Why here |
-|---|---|---|
-| `tensor-core` | — | Root of the graph: storage, dtypes, shapes, broadcasting, elementwise, reductions, `.npy` |
-| `tensor-wasm` | `tensor-core` | Rust kernels/allocator/SIMD under tensor-core's hot paths |
-| `tensor-autograd` | `tensor-core` | Reverse tape, `nn.Linear/Embedding/LayerNorm`, `optim.AdamW` |
-| `packages/scalar-types` | `mallory-math@^0.8` | Thin re-export of `ComplexNumber`/`Rational`/`Decimal` + tensor-boundary converters — near-zero work; the single import point for mallory-math types so a future swap touches one package |
-| `scalars/unit` | — | Only net-new scalar package (mallory-math has no Unit type); non-blocking, can slip |
-| `adapters/adapter-onnx` | `tensor-core` | "Start here" mode: use ONNX Runtime Web directly for imported models — doesn't need autograd |
-| `frame-arrow` | — | **No dependency on tensor-core or tensor-wasm** — can be built fully in parallel with the tensor track (tensors and tables are explicitly separate-but-interoperable domains) |
-| `adapters/adapter-ml-matrix`, `adapter-mathjs`, `adapter-math` (Matrix↔Tensor slice only) | `tensor-core`, `scalar-types`, `mallory-math` | Cheap, low-surface, validate the adapter-isolation pattern early. `adapter-math`'s bigger deliverables (Symbolic→IR, Graph→CSR) land in v2 |
+| Package | Depends on | Why here | Status |
+|---|---|---|---|
+| `tensor-core` | — | Root of the graph: storage, dtypes, shapes, broadcasting, elementwise, reductions, `.npy` | ✅ Shipped (#1 #2 #4 #5) |
+| `tensor-wasm` | `tensor-core` | Rust kernels/allocator/SIMD under tensor-core's hot paths | ✅ Shipped (#6 #7 #3); SIMD (#13) deferred, no measured win yet |
+| `tensor-autograd` | `tensor-core` | Reverse tape, `nn.Linear/Embedding/LayerNorm`, `optim.AdamW` | ✅ Shipped (#8 #9 #10, incl. telemetry) |
+| `packages/scalar-types` | `mallory-math@^0.8` | Thin re-export of `ComplexNumber`/`Rational`/`Decimal` + tensor-boundary converters — near-zero work; the single import point for mallory-math types so a future swap touches one package | ✅ Shipped |
+| `scalars/unit` | — | Only net-new scalar package (mallory-math has no Unit type); non-blocking, can slip | ✅ Shipped (#23) |
+| `adapters/adapter-onnx` | `tensor-core` | "Start here" mode: use ONNX Runtime Web directly for imported models — doesn't need autograd | ✅ Shipped (#18), verified against real ONNX models |
+| `frame-arrow` | — | **No dependency on tensor-core or tensor-wasm** — can be built fully in parallel with the tensor track (tensors and tables are explicitly separate-but-interoperable domains) | ✅ Shipped (#19), verified against real pyarrow/pandas |
+| `adapters/adapter-ml-matrix`, `adapter-mathjs`, `adapter-math` (Matrix↔Tensor slice only) | `tensor-core`, `scalar-types`, `mallory-math` | Cheap, low-surface, validate the adapter-isolation pattern early. `adapter-math`'s bigger deliverables (Symbolic→IR, Graph→CSR) land in v2 | `adapter-math`'s Matrix↔Tensor slice ✅ Shipped (#14); `adapter-ml-matrix`/`adapter-mathjs` not started (no filed issue yet — mallory-math already covers ml-matrix's role, revisit if a concrete need surfaces) |
 
 ### v2 — Compilation, GPU, scientific core, dataframe I/O
 
-| Package | Depends on | Why here |
-|---|---|---|
-| `tensor-compile` | `tensor-core` | Expression IR, elementwise fusion, temp-memory planning — must land before WebGPU |
-| `tensor-webgpu` | `tensor-core` **+** `tensor-compile` | Large matmuls/attention-adjacent/image kernels need the fusion/IR layer for GPU dispatch planning |
-| `frame-parquet` | `frame-arrow` | Scans/writes, projection/predicate pushdown |
-| `fft`, `signal`, `image` (resize/normalize), convolution/attention primitives, `data` loaders + `trainer` facade, checkpoint format (`stateDict` + `io.writeCheckpoint`) | `tensor-core`, `tensor-compile`, `async-itertools@^2` | "Practical ML/media compute" bundle. `data` is built on async-itertools via a **curated facade** — dataframe-safe names only (`chunk(n)` ← `group(n)`, `fold` ← terminal fold, `count*` NOT re-exported since it means row-count in dataframe-land), plus `batch(n, {collate})` → Tensors, epoch shuffling, `data.fromAsync` |
-| Symbolic→IR bridge in `adapter-math`: `compileExpr(expr \| string, spec)` | `tensor-compile`, `mallory-math` | mallory's tagged-union `Expr` AST maps ~1:1 onto the IR (const/var/arith, 41 unary funcs incl. erf/sigmoid/relu, `cmp`→comparisons, `piecewise`→`Tensor.where`); unsupported nodes throw typed errors. Differentiate symbolically in mallory, evaluate vectorized over tensors — nearly free |
-| Dense linalg maturity (QR/SVD/eigen), `optimize`, minimal `sparse` (CSR/COO) | `tensor-core`, `tensor-autograd` | `optimize.minimize` needs autodiff; full sparse solvers deferred to v3 |
-| `adapters/adapter-stdlib`, `adapter-tfjs`, `adapter-danfo`, `adapter-arrow` | respective core packages | Larger-surface adapters, deferred until the APIs they bridge to stabilize |
+| Package | Depends on | Why here | Status |
+|---|---|---|---|
+| `tensor-compile` | `tensor-core` | Expression IR, elementwise fusion, temp-memory planning — must land before WebGPU | ✅ Shipped (#11), extended for the Symbolic bridge below |
+| `tensor-webgpu` | `tensor-core` **+** `tensor-compile` | Large matmuls/attention-adjacent/image kernels need the fusion/IR layer for GPU dispatch planning | Not started |
+| `frame-parquet` | `frame-arrow` | Scans/writes, projection/predicate pushdown | In progress (#20) |
+| `fft`, `signal`, `image` (resize/normalize), convolution/attention primitives, `data` loaders + `trainer` facade, checkpoint format (`stateDict` + `io.writeCheckpoint`) | `tensor-core`, `tensor-compile`, `async-itertools@^2` | "Practical ML/media compute" bundle. `data` is built on async-itertools via a **curated facade** — dataframe-safe names only (`chunk(n)` ← `group(n)`, `fold` ← terminal fold, `count*` NOT re-exported since it means row-count in dataframe-land), plus `batch(n, {collate})` → Tensors, epoch shuffling, `data.fromAsync` | Not started. `async-itertools` → `mallory-iteration` (moved to the `mallory` monorepo, §0); `data` namespace (#22) blocked on its npm publish. `fft`/`signal`/`image`/`trainer`/checkpoint: no filed issues yet |
+| Symbolic→IR bridge in `adapter-math`: `compileExpr(expr \| string, spec)` | `tensor-compile`, `mallory-math` | mallory's tagged-union `Expr` AST maps ~1:1 onto the IR (const/var/arith, 41 unary funcs incl. erf/sigmoid/relu, `cmp`→comparisons, `piecewise`→`Tensor.where`); unsupported nodes throw typed errors. Differentiate symbolically in mallory, evaluate vectorized over tensors — nearly free | ✅ Shipped (#15) |
+| Dense linalg maturity (QR/SVD/eigen), `optimize`, minimal `sparse` (CSR/COO) | `tensor-core`, `tensor-autograd` | `optimize.minimize` needs autodiff; full sparse solvers deferred to v3 | Reference-speed linalg (LU/solve/QR/Cholesky/eig/SVD/leastSquares/pseudoInverse/norms) ✅ Shipped in `adapter-math` (#26), native WASM kernels not started. `optimize`/`sparse`: not started |
+| `adapters/adapter-stdlib`, `adapter-tfjs`, `adapter-danfo`, `adapter-arrow` | respective core packages | Larger-surface adapters, deferred until the APIs they bridge to stabilize | Not started (as planned — deferred) |
 
 ### v3 — Full dataframe system, Python interop, scientific breadth
 
 | Package | Depends on | Why here |
 |---|---|---|
-| `interop-python` | `frame-arrow`, `frame-parquet`, `tensor-core` | Needs stable Arrow IPC/Parquet/.npy surfaces to bridge — explicitly last in the source's release sequence |
-| Dataframe hardening: window ops, full groupby/join maturity | `frame-arrow`, `frame-parquet` | — |
-| `sparse.linalg` iterative solvers, `interpolate`, `special`, `stats.distributions`, full `integrate` | `tensor-core`, `tensor-autograd` | "Build later" tier — large algorithm/test surface. `adapter-math`'s Graph→CSR bridge (`toCSR(g)` → `{rowPointers, columnIndices, values, order}`, iterating the `Map` adjacency directly — never via the dense Infinity-sentinel matrix; explicit `missing: "zero"\|"infinity"` policy on the `toDense` companion) lands alongside the minimal `sparse` package |
-| GPU kernel DSL maturity (typed `kernel({inputs, output, expression})`) | `tensor-webgpu` | The *DSL* matures here; unrestricted JS-to-shader transpilation never enters scope, at any version |
-| `expression` (optional) — safe string-expression compilation into `tensor-compile`'s IR, never into JS | `tensor-compile`, `adapter-math` | **Primary route: reuse mallory-math's `Symbolic.parse` via `adapter-math`'s compile bridge** — string → mallory `Expr` AST → validated IR; a bespoke parser is only built if mallory's grammar proves insufficient. Source's math.js section: useful for a REPL/notebook/calculator/graphing view/LLM-facing constrained compute DSL, explicitly non-core; compatible with non-goal 2 because the IR and WASM/WGSL emitters stay fully controlled |
-| `DecimalTensor` (if ever) | `scalars/*` | Own fixed-width storage family, never boxed `BigNumber` |
-| Full Danfo/pandas behavioral parity in adapters | `adapters/adapter-danfo` | Explicitly bounded, not full parity even here |
+| `interop-python` | `frame-arrow`, `frame-parquet`, `tensor-core` | Needs stable Arrow IPC/Parquet/.npy surfaces to bridge — explicitly last in the source's release sequence | Queued (#21), blocked on `frame-parquet` |
+| Dataframe hardening: window ops, full groupby/join maturity | `frame-arrow`, `frame-parquet` | — | Not started |
+| `sparse.linalg` iterative solvers, `interpolate`, `special`, `stats.distributions`, full `integrate` | `tensor-core`, `tensor-autograd` | "Build later" tier — large algorithm/test surface. `adapter-math`'s Graph→CSR bridge (`toCSR(g)` → `{rowPointers, columnIndices, values, order}`, iterating the `Map` adjacency directly — never via the dense Infinity-sentinel matrix; explicit `missing: "zero"\|"infinity"` policy on the `toDense` companion) lands alongside the minimal `sparse` package | Not started |
+| GPU kernel DSL maturity (typed `kernel({inputs, output, expression})`) | `tensor-webgpu` | The *DSL* matures here; unrestricted JS-to-shader transpilation never enters scope, at any version | Not started |
+| `expression` (optional) — safe string-expression compilation into `tensor-compile`'s IR, never into JS | `tensor-compile`, `adapter-math` | **Primary route: reuse mallory-math's `Symbolic.parse` via `adapter-math`'s compile bridge** — string → mallory `Expr` AST → validated IR; a bespoke parser is only built if mallory's grammar proves insufficient. Source's math.js section: useful for a REPL/notebook/calculator/graphing view/LLM-facing constrained compute DSL, explicitly non-core; compatible with non-goal 2 because the IR and WASM/WGSL emitters stay fully controlled | Superseded early: `compileExpr` (#15) shipped directly in `adapter-math` in v2, not as a separate `expression` package — same "reuse Symbolic.parse" approach the source recommended, just landed sooner than planned |
+| `DecimalTensor` (if ever) | `scalars/*` | Own fixed-width storage family, never boxed `BigNumber` | Not started |
+| Full Danfo/pandas behavioral parity in adapters | `adapters/adapter-danfo` | Explicitly bounded, not full parity even here | Not started |
 
 Non-goals from §2 never enter this roadmap at any version.
 
@@ -351,23 +353,25 @@ Ranked by how early each risk becomes load-bearing:
 
 ## 8. Immediate Next Steps
 
+All five items below are **DONE** as of 2026-08-11 — kept for historical record, see [`ROADMAP.md`](../ROADMAP.md) for what's actually next.
+
 1. ~~Confirm package naming~~ **RESOLVED 2026-08-10:** Mallory family, unscoped `mallory-*` npm names (see naming note in the header; the `@mallory` scope is owned by another npm user; all needed `mallory-*` names verified available). The earlier Google-Malloy collision concern is closed by the rename.
-1b. **Ops prerequisite:** npm is not authenticated on this machine (`npm whoami` → ENEEDAUTH). Mint a granular automation token (publish rights for `async-itertools` + future `mallory-*` names) or `npm adduser` before any publish step.
-1c. **async-itertools fix-and-publish workstream** (parallel track, blocks the v2 `data` namespace only): full TypeScript conversion → transduce leak fix (rewrite `reduceSync`/`reduceAsync` to yield items directly instead of threading an iterable accumulator; regression test proving bounded heap over 1e6 items) → `HAULT`→`HALT` → AbortSignal propagation → `mapConcurrent`/`prefetch` → backpressure `AsyncChannel.put()` → publish v2.x.
-2. Scaffold the monorepo per §1: npm workspaces in root `package.json`, root `Cargo.toml`, `turbo.json` with the `build:wasm → build` task dependency wired, `packages/tensor-core` + `packages/scalar-types` (the mallory-math shim — ~30 min, immediately proves the external-dependency seam) and `crates/tensor-wasm-kernels` as the first real packages.
-3. Stand up the Python-subprocess differential-testing harness (§6.1) early — even before `tensor-wasm` kernels exist, it validates `tensor-core`'s pure-JS/TypedArray fallback path against NumPy.
-4. ~~Spike the Parquet library decision and the `apache-arrow`/PyArrow parity check~~ **DONE 2026-08-10** — three spike docs in `docs/spikes/` (arrow-parity, parquet-bakeoff, cellgraph-study); Parquet = hyparquet, arrow parity confirmed, CellGraph = design reference only (its 5 sharp edges worth reporting upstream to mallory-graph are listed in the study doc).
-5. Set up the Xvfb + Dawn/SwiftShader headless WebGPU CI path (§6.3) early, reusing the existing `headless-webgl` Xvfb pattern on this machine, even before `tensor-webgpu` has real kernels — cheaper to have the harness ready than to retrofit it under deadline pressure later.
+1b. ~~Ops prerequisite: npm auth~~ **RESOLVED** — npm publish tooling and CI are wired up (`docs/RELEASING.md`); first real publish awaits the `NPM_TOKEN` secret being armed (a deliberate manual gate, not a blocker on any code work).
+1c. ~~async-itertools fix-and-publish workstream~~ **RESOLVED 2026-08-10, differently than planned:** rather than fix-in-place, `async-itertools` was consolidated into the `mallory` monorepo as `mallory-iteration` (full git history preserved) — the transduce leak fix and the rest of this checklist happened as part of that move. Its npm publish (which unblocks the v2 `data` namespace, #22) is still pending.
+2. ~~Scaffold the monorepo~~ **DONE** — npm workspaces, Cargo workspace, the `build:wasm → build` dependency, and every package/adapter/scalar listed in §5's v1 row are live.
+3. ~~Stand up the differential-testing harness~~ **DONE** — see `docs/TESTING.md`; every numeric package's test suite runs a NumPy (or pyarrow/pandas, for frame-arrow) differential oracle.
+4. ~~Spike the Parquet library decision and the `apache-arrow`/PyArrow parity check~~ **DONE 2026-08-10** — three spike docs in `docs/spikes/` (arrow-parity, parquet-bakeoff, cellgraph-study); Parquet = hyparquet, arrow parity confirmed, CellGraph = design reference only (its 5 sharp edges reported upstream as johnhenry/mallory-graph#12–#16, fixes in progress).
+5. Set up the Xvfb + Dawn/SwiftShader headless WebGPU CI path (§6.3) early, reusing the existing `headless-webgl` Xvfb pattern on this machine, even before `tensor-webgpu` has real kernels — cheaper to have the harness ready than to retrofit it under deadline pressure later. **Still open** — `tensor-webgpu` itself hasn't started, so this hasn't been urgent; revisit when that package starts.
 
 ## 9. Open Questions
 
 Carried directly from the source conversation's own unexplored follow-ups:
-1. **Which ml-matrix decompositions to prioritize first** (feeds the v2 dense-linalg row in §5).
-2. **How to structure Arrow-backed DataFrames with a Danfo.js-like API** (feeds `frame-arrow` ergonomics and `adapters/runtime-danfo`).
-3. **Implementing Complex and Fraction types in Rust for WASM** — **DEFERRED indefinitely (2026-08-10):** mallory-math's boxed `ComplexNumber`/`Rational` fill the scalar role (the source itself says scalars are "usually not accelerated"); `ComplexTensor` kernels operate on flat interleaved/split typed storage, not boxed scalars, so the Rust crate as originally scoped is likely never needed.
+1. ~~Which ml-matrix decompositions to prioritize first~~ **RESOLVED 2026-08-11 as issue #26** — ship a reference-speed `linalg` surface now (delegating to mallory-math's decompositions via `adapter-math`), labeled reference-speed; `solve` and matmul-adjacent paths are the first native-kernel candidates when that work starts. Shipped.
+2. **How to structure Arrow-backed DataFrames with a Danfo.js-like API** (feeds `frame-arrow` ergonomics and `adapters/runtime-danfo`) — still open; `frame-arrow`'s v1 API (#19) shipped its own expression-oriented design rather than a Danfo-mimicking one, so this question is really "build `adapter-danfo` later, or fold Danfo idioms into `frame-arrow` itself" — unresolved, low urgency (both `adapter-danfo` and `adapter-tfjs`/`adapter-stdlib` are still "not started" per §5).
+3. **Implementing Complex and Fraction types in Rust for WASM** — filed as issue #27 to make the decision discoverable; **maintainer decision 2026-08-11: keep open** (not closed as won't-do, despite the reasoning below supporting closure) in case a concrete workload surfaces. Reasoning on record either way: mallory-math's boxed `ComplexNumber`/`Rational` fill the scalar role (the source itself says scalars are "usually not accelerated"); `ComplexTensor` kernels operate on flat interleaved/split typed storage, not boxed scalars, so the Rust crate as originally scoped would likely not serve them regardless.
 
 Raised by this plan (not in the source):
-4. **`i64`/`u64` dtype decision** — resolve the source's own DType-vs-ONNX-example inconsistency (§6.1) before freezing the dtype list.
+4. ~~`i64`/`u64` dtype decision~~ **RESOLVED** during `tensor-core` M1 (§5) — both are `BigInt64Array`/`BigUint64Array`-backed, documented in `packages/tensor-core/src/dtype.ts`.
 5. ~~Public naming~~ **RESOLVED 2026-08-10** — renamed to the Mallory family, unscoped `mallory-*` npm packages (§8 item 1).
-6. **npm-only vs. dual npm+JSR publishing** for first-class Deno distribution (§0).
-7. **Browser bundle-size budget** — a concrete number and lazy-loading policy for the Arrow + Parquet + tensor-WASM stack (§6.2 risk 3) rather than discovering the cost post-hoc. Materially improved 2026-08-10: choosing hyparquet over parquet-wasm cuts the Parquet payload ~20× (≈91 KB vs 1.82 MB gzip), and apache-arrow's shipped bundles measure ~50 KB gzip tree-shakeable — the remaining unknown is tensor-WASM kernel growth.
+6. ~~npm-only vs. dual npm+JSR publishing~~ **RESOLVED 2026-08-11 as issue #25: dual, from the start.** Every publishable package has a generated `jsr.json` (`@johnhenry/<name>`) and a `jsr-release` CI job (OIDC Trusted Publishing); see `docs/RELEASING.md`'s JSR section for the one-time manual jsr.io setup that arms it.
+7. ~~Browser bundle-size budget~~ **RESOLVED 2026-08-11 as issue #24: no hard budget for now.** Recommendation drafted (150 KB gzip core + lazy-load everything else) but the maintainer chose to leave it a documented aspiration rather than lock a number, revisiting once there's real bundle-analyzer data from an app using this. The lazy-loading POLICY (dynamic `import()` at the exact call site, e.g. `frame-arrow`'s `toTensor()`) is followed regardless of the open number.
