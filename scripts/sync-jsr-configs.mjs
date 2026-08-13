@@ -29,6 +29,7 @@ const PACKAGE_DIRS = [
   "packages/fft",
   "packages/frame-arrow",
   "packages/frame-parquet",
+  "packages/image",
   "packages/scalar-types",
   "packages/telemetry",
   "packages/tensor-autograd",

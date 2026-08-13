@@ -1,0 +1,8 @@
+{
+  "name": "@johnhenry/mallory-image",
+  "version": "0.0.1",
+  "exports": "./src/index.ts",
+  "imports": {
+    "mallory-tensor-core": "jsr:@johnhenry/mallory-tensor-core@^0.0.1"
+  }
+}
