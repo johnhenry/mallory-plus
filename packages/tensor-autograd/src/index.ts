@@ -4,3 +4,4 @@ export { sumToShape } from "./shape-utils.ts";
 export * as nn from "./nn.ts";
 export * as optim from "./optim.ts";
 export * as io from "./io.ts";
+export * as trainer from "./trainer.ts";
