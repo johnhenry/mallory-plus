@@ -186,6 +186,15 @@ export class WasmTensor {
   /** Copy the buffer out as a plain Float32Array (for inspection/testing only). */
   toFloat32Array(): Float32Array {
     if (this.#freed) throw new Error("WasmTensor: use after free");
+    // A direct memory read, not an export call -- but a trapped instance's
+    // memory contents are untrustworthy too (issue #46), so refuse loudly
+    // rather than hand back possibly-corrupt data.
+    if (this.kernels.poisoned) {
+      throw new Error(
+        `WasmTensor: this tensor's Kernels instance is poisoned (WASM export "${this.kernels.poisonedBy}" ` +
+          `trapped) -- its memory contents are untrustworthy. Create a fresh instance with Kernels.load().`,
+      );
+    }
     const size = this.shape.reduce((a, b) => a * b, 1);
     if (this.strides.length === 1 && this.strides[0] === 1 && this.elementOffset === 0) {
       return new Float32Array(this.kernels.exports.memory.buffer, this.bufferPtr, size).slice();
@@ -212,7 +221,14 @@ export class WasmTensor {
 
   free(): void {
     if (this.#freed) return;
-    this.kernels.exports.dealloc(this.bufferPtr, this.byteLength, F32_ALIGN);
+    // On a poisoned instance (issue #46), calling dealloc would re-enter the
+    // corrupted allocator (and throw the poisoned error into what is usually
+    // a cleanup path). The whole instance's memory is unrecoverable and gets
+    // garbage-collected wholesale when the Kernels instance is dropped, so
+    // just mark this tensor freed and skip the call.
+    if (!this.kernels.poisoned) {
+      this.kernels.exports.dealloc(this.bufferPtr, this.byteLength, F32_ALIGN);
+    }
     this.#freed = true;
   }
 }
@@ -243,10 +259,64 @@ function flatSpec(t: WasmTensor): { bufferPtr: number; offset: number; stride: n
   };
 }
 
+/** Per-instance trap-poisoning state (issue #46), shared by every guarded export wrapper (scalar and SIMD modules alike — they share one linear memory, so a trap in either corrupts both). */
+interface PoisonState {
+  poisonedBy: string | undefined;
+}
+
+/**
+ * Wrap one WASM export with the trap guard (issue #46). A Rust panic on
+ * wasm32-unknown-unknown becomes an `unreachable` trap, surfacing in JS as
+ * `WebAssembly.RuntimeError` — and after a trap, the instance's allocator/
+ * memory state is undefined (the same failure mode the Woxi study's
+ * playground works around by re-instantiating the whole module; see
+ * docs/spikes/woxi-study.md, "WASM packaging"). Re-entering a trapped
+ * instance can silently compute garbage, the worst failure class for a
+ * numerics library — so the first trap permanently poisons this instance,
+ * and every later call fails loudly instead. Resident WasmTensors point
+ * into the (now-untrustworthy) linear memory and cannot survive; the
+ * recovery path is a fresh `Kernels.load()`.
+ *
+ * Only genuine traps poison — ordinary JS errors (e.g. `solveInto`'s own
+ * RangeError validation) pass through unchanged. Cost: one flag check per
+ * call, negligible next to any kernel's actual work; the `...Into` path's
+ * zero-allocation property is unaffected.
+ */
+function guardExport<A extends unknown[], R>(
+  poison: PoisonState,
+  name: string,
+  fn: (...args: A) => R,
+): (...args: A) => R {
+  return (...args: A): R => {
+    if (poison.poisonedBy !== undefined) {
+      throw new Error(
+        `Kernels instance is poisoned: WASM export "${poison.poisonedBy}" trapped earlier, leaving this ` +
+          `instance's memory in an undefined state. Resident WasmTensors are invalid; create a fresh ` +
+          `instance with Kernels.load().`,
+      );
+    }
+    try {
+      return fn(...args);
+    } catch (err) {
+      if (err instanceof WebAssembly.RuntimeError) {
+        poison.poisonedBy = name;
+        throw new Error(
+          `WASM export "${name}" trapped (${err.message}) — a Rust panic aborted mid-operation. This ` +
+            `Kernels instance is now poisoned (its memory state is undefined); resident WasmTensors are ` +
+            `invalid. Create a fresh instance with Kernels.load().`,
+          { cause: err },
+        );
+      }
+      throw err;
+    }
+  };
+}
+
 export class Kernels {
   readonly exports: KernelExports;
   readonly #allocCounter: { count: number };
   readonly #simd: SimdKernelExports | undefined;
+  readonly #poison: PoisonState;
 
   /** Calls to the WASM `alloc` export since load() — proves the `...Into` path allocates zero times. */
   get allocCallCount(): number {
@@ -258,10 +328,26 @@ export class Kernels {
     return this.#simd !== undefined;
   }
 
-  private constructor(exports: KernelExports, allocCounter: { count: number }, simd: SimdKernelExports | undefined) {
+  /** Whether a WASM trap has poisoned this instance (issue #46) — see {@link guardExport}. Once true, never resets; recover with a fresh `Kernels.load()`. */
+  get poisoned(): boolean {
+    return this.#poison.poisonedBy !== undefined;
+  }
+
+  /** The export whose trap poisoned this instance, or undefined if healthy. */
+  get poisonedBy(): string | undefined {
+    return this.#poison.poisonedBy;
+  }
+
+  private constructor(
+    exports: KernelExports,
+    allocCounter: { count: number },
+    simd: SimdKernelExports | undefined,
+    poison: PoisonState,
+  ) {
     this.exports = exports;
     this.#allocCounter = allocCounter;
     this.#simd = simd;
+    this.#poison = poison;
   }
 
   static async load(wasmBytes?: Uint8Array, simdWasmBytes?: Uint8Array): Promise<Kernels> {
@@ -272,12 +358,14 @@ export class Kernels {
     const rawExports = instance.exports as unknown as KernelExports;
     const rawAlloc = rawExports.alloc.bind(rawExports);
     const counter = { count: 0 };
+    const poison: PoisonState = { poisonedBy: undefined };
     // Build a fresh exports object rather than mutating properties on the
     // WASM-provided one (whether those are writable is spec-uncertain and
-    // varies by engine) -- every other export is just rebound, unchanged.
+    // varies by engine) -- every export is rebound through the trap guard
+    // (issue #46, see guardExport above).
     const wrapped: KernelExports = {
       memory: rawExports.memory,
-      alloc: (len: number, align: number) => {
+      alloc: guardExport(poison, "alloc", (len: number, align: number) => {
         counter.count++;
         // Opt-in telemetry (issue #10): the differentiated panel this
         // enables isn't loss curves, it's JS<->WASM memory residency --
@@ -289,12 +377,12 @@ export class Kernels {
           metric("wasm", counter.count, "wasm/alloc.calls", counter.count);
         }
         return rawAlloc(len, align);
-      },
-      dealloc: rawExports.dealloc.bind(rawExports),
-      add_f32_strided: rawExports.add_f32_strided.bind(rawExports),
-      mul_f32_strided: rawExports.mul_f32_strided.bind(rawExports),
-      gemm_f32: rawExports.gemm_f32.bind(rawExports),
-      solve_f32: rawExports.solve_f32.bind(rawExports),
+      }),
+      dealloc: guardExport(poison, "dealloc", rawExports.dealloc.bind(rawExports)),
+      add_f32_strided: guardExport(poison, "add_f32_strided", rawExports.add_f32_strided.bind(rawExports)),
+      mul_f32_strided: guardExport(poison, "mul_f32_strided", rawExports.mul_f32_strided.bind(rawExports)),
+      gemm_f32: guardExport(poison, "gemm_f32", rawExports.gemm_f32.bind(rawExports)),
+      solve_f32: guardExport(poison, "solve_f32", rawExports.solve_f32.bind(rawExports)),
     };
 
     // SIMD128 fast path (issue #13) — best-effort, never fatal. Any failure
@@ -322,13 +410,28 @@ export class Kernels {
         const { instance: simdInstance } = await WebAssembly.instantiate(simdBytes as BufferSource, {
           env: { memory: rawExports.memory },
         });
-        simdExports = simdInstance.exports as unknown as SimdKernelExports;
+        const rawSimd = simdInstance.exports as unknown as SimdKernelExports;
+        // Same poison state as the scalar module: the two share one linear
+        // memory, so a trap in either corrupts both (issue #46).
+        simdExports = {
+          memory: rawSimd.memory,
+          add_f32_contiguous_simd128: guardExport(
+            poison,
+            "add_f32_contiguous_simd128",
+            rawSimd.add_f32_contiguous_simd128.bind(rawSimd),
+          ),
+          mul_f32_contiguous_simd128: guardExport(
+            poison,
+            "mul_f32_contiguous_simd128",
+            rawSimd.mul_f32_contiguous_simd128.bind(rawSimd),
+          ),
+        };
       }
     } catch {
       simdExports = undefined;
     }
 
-    return new Kernels(wrapped, counter, simdExports);
+    return new Kernels(wrapped, counter, simdExports, poison);
   }
 
   zeros(shape: readonly number[]): WasmTensor {

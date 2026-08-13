@@ -255,9 +255,15 @@ with a cache-busted URL** (a trapped Rust panic permanently corrupts wasm
 globals; a fresh instantiation is the only cure — their playground's worker
 does exactly this). mallory-plus's flat extern-C ABI (no wasm-bindgen) is
 the opposite trade, chosen for zero-marshalling hot paths — both are
-correct for their use ("rich API surface" vs "hot kernels"). The panic-
-recovery pattern is worth remembering if tensor-wasm ever adds
-Rust-side panics beyond `expect` on allocation.
+correct for their use ("rich API surface" vs "hot kernels"). The trapped-
+instance failure mode turned out to already apply to tensor-wasm (its
+`alloc`/`dealloc` `.expect()` and `solve_f32`'s internal `Vec`s are real
+panic paths) — **adapted and shipped as trap poisoning** (issue #46): a
+trap permanently poisons the `Kernels` instance and every later call fails
+loudly instead of silently computing on corrupt memory; recovery is a
+fresh `Kernels.load()` (unlike Woxi's transparent re-instantiation, our
+resident `WasmTensor`s can't survive a reload, so honesty beats
+transparency here).
 
 ## Actionable items (filed)
 
