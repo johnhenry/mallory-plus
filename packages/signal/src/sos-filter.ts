@@ -1,0 +1,43 @@
+/**
+ * sosFilter (issue #44) — apply a cascade of second-order sections (SOS,
+ * the numerically-stable filter representation `butter`'s `output: "sos"`
+ * produces) to a signal, via Direct Form II Transposed per section (the
+ * same structure `scipy.signal.sosfilt` uses) -- each section's output
+ * feeds the next section's input.
+ */
+import { Tensor } from "mallory-tensor-core";
+
+/** One second-order section: `[b0, b1, b2, a0, a1, a2]` (numerator then denominator coefficients; `a0` need not be pre-normalized to 1 -- this function normalizes internally). */
+export type SosSection = readonly [number, number, number, number, number, number];
+export type Sos = readonly SosSection[];
+
+export function sosFilter(sos: Sos, signal: Tensor): Tensor {
+  if (signal.shape.length !== 1) throw new RangeError("sosFilter: v1 supports 1-D Tensor only");
+  if (sos.length === 0) throw new RangeError("sosFilter: sos must have at least one section");
+
+  let data = Float64Array.from(signal.contiguous().toArray() as number[]);
+
+  for (const section of sos) {
+    const [b0raw, b1raw, b2raw, a0, a1raw, a2raw] = section;
+    if (a0 === 0) throw new RangeError("sosFilter: a section's a0 coefficient must be nonzero");
+    const b0 = b0raw / a0;
+    const b1 = b1raw / a0;
+    const b2 = b2raw / a0;
+    const a1 = a1raw / a0;
+    const a2 = a2raw / a0;
+
+    const out = new Float64Array(data.length);
+    let z1 = 0;
+    let z2 = 0;
+    for (let n = 0; n < data.length; n++) {
+      const x = data[n] as number;
+      const y = b0 * x + z1;
+      z1 = b1 * x - a1 * y + z2;
+      z2 = b2 * x - a2 * y;
+      out[n] = y;
+    }
+    data = out;
+  }
+
+  return Tensor.fromTypedArray(data, [data.length], { dtype: "f64" });
+}

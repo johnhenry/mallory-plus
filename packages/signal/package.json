@@ -1,0 +1,34 @@
+{
+  "name": "mallory-signal",
+  "version": "0.0.1",
+  "description": "convolve/stft/istft/findPeaks/sosFilter/butter/resamplePoly for mallory-plus (issue #44) — v2/v3 SciPy-equivalent bundle, the signal-processing slice",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
+    "test": "npm run typecheck && node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "mallory-fft": "0.0.1",
+    "mallory-tensor-core": "0.0.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johnhenry/mallory-plus.git",
+    "directory": "packages/signal"
+  },
+  "license": "MIT",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

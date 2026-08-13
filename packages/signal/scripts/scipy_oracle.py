@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+"""scipy.signal oracle for mallory-signal's differential tests (issue #44).
+
+Same job-file convention as tensor-core's numpy_oracle.py: a single JSON
+argument path describing the operation, writes a JSON result to stdout
+(chosen over .npy here since results are small and sometimes structured --
+e.g. SOS arrays -- not bulk tensor data).
+"""
+import json
+import sys
+
+import numpy as np
+from scipy import signal
+
+
+def main() -> None:
+    job_path = sys.argv[1]
+    with open(job_path) as f:
+        job = json.load(f)
+
+    op = job["op"]
+
+    if op == "butter_sos":
+        sos = signal.butter(job["order"], job["wn"], btype=job["btype"], output="sos")
+        result = {"sos": sos.tolist()}
+
+    elif op == "sosfilt":
+        sos = np.array(job["sos"], dtype=float)
+        x = np.array(job["x"], dtype=float)
+        y = signal.sosfilt(sos, x)
+        result = {"y": y.tolist()}
+
+    elif op == "find_peaks":
+        x = np.array(job["x"], dtype=float)
+        kwargs = {}
+        if "height" in job:
+            kwargs["height"] = job["height"]
+        if "distance" in job:
+            kwargs["distance"] = job["distance"]
+        if "prominence" in job:
+            kwargs["prominence"] = job["prominence"]
+        indices, props = signal.find_peaks(x, **kwargs)
+        result = {"indices": indices.tolist()}
+        if "peak_heights" in props:
+            result["heights"] = props["peak_heights"].tolist()
+        if "prominences" in props:
+            result["prominences"] = props["prominences"].tolist()
+
+    elif op == "peak_prominences":
+        x = np.array(job["x"], dtype=float)
+        indices = np.array(job["indices"], dtype=int)
+        prominences, left_bases, right_bases = signal.peak_prominences(x, indices)
+        result = {"prominences": prominences.tolist()}
+
+    elif op == "convolve":
+        a = np.array(job["a"], dtype=float)
+        b = np.array(job["b"], dtype=float)
+        mode = job.get("mode", "full")
+        y = np.convolve(a, b, mode=mode)
+        result = {"y": y.tolist()}
+
+    elif op == "windowed_frame_fft":
+        # A primitive, version-stable oracle for our own stft's exact
+        # algorithm (windowed-frame -> full FFT, no extra normalization) --
+        # deliberately NOT scipy.signal.stft, whose own internal scaling
+        # convention varies across scipy versions and would test "did we
+        # replicate scipy's scaling" rather than "is the FFT of a windowed
+        # frame correct," which is the property that actually matters here.
+        x = np.array(job["x"], dtype=float)
+        window = np.array(job["window"], dtype=float)
+        frame = x * window
+        spectrum = np.fft.fft(frame)
+        result = {"real": spectrum.real.tolist(), "imag": spectrum.imag.tolist()}
+
+    else:
+        raise ValueError(f"scipy_oracle: unknown op {op!r}")
+
+    print(json.dumps(result))
+
+
+if __name__ == "__main__":
+    main()

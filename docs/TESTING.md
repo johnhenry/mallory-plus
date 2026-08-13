@@ -53,6 +53,27 @@ are **pre-generated and committed**, not regenerated live on every test run — 
 verify THIS run's own freshly-written output (e.g. `writeParquet`'s pyarrow-round-trip tests) spawn
 a live Python subprocess.
 
+## scipy.signal oracle (mallory-signal)
+
+`packages/signal/test/helpers.ts` (`runScipyOracle`) compares `mallory-signal`'s `butter`/
+`sosFilter`/`findPeaks`/`stft` against `scipy.signal` via a subprocess
+(`packages/signal/scripts/scipy_oracle.py`). Same skip-don't-fail convention as the NumPy oracle,
+resolved via `$MALLORY_SCIPY_ORACLE_PYTHON`, else `$MALLORY_ORACLE_PYTHON`, else `python3` on PATH —
+but scipy is NOT part of the NixOS nix-shell line above (numpy/pyarrow/pandas only), since it's a
+much heavier dependency (needs a Fortran/BLAS toolchain) only this one package's tests need:
+
+```bash
+SCIPY_PY=$(nix-shell -p "python3.withPackages(ps: with ps; [scipy numpy])" --run "which python3")
+MALLORY_SCIPY_ORACLE_PYTHON=$SCIPY_PY npm test -w mallory-signal
+```
+
+`butter`'s own SOS section coefficients are NOT expected to match `scipy.signal.butter`'s
+byte-for-byte — scipy's own pole/zero-to-section grouping isn't fixed either (verified empirically:
+which zeros pair with which poles varies by filter order). Tests instead verify END-TO-END FILTERING
+BEHAVIOR (apply `sosFilter` to `butter`'s output, compare against `scipy.signal.sosfilt` applied to
+`scipy.signal.butter`'s own output, on the same input) — invariant to section grouping, and the
+property that actually matters.
+
 ## Gradient oracles (autograd)
 
 `adapter-math`'s `mallory-adapter-math/test-utils` subpath (`dualGrad`/`dualGradN`) wraps
