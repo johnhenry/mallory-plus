@@ -26,6 +26,7 @@ import { join } from "node:path";
 const ROOT = new URL("..", import.meta.url).pathname;
 
 const PACKAGE_DIRS = [
+  "packages/fft",
   "packages/frame-arrow",
   "packages/frame-parquet",
   "packages/scalar-types",
