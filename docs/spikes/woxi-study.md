@@ -321,20 +321,22 @@ transparency here).
     rule — demonstrably held 8k agent-written commits together) →
     `johnhenry/mallory-plus#50`.
 
-## Findings deliberately NOT filed as issues
+## Trigger-filed (dormant until their trigger fires; close as not-needed if it never does)
 
-- **`ExprList` hybrid Vec→persistent-vector upgrade**: a good structure,
-  but no Mallory code has a known O(N²) prepend pain — filing it would be
-  a solution seeking a problem. Recorded here; adopt if the pain appears.
-- **Rust crate splitting for compile time**: their hardest-won lesson
-  ("the one structural fix we never made"), but tensor-wasm-kernels is
-  ~500 lines — the trigger ("split early if it grows past kernels") is
-  recorded in the architecture section above; nothing to do today.
-- **`overflow-checks = true` in release**: meaningful for their
-  integer-heavy CAS; our kernels are f32-only (floats don't overflow-trap).
-  Revisit only if integer kernels land — noted in the numerics section.
+- **`ExprList` hybrid Vec→persistent-vector upgrade** — trigger: a
+  profiled O(N²) prepend pain in family code (none known today) →
+  `johnhenry/mallory#19`.
+- **Rust crate splitting for compile time** (their hardest-won lesson —
+  "the one structural fix we never made") — trigger: tensor-wasm-kernels
+  reaching ~5k lines or a second kernel family → `johnhenry/mallory-plus#51`.
+- **`overflow-checks = true` in release** — trigger: the first
+  integer-dtype kernel (f32-only kernels can't overflow-wrap; pairs with
+  #46's trap poisoning once enabled) → `johnhenry/mallory-plus#52`.
+
+## Findings deliberately NOT filed as issues (permanent rejections, not deferrals)
+
 - **insta-style snapshot testing**: our tests are assertion/oracle-based
   by design; snapshots would weaken, not strengthen, that.
 - **functions.csv-style parity manifest**: already covered in "Considered
   and NOT adopted" above — only pays off when parity with an incumbent is
-  the claim.
+  the claim, which non-goal 11 permanently declines.
