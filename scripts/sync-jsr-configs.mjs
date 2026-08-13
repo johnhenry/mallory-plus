@@ -30,6 +30,7 @@ const PACKAGE_DIRS = [
   "packages/frame-arrow",
   "packages/frame-parquet",
   "packages/image",
+  "packages/mcp",
   "packages/scalar-types",
   "packages/signal",
   "packages/telemetry",

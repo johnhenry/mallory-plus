@@ -1,0 +1,12 @@
+{
+  "name": "@johnhenry/mallory-mcp",
+  "version": "0.0.1",
+  "exports": "./src/index.ts",
+  "imports": {
+    "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.30.0",
+    "mallory-adapter-math": "jsr:@johnhenry/mallory-adapter-math@^0.0.1",
+    "mallory-math": "jsr:@johnhenry/mallory-math@^0.8.0",
+    "mallory-tensor-core": "jsr:@johnhenry/mallory-tensor-core@^0.0.1",
+    "zod": "npm:zod@^3.25.0"
+  }
+}
