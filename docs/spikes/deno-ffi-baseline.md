@@ -78,3 +78,30 @@ acceptable.
 One Phase-2 cost got cheaper during Phase 1: no crate/manifest changes
 were needed at all for the native build, so "distribution matrix + JS
 binding + panic hardening" is the entire remaining work.
+
+## Phase 2 (shipped, same issue)
+
+- **Panic boundary**: `alloc`'s invalid-layout `.expect()` is now a defined
+  null return on both build targets (JS surfaces it as "allocation
+  failed", never poisoning); `dealloc` on an invalid layout is a defined
+  no-op. Remaining panics (genuine bugs) abort the process natively —
+  guaranteed-defined on Rust ≥1.81, documented in the crate — vs trapping
+  + poisoning (#46) in WASM. The trap-poisoning tests moved to an
+  out-of-bounds-load trigger accordingly.
+- **Binding**: `packages/tensor-wasm/src/native.ts` — `NativeKernels` over
+  host `Float32Array`s (addInto/mulInto/matmulInto/solveInto, strided
+  `MatrixRef` operands), `load()` returning `undefined` (never throwing)
+  outside Deno / without `--allow-ffi` / with no binary; resolution:
+  explicit path → `$MALLORY_NATIVE_KERNELS_PATH` → bundled
+  `native/<os>-<arch>/` → repo `target/release/`.
+- **Conditional exports**: `"deno"` → `native-entry` (default entry's
+  surface + the native API; WASM stays the default path even on Deno —
+  native is opt-in); `./native` subpath for explicit access.
+- **CI**: `.github/workflows/native-kernels.yml` — 5-platform cdylib
+  matrix (linux/darwin × x86_64/aarch64 + windows), artifact names
+  matching the binding's lookup, linux-x86_64 job runs the Deno
+  verification script. npm platform-package publishing deliberately
+  unwired pending NPM_TOKEN (#28).
+- **Verification**: `scripts/deno-native-test.ts` — native vs WASM
+  agreement on every op (incl. transposed-stride matmul), fallback
+  contract, RangeError validation. Passing under Deno 2.6.10 locally.

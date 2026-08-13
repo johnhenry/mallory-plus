@@ -1,0 +1,82 @@
+# Native cdylib matrix for the Deno FFI path (issue #55 Phase 2).
+#
+# Builds crates/tensor-wasm-kernels as a platform cdylib on every supported
+# target and uploads each as an artifact named to match
+# packages/tensor-wasm/src/native.ts's bundled-location lookup
+# (`native/<Deno.build.os>-<Deno.build.arch>/<libfile>`). The linux-x86_64
+# job also runs the full Deno-side verification (native vs WASM agreement)
+# before anything is uploaded.
+#
+# Publishing these as npm platform packages (the esbuild/swc
+# optionalDependencies pattern) is deliberately NOT wired yet — it needs the
+# NPM_TOKEN secret (issue #28) and a release-flow decision; until then the
+# artifacts serve local/download-on-demand use and keep the matrix honest.
+name: Native kernels
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/tensor-wasm-kernels/**"
+      - "packages/tensor-wasm/src/native*.ts"
+      - "packages/tensor-wasm/scripts/deno-native-test.ts"
+      - ".github/workflows/native-kernels.yml"
+  pull_request:
+    paths:
+      - "crates/tensor-wasm-kernels/**"
+      - "packages/tensor-wasm/src/native*.ts"
+      - "packages/tensor-wasm/scripts/deno-native-test.ts"
+      - ".github/workflows/native-kernels.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # `platform` matches Deno.build.os-Deno.build.arch, the exact
+          # folder name native.ts probes under packages/tensor-wasm/native/.
+          - runner: ubuntu-latest
+            platform: linux-x86_64
+            libfile: libtensor_wasm_kernels.so
+            verify: true
+          - runner: ubuntu-24.04-arm
+            platform: linux-aarch64
+            libfile: libtensor_wasm_kernels.so
+          - runner: macos-13
+            platform: darwin-x86_64
+            libfile: libtensor_wasm_kernels.dylib
+          - runner: macos-latest
+            platform: darwin-aarch64
+            libfile: libtensor_wasm_kernels.dylib
+          - runner: windows-latest
+            platform: windows-x86_64
+            libfile: tensor_wasm_kernels.dll
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build cdylib
+        run: cargo build --release -p tensor-wasm-kernels
+
+      - name: Run crate tests
+        run: cargo test --release -p tensor-wasm-kernels
+
+      - name: Verify native-vs-WASM agreement under Deno
+        if: ${{ matrix.verify }}
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Run Deno verification script
+        if: ${{ matrix.verify }}
+        working-directory: packages/tensor-wasm
+        run: deno run --allow-ffi --allow-read --allow-env scripts/deno-native-test.ts
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-kernels-${{ matrix.platform }}
+          path: target/release/${{ matrix.libfile }}
+          if-no-files-found: error
