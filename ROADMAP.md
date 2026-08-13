@@ -44,9 +44,11 @@ package exists, the source design conversation, non-goals, risk register), see
 
 ## Open decisions
 
-- **Rust `Complex`/`Fraction` scalars** (issue #27) — kept open by choice, though the recorded reasoning leans toward "not needed" (mallory-math's boxed scalars already fill the role).
+- **Rust `Complex`/`Fraction` scalars** (issue #27) — kept open as "someday" by choice (reaffirmed 2026-08-13), now with a concrete implementation roadmap on the issue: split-storage Complex kernels fit the existing WASM ABI cleanly (`fft_f64_split` is the natural first candidate, triggered by a measured `mallory-fft` bottleneck); Fraction/Rational can never cross the flat-numeric ABI and would be a separate crate if ever needed.
 
-**Resolved:** Danfo.js-like ergonomics for `frame-arrow` — no new `adapter-danfo` package for now; `frame-arrow` keeps its own expression-oriented API (see `docs/PLAN.md` §9 item 2 for the full reasoning).
+**Resolved:**
+- Danfo.js-like ergonomics for `frame-arrow` — no new `adapter-danfo` package for now; `frame-arrow` keeps its own expression-oriented API (see `docs/PLAN.md` §9 item 2 for the full reasoning).
+- Browser bundle-size budget (issue #24, closed 2026-08-13) — no numeric budget, final; the lazy-loading policy + per-package granularity is the size control (see `docs/PLAN.md` §9 item 7).
 
 ## Cross-repo dependencies
 
