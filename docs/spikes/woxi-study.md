@@ -105,6 +105,160 @@ bottleneck exists yet at this project's scale.
   Borland cited for "API clones don't infringe"), irrelevant here — Mallory is
   MIT and its API is its own.
 
+## Code-level findings (repo scan, 2026-08-13)
+
+Second pass: cloned the repo (shallow) and surveyed the source directly —
+~500k lines under `src/` (plus ~294k of tests), 316 Rust files. **License
+wall, repeated for emphasis: Woxi is AGPL-3.0 and Mallory is MIT — nothing
+below may be copied as code; these are architecture observations and
+methodology, which are not copyrightable.** The corpus question this pass
+also settled (Rubi, not WL notebooks) is tracked as `johnhenry/mallory#16`.
+
+### Test methodology (the best material in the repo)
+
+1. **One harness, oracle swapped by env var.** The same test artifacts run
+   against either implementation: `WOXI_USE_WOLFRAM=true` redirects the
+   snapshot harness to `wolframscript -file`, the scrut CLI tests to a `wo`
+   shim that dispatches to `wolframscript -c`, and even the ~26k Rust unit
+   tests get oracle-verified — by a 1,900-line script that *parses the Rust
+   test source* to extract `assert_eq!(interpret("…"), "…")` pairs and
+   replays them through wolframscript. A conformance suite derived from the
+   unit tests, with no parallel corpus to maintain. Mallory analogue: our
+   oracles generate expectations rather than replaying them, which is the
+   same closed loop — but the "extract-and-replay your own unit tests
+   against the oracle" trick is worth remembering if a second reference
+   implementation of anything ever exists.
+2. **The oracle never runs in CI.** Conformance (`make test-conformance`) is
+   a local, developer-run gate; CI runs only self-contained tiers. Exactly
+   our skip-don't-fail convention, independently converged on.
+3. **Docs are tests.** Their published documentation pages ARE the scrut
+   test files (markdown with fenced `scrut` blocks + MkDocs frontmatter) —
+   every example in the docs is verified against both implementations on
+   every run. Genuinely attractive pattern for mallory-math's COOKBOOK.md
+   someday: examples that can't rot.
+4. **Differential fuzzer design** (`src/bin/diff_fuzz.rs`, ~1,450 lines) —
+   the mechanics now folded into `johnhenry/mallory#14`:
+   - **Spec-table generation, not grammar generation**: a curated table of
+     `(function, argument-shape list)` with an `Arg` enum as the type system
+     (`Num`, `IntIn(lo,hi)`, `Poly`, `PredFn`, …), ranges chosen so
+     generated programs terminate and emit no messages (`Power` exponents
+     bounded to ±3). Coupled args (`Part` index vs list length) are
+     special-cased generators. Depth-budgeted recursion.
+   - The generator **partitions its spec table against the implementation
+     manifest** (functions.csv ✅ rows) and warns on drift — and a unit test
+     guards the reverse direction.
+   - **Batching + sentinel markers + bisection**: ~20 cases per oracle
+     invocation (amortizes wolframscript's slow start), `Print` sentinel
+     markers between cases, and a missing end-sentinel triggers bisecting
+     the batch to distinguish a genuine hang from a cold-start flake. Any
+     batch-level divergence is re-confirmed individually so batch
+     scaffolding can never produce a false positive.
+   - **Greedy shrinking** with strictly-size-decreasing candidates (ints →
+     0/1/n±half, lists drop elements, calls hoist each argument over the
+     call) and a `debug_assert` that every candidate is smaller — guaranteed
+     termination, bounded by an oracle-call budget.
+   - Deterministic hand-rolled RNG (SplitMix64), master + per-case seeds
+     printed for exact replay; a `--oracle woxi` self-check mode that must
+     report zero divergences (validates the harness itself).
+   - **Exception discipline**: exact-string skip lists with a written
+     justification per entry (one records that *Woxi is more accurate than
+     Mathematica* on a specific `NSolve`), plus a numeric-tolerance
+     escape hatch for ephemeris values — never blanket category skips.
+5. **Corpus-driven burn-down.** Their changelog batches fixes per
+   real-world artifact ("Fixes driven by a Wolfram Demonstration that…"),
+   and `scripts-todo.md` is an activation ledger: 832 scripts, 599 verified
+   byte-for-byte against the oracle, the rest triaged into buckets with
+   per-bucket actions. HN bug reports from their announcement thread were
+   fixed within the release cycle.
+6. **Anti-pattern observed**: `functions.csv` (6,298 rows) has no schema
+   validation and its `effect_level` column has visibly rotted — 15+
+   inconsistent value spellings and column-shift bugs; the `rank` column is
+   read by nothing. Manifests need validating tests or they rot. (Their
+   fuzzer survives this by filtering only on the ✅ status column and
+   keeping purity in its own curated table.)
+7. Two ops-level details worth stealing: nextest per-test timeout overrides
+   by name filter (an allocation-bound test gets `threads-required =
+   'num-cpus'` to run in isolation instead of flaking under contention —
+   the exact benchmark-contention problem we hit with the SIMD test); and a
+   documented oracle warm-up step (`wolframscript` CalendarData lazy init
+   paid once, outside any timed test).
+
+### Interpreter architecture (what to do, and what not to do, in a CAS)
+
+1. **Syntax-preserving AST = permanent tax.** Woxi's `Expr` has ~30
+   variants, many encoding surface syntax (`BinaryOp`, `Map`, `Postfix`,
+   `Rule`, …) alongside `FunctionCall` — so `Plus` exists in three forms
+   and every consumer needs canonicalisation shims. There is no `PartialEq`;
+   61 call sites compare expressions by *rendering them to strings*.
+   mallory-math's `Expr` is far smaller but shares the mild form of this
+   (binary `add`/`mul` nodes rather than canonical n-ary), worth
+   remembering if #15's rule table ever lands: desugar in the parser, keep
+   ONE application node.
+2. **The "polynomials in Rust" criticism is empirically confirmed, in
+   full.** Zero rewrite-rule data structures anywhere: `D` is a Rust match
+   on head strings with the chain/product rules as control flow; `Simplify`
+   is a generate-and-score search (candidates from Expand/Factor/Together,
+   scored by leaf count) — not a rule system; `Integrate` is an *ordered
+   cascade of hardcoded heuristics whose order matters*. ~53k lines of
+   algebra as opaque compiled code that nothing can inspect, extend, or
+   override from the language. This is the strongest possible evidence for
+   `johnhenry/mallory#15`'s middle path (rules as data, algorithms as
+   code) — and Woxi even shows where the boundary belongs: their
+   generate-and-score Simplify and Zassenhaus factoring are genuinely
+   algorithmic (fine as code); their elementary-derivative table is
+   screaming to be data.
+3. **User definitions stored as decomposed positional tuples** (a 6-tuple
+   of parallel `Vec`s per definition) instead of first-class
+   `{lhs, rhs, condition}` rules — the survey traced most of their pattern
+   limitations to this. Recommendation recorded on #15: rules as
+   first-class values, indexed by head.
+4. **Pattern matching is real but factorial**: Flat/Orderless matching
+   enumerates permutations/set-partitions outright, no discrimination nets
+   or indexing. Fine at small arg counts; a known cliff.
+5. **Dispatch at 6,000 builtins**: a linear chain of 22 modules, each a
+   multi-thousand-line `match name` — plus a separate 1,700-line arity
+   table, plus functions.csv, plus the impl: **four places to touch per
+   function**, kept in sync only by agent discipline. The obvious fix they
+   never made: one registry record per function (name, arity, attributes,
+   impl together). mallory-math's namespace-object convention already is
+   that; keep it.
+6. **Numerics choices worth knowing**: rationals have no variant (they're
+   `FunctionCall("Rational", …)`, string-checked at ~200 sites — ouch);
+   arbitrary-precision floats are stored as *decimal strings* and re-parsed
+   through astro-float at every operation (a serialization tax); `libm`
+   (pure-Rust transcendentals) was adopted because **platform libm ULP
+   differences broke cross-platform snapshot tests** — directly relevant to
+   us, since JS engines' `Math.sin`/`Math.exp` have the same
+   engine-dependence and our differential tolerances (not exact snapshots)
+   are the right defense; release builds keep `overflow-checks = true`
+   ("for a CAS, numeric correctness matters more than the small runtime
+   cost") — mallory-plus's Rust kernels currently follow Rust's default
+   (checks off in release); for f32 kernels overflow isn't the live risk,
+   but worth remembering if integer kernels ever land.
+7. **One genuinely portable data-structure idea**: their `ExprList` starts
+   as a plain `Vec` and upgrades to a persistent RRB vector (imbl) on first
+   `push_front`, with a lazily-materialized contiguous cache — turned an
+   O(N²) `Prepend` chain into O(N log N) without taxing the common case.
+8. **Compile-time postmortem** (`improve-compile-time.md`): five diagnosed
+   causes at 500k lines, all peripheral fixes made — and their own
+   conclusion names the one structural fix they never did: "split the crate
+   into workspace sub-crates so edits recompile a slice." Mallory-plus's
+   many-small-packages layout is already the TS equivalent; if the Rust
+   crate ever grows past kernels, split early.
+
+### WASM packaging (contrast with our seam)
+
+Woxi ships wasm-bindgen + wasm-pack with a hand-written npm wrapper
+(`woxi-wasm`): JSON-marshalled results, a host-provided `__woxi_fetch_url`
+extern for `Import[url]`, and **panic recovery by re-importing the module
+with a cache-busted URL** (a trapped Rust panic permanently corrupts wasm
+globals; a fresh instantiation is the only cure — their playground's worker
+does exactly this). mallory-plus's flat extern-C ABI (no wasm-bindgen) is
+the opposite trade, chosen for zero-marshalling hot paths — both are
+correct for their use ("rich API surface" vs "hot kernels"). The panic-
+recovery pattern is worth remembering if tensor-wasm ever adds
+Rust-side panics beyond `expect` on allocation.
+
 ## Actionable items (filed)
 
 1. **SymPy differential oracle for mallory-math's `Symbolic`** — the one
@@ -113,13 +267,26 @@ bottleneck exists yet at this project's scale.
    `sympy_oracle.py` subprocess (same pattern as mallory-plus's
    `numpy_oracle.py`/`scipy_oracle.py`, skip-don't-fail) plus a
    property-based leg (generate random `Expr` trees, compare evaluation and
-   derivatives) would close the loop. → filed on `johnhenry/mallory`.
+   derivatives) would close the loop. → `johnhenry/mallory#14`; the code
+   scan added the fuzzer mechanics (spec-table generation, batching +
+   sentinels + bisection, size-monotone shrinking, exception discipline) as
+   a design comment there.
 2. **Declarative rewrite-rule table for `Symbolic`** (someday, above). →
-   filed on `johnhenry/mallory`.
-3. **MCP server exposing Mallory evaluation to agents.** An HN commenter
+   `johnhenry/mallory#15`; the code scan added the empirical confirmation
+   (D/Simplify/Integrate as opaque code, definitions as positional tuples)
+   and the rules-as-first-class-values-indexed-by-head recommendation as a
+   comment there.
+3. **Rubi-derived integration/differentiation corpus** — the corpus follow-
+   up: NOT the 3GB WL-notebook archive (wrong artifact class — those are
+   programs, only useful to a WL-compatible implementation), but Rubi's
+   72,254-problem, MIT-licensed, Maxima-syntax test suite, whose cheapest
+   tier (differentiate Rubi's own antiderivative, numerically compare to
+   the integrand) exercises parse/differentiate/evaluate with no external
+   tool at test time. → `johnhenry/mallory#16`.
+4. **MCP server exposing Mallory evaluation to agents.** An HN commenter
    (alex7o) wrapped Woxi as an MCP server for agents and called it "an
    amazing experience" — and this family is unusually well-positioned for
    that idea (johnhenry/mcp-query, @johnhenry/mcp-gate already exist).
    A `mallory-mcp` package exposing Symbolic evaluation + tensor compute as
    MCP tools is a real, differentiated opportunity. → filed on
-   `johnhenry/mallory-plus`.
+   `johnhenry/mallory-plus` (#45).
