@@ -5,20 +5,22 @@ this file is a snapshot, not a substitute for it. For the full original design r
 package exists, the source design conversation, non-goals, risk register), see
 [`docs/PLAN.md`](docs/PLAN.md).
 
-## Status (2026-08-12)
+## Status (2026-08-13)
 
 **v1 (tensor foundation + parallel dataframe start): fully shipped.**
 
 | Package | What it is |
 |---|---|
 | `mallory-tensor-core` | Typed n-D arrays: dtypes, shapes, broadcasting, views, reductions, `.npy` |
-| `mallory-tensor-wasm` | Rust/WASM kernels under tensor-core's hot paths (flat extern-C ABI, no wasm-bindgen), incl. a measured SIMD128 fast path (~2.6-4.4x for contiguous elementwise add/mul, feature-detected, separate `.wasm` artifact) |
-| `mallory-tensor-autograd` | Reverse-mode tape, `nn.Linear/Embedding/LayerNorm`, `optim.SGD/AdamW` |
-| `mallory-scalar-types` | Re-exports mallory-math's `ComplexNumber`/`Rational`/`Decimal` at the tensor boundary |
+| `mallory-tensor-wasm` | Rust/WASM kernels under tensor-core's hot paths (flat extern-C ABI, no wasm-bindgen), incl. a measured SIMD128 fast path (~2.6-4.4x for contiguous elementwise add/mul, feature-detected, separate `.wasm` artifact) and a native `solve()` kernel (LU with partial pivoting) |
+| `mallory-tensor-autograd` | Reverse-mode tape, `nn.Linear/Embedding/LayerNorm`, `optim.SGD/AdamW`, a `trainer.configure/fit` facade, and a checkpoint format (`Module.stateDict()/loadStateDict()` + `io.writeCheckpoint/loadCheckpoint`) |
+| `mallory-scalar-types` | Re-exports mallory-math's `ComplexNumber`/`Rational`/`Decimal`/`Interval`/`Quaternion` at the tensor boundary |
 | `mallory-unit` | Dimensioned quantities (`Unit.of(55, "cm").to("m")`), dimensional-analysis-checked arithmetic |
 | `mallory-adapter-onnx` | `onnx.load()`/`model.run()` over ONNX Runtime Web, verified against real ONNX models |
 | `mallory-frame-arrow` | Immutable, expression-oriented `Frame`/`Series` on Apache Arrow, real column pruning + predicate pushdown, plus a `"lazySource"`/`collectAsync()` extension point for genuinely-lazy I/O-backed sources |
-| `mallory-adapter-math` | Bridge to `mallory-math` (the pure-TS science/CAS sibling library): Matrix/Vector↔Tensor, Symbolic Expr→IR, DualNumber gradient oracle, reference-speed `linalg`, `Graph`↔CSR sparse-matrix bridge |
+| `mallory-adapter-math` | Bridge to `mallory-math` (the pure-TS science/CAS sibling library): Matrix/Vector↔Tensor, Symbolic Expr→IR, DualNumber gradient oracle, reference-speed `linalg`, `Graph`↔CSR sparse-matrix bridge, `fft`/`ifft`/`fftPadded`/`convolve`, `SpecialFunctions`/`Distributions`/`HypothesisTests` + a `Statistics.ts` subset |
+| `mallory-fft` | `ComplexTensor` (split real/imag storage, boxed `ComplexNumber` at edges) + a fresh tensor-shaped `fft`/`ifft`/`fftPadded`/`rfft`/`irfft` (Cooley-Tukey, reference-speed) |
+| `mallory-image` | `resize` (nearest/bilinear) and `normalize` on `[H,W,C]`/`[N,H,W,C]` tensors |
 
 **v2 (compilation, GPU, scientific core, dataframe I/O): mostly shipped.**
 
@@ -26,10 +28,11 @@ package exists, the source design conversation, non-goals, risk register), see
 |---|---|
 | `mallory-tensor-compile` | ✅ Shipped — elementwise expression IR + fusion, the shared lowering target `compileExpr` also targets |
 | `mallory-frame-parquet` | ✅ Shipped — hyparquet-based read/write with genuine row-group pushdown, LIST/STRUCT (single-level nested) type support, and a genuinely-lazy `scanParquetLazy` on top of frame-arrow's lazy-source extension point |
-| `mallory-tensor-webgpu` | ✅ Shipped — GEMM/attention/elementwise-fusion WGSL kernels, verified against a real headless GPUAdapter; GEMM stays WASM-routed by default (measured, no crossover found on this machine's integrated-GPU + naive-kernel combination — see `docs/spikes/webgpu-baseline.md`) |
-| `data` namespace (async loaders on `mallory-iteration`) | Blocked — waiting on `mallory-iteration`'s npm publish (it lives in the sibling [`mallory`](https://github.com/johnhenry/mallory) monorepo) |
-| `fft`/`signal`/`image`/`trainer`/checkpoint format | Not started |
-| Native (WASM) linalg kernels | Not started — the reference-speed path in `adapter-math` covers this today |
+| `mallory-tensor-webgpu` | ✅ Shipped — GEMM/attention/elementwise-fusion WGSL kernels, verified against a real headless GPUAdapter; GEMM stays WASM-routed by default (measured, no crossover found on this machine's integrated-GPU + naive-kernel combination — see `docs/spikes/webgpu-baseline.md`); `scalar-types`' `Interval` used as an f32-vs-f64 rounding-error bound oracle |
+| `fft`/`image`/`trainer`/checkpoint format | ✅ Shipped (see `mallory-fft`/`mallory-image`/`mallory-tensor-autograd` rows above) |
+| `signal` (the DSP-specific slice: `convolve`/`butter`/`sosFilter`/`stft`/`istft`/`findPeaks`/`resamplePoly`) | Deliberately deferred (issue #44) — PLAN.md's own sequencing flags this "third-priority, not near-term" |
+| `data` namespace (async loaders on `mallory-iteration`) | Blocked — waiting on `mallory-iteration`'s npm publish (it lives in the sibling [`mallory`](https://github.com/johnhenry/mallory) monorepo); held for the combined release rather than published separately |
+| Native (WASM) linalg kernels | `solve` ✅ shipped (the first candidate named in `docs/PLAN.md` §9); QR/SVD/eigen/Cholesky stay reference-speed in `adapter-math` for now |
 
 **v3 (full dataframe system, Python interop, scientific breadth): `interop-python` shipped, everything else not started** as planned.
 
