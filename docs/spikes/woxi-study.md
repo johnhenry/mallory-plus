@@ -296,3 +296,45 @@ transparency here).
    A `mallory-mcp` package exposing Symbolic evaluation + tensor compute as
    MCP tools is a real, differentiated opportunity. → filed on
    `johnhenry/mallory-plus` (#45).
+5. **Trap poisoning for tensor-wasm** (the WASM-panic finding above) →
+   `johnhenry/mallory-plus#46`, **shipped** same day.
+6. **Docs-as-tests** (the scrut pattern): executable COOKBOOK.md/readme
+   examples so documented output can't rot → `johnhenry/mallory#17`.
+7. **Zero-install browser playground for mallory-math** (Woxi's
+   distribution-surface lesson; mallory-graph is the rich Studio analogue,
+   the minimal link-shareable REPL is what's missing; someday) →
+   `johnhenry/mallory#18`.
+8. **Workspace manifest drift guards** (the functions.csv-rot lesson
+   applied to our own three hand-maintained lists: root build/test `-w`
+   flags, `sync-jsr-configs.mjs` `PACKAGE_DIRS`) →
+   `johnhenry/mallory-plus#47`.
+9. **Randomized cross-backend differential fuzzer** (Woxi's diff-fuzz
+   shape, but with our own CPU interpreter as the oracle against
+   CompiledFn/WGSL/WASM — random IR graphs, seeded replay, monotone
+   shrinking, self-check mode) → `johnhenry/mallory-plus#48`.
+10. **Contention-flake stabilization** (SIMD benchmark + WebGPU cold-start
+    `NO_NAVIGATOR_GPU`, both hit repeatedly; Woxi prior art: isolation over
+    tolerance, bounded diagnostic retries, warm-up outside the timed path)
+    → `johnhenry/mallory-plus#49`.
+11. **Repo-level AGENTS.md** distilling the scattered conventions (Woxi's
+    agent playbook — including their "never implement a construct twice"
+    rule — demonstrably held 8k agent-written commits together) →
+    `johnhenry/mallory-plus#50`.
+
+## Findings deliberately NOT filed as issues
+
+- **`ExprList` hybrid Vec→persistent-vector upgrade**: a good structure,
+  but no Mallory code has a known O(N²) prepend pain — filing it would be
+  a solution seeking a problem. Recorded here; adopt if the pain appears.
+- **Rust crate splitting for compile time**: their hardest-won lesson
+  ("the one structural fix we never made"), but tensor-wasm-kernels is
+  ~500 lines — the trigger ("split early if it grows past kernels") is
+  recorded in the architecture section above; nothing to do today.
+- **`overflow-checks = true` in release**: meaningful for their
+  integer-heavy CAS; our kernels are f32-only (floats don't overflow-trap).
+  Revisit only if integer kernels land — noted in the numerics section.
+- **insta-style snapshot testing**: our tests are assertion/oracle-based
+  by design; snapshots would weaken, not strengthen, that.
+- **functions.csv-style parity manifest**: already covered in "Considered
+  and NOT adopted" above — only pays off when parity with an incumbent is
+  the claim.
