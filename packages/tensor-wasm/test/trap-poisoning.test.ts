@@ -5,10 +5,14 @@
  * permanently poison the Kernels instance and every later use must fail
  * LOUDLY, never silently compute on corrupt memory.
  *
- * The deterministic trap trigger: `alloc` with a non-power-of-two align.
- * Rust's `Layout::from_size_align(len, 3)` returns Err, the kernel's
- * `.expect()` panics, the panic traps. This goes through the raw exports
- * surface (the public API hardcodes align=4), which is exactly the point:
+ * The deterministic trap trigger: an out-of-bounds load. Reading via a
+ * pointer far beyond linear memory's extent traps with "memory access out
+ * of bounds" — a genuine trap that exists on any kernel taking pointers.
+ * (The original trigger, `alloc` with a non-power-of-two align, stopped
+ * panicking in issue #55 Phase 2: invalid layouts are now a DEFINED null
+ * return so the native FFI build has a catchable failure signal instead of
+ * a process abort — see the "defined failures do not poison" test below.)
+ * This goes through the raw exports surface, which is exactly the point:
  * the guard lives on the rebound exports, so even direct exports usage is
  * covered.
  */
@@ -17,13 +21,14 @@ import { test } from "node:test";
 import { Kernels } from "../src/index.ts";
 
 /** Trigger a real WASM trap on `kernels` and return the error it surfaced as. */
-function poisonViaBadAlloc(kernels: Kernels): Error {
+function poisonViaOobLoad(kernels: Kernels): Error {
   try {
-    kernels.exports.alloc(16, 3); // align must be a power of two -> Rust panic -> trap
+    // Read + write a single "element" at a pointer far past linear memory.
+    kernels.exports.add_f32_strided(2 ** 30, 0, 1, 2 ** 30, 0, 1, 2 ** 30, 0, 1, 1);
   } catch (err) {
     return err as Error;
   }
-  throw new Error("expected alloc(16, 3) to trap");
+  throw new Error("expected the out-of-bounds load to trap");
 }
 
 test("a real WASM trap surfaces as a wrapped error with the trap as its cause, and poisons the instance", async () => {
@@ -31,13 +36,13 @@ test("a real WASM trap surfaces as a wrapped error with the trap as its cause, a
   assert.equal(kernels.poisoned, false);
   assert.equal(kernels.poisonedBy, undefined);
 
-  const err = poisonViaBadAlloc(kernels);
+  const err = poisonViaOobLoad(kernels);
   assert.match(err.message, /trapped/);
   assert.match(err.message, /Kernels\.load\(\)/);
   assert.ok(err.cause instanceof WebAssembly.RuntimeError, `cause should be the original trap, got ${err.cause}`);
 
   assert.equal(kernels.poisoned, true);
-  assert.equal(kernels.poisonedBy, "alloc");
+  assert.equal(kernels.poisonedBy, "add_f32_strided");
 });
 
 test("every subsequent kernel call on a poisoned instance throws the clear poisoned error", async () => {
@@ -47,7 +52,7 @@ test("every subsequent kernel call on a poisoned instance throws the clear poiso
   const b = kernels.fromArray(new Float32Array([4, 5, 6]), [3]);
   const out = kernels.zeros([3]);
 
-  poisonViaBadAlloc(kernels);
+  poisonViaOobLoad(kernels);
 
   assert.throws(() => kernels.zeros([4]), /poisoned/);
   assert.throws(() => kernels.fromArray(new Float32Array([1]), [1]), /poisoned/);
@@ -61,21 +66,21 @@ test("toFloat32Array on a pre-existing tensor refuses to read a poisoned instanc
   const t = kernels.fromArray(new Float32Array([1, 2, 3, 4]), [4]);
   assert.deepEqual([...t.toFloat32Array()], [1, 2, 3, 4]); // healthy read first
 
-  poisonViaBadAlloc(kernels);
+  poisonViaOobLoad(kernels);
   assert.throws(() => t.toFloat32Array(), /poisoned|untrustworthy/);
 });
 
 test("free() on a poisoned instance is a silent no-op (cleanup paths must not throw), not a call into the corrupt allocator", async () => {
   const kernels = await Kernels.load();
   const t = kernels.fromArray(new Float32Array([1, 2]), [2]);
-  poisonViaBadAlloc(kernels);
+  poisonViaOobLoad(kernels);
   t.free(); // must not throw
-  assert.equal(kernels.poisonedBy, "alloc"); // and must not have re-entered wasm (poisonedBy unchanged)
+  assert.equal(kernels.poisonedBy, "add_f32_strided"); // and must not have re-entered wasm (poisonedBy unchanged)
 });
 
 test("poison is per-instance: a fresh Kernels.load() after poisoning works normally", async () => {
   const poisonedKernels = await Kernels.load();
-  poisonViaBadAlloc(poisonedKernels);
+  poisonViaOobLoad(poisonedKernels);
   assert.equal(poisonedKernels.poisoned, true);
 
   const fresh = await Kernels.load();
@@ -101,4 +106,15 @@ test("ordinary JS validation errors do NOT poison the instance", async () => {
   const sum = kernels.zeros([1]);
   kernels.addInto(sum, x, y);
   assert.deepEqual([...sum.toFloat32Array()], [12]);
+});
+
+test("defined failures do NOT poison: alloc with an invalid layout returns null (issue #55 Phase 2), surfaced as a plain JS error", async () => {
+  const kernels = await Kernels.load();
+  // Non-power-of-two align: previously a Rust panic (a trap here, a process
+  // abort on the native FFI build); now a defined null return on both.
+  assert.equal(kernels.exports.alloc(16, 3), 0);
+  assert.equal(kernels.poisoned, false);
+  // The public API surfaces null as "allocation failed", instance unharmed.
+  const t = kernels.zeros([4]);
+  assert.deepEqual([...t.toFloat32Array()], [0, 0, 0, 0]);
 });

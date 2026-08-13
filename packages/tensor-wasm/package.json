@@ -6,7 +6,12 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "deno": "./dist/native-entry.js",
       "default": "./dist/index.js"
+    },
+    "./native": {
+      "types": "./dist/native.d.ts",
+      "default": "./dist/native.js"
     }
   },
   "files": [
@@ -27,7 +32,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "test": "npm run typecheck && node --test test/*.test.ts && npm run test:bench",
-    "test:bench": "node --test test/*.bench-test.ts"
+    "test:bench": "node --test test/*.bench-test.ts",
+    "test:deno": "deno run --allow-ffi --allow-read --allow-env scripts/deno-native-test.ts"
   },
   "repository": {
     "type": "git",

@@ -15,22 +15,42 @@ use std::alloc::{alloc as std_alloc, dealloc as std_dealloc, Layout};
 /// Allocate `len` bytes aligned to `align` (must be a power of two; 4 or 8
 /// for f32/f64 buffers). Ownership passes to the caller; free with
 /// `dealloc(ptr, len, align)` using the SAME align used here.
+///
+/// Returns null for an invalid layout (non-power-of-two `align`, or a
+/// rounded size overflowing `isize`) as well as for allocator exhaustion —
+/// a DEFINED failure signal on both build targets, rather than a panic.
+/// (Issue #55 Phase 2: this crate now also ships as a native cdylib called
+/// over FFI. A panic escaping an `extern "C"` fn is a guaranteed process
+/// abort on Rust >= 1.81 — never UB — but a null return is catchable by
+/// the JS caller on both the WASM and native paths, so the one input-
+/// validation panic this crate had is now an error value instead. Panics
+/// from genuine bugs still abort natively / trap in WASM, where the JS
+/// wrapper's trap poisoning (issue #46) takes over.)
 #[no_mangle]
 pub extern "C" fn alloc(len: usize, align: usize) -> *mut u8 {
-    let layout = Layout::from_size_align(len.max(1), align).expect("invalid alloc layout");
-    // SAFETY: layout has non-zero size (len.max(1)) and a validated alignment.
-    unsafe { std_alloc(layout) }
+    match Layout::from_size_align(len.max(1), align) {
+        // SAFETY: layout has non-zero size (len.max(1)) and a validated alignment.
+        Ok(layout) => unsafe { std_alloc(layout) },
+        Err(_) => std::ptr::null_mut(),
+    }
 }
 
 /// Free a buffer previously returned by `alloc(len, align)`.
+///
+/// An invalid layout is a no-op rather than a panic (same reasoning as
+/// `alloc`'s null return): such a pointer cannot have come from `alloc`,
+/// which never returns memory for an invalid layout, so there is nothing
+/// this function could correctly free — leaking is the defined, safe
+/// outcome on both build targets.
 ///
 /// # Safety
 /// `ptr` must come from `alloc(len, align)` with the SAME `len`/`align`, and
 /// not have been freed already.
 #[no_mangle]
 pub unsafe extern "C" fn dealloc(ptr: *mut u8, len: usize, align: usize) {
-    let layout = Layout::from_size_align(len.max(1), align).expect("invalid dealloc layout");
-    std_dealloc(ptr, layout);
+    if let Ok(layout) = Layout::from_size_align(len.max(1), align) {
+        std_dealloc(ptr, layout);
+    }
 }
 
 /// out[outOffset + i*outStride] = a[aOffset + i*aStride] + b[bOffset + i*bStride]
@@ -334,6 +354,19 @@ mod simd {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn alloc_invalid_layout_returns_null_not_panic() {
+        // Issue #55 Phase 2: defined failure signal on both build targets.
+        assert!(alloc(16, 3).is_null()); // non-power-of-two align
+        assert!(alloc(usize::MAX, 8).is_null()); // size overflows isize when rounded
+        let ok = alloc(16, 4);
+        assert!(!ok.is_null());
+        unsafe { dealloc(ok, 16, 4) };
+        // dealloc with an invalid layout: defined no-op (nothing to free --
+        // alloc never returns memory for an invalid layout).
+        unsafe { dealloc(std::ptr::null_mut(), 16, 3) };
+    }
 
     #[test]
     fn add_f32_strided_contiguous() {
