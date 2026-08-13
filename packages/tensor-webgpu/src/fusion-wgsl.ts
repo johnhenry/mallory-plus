@@ -250,12 +250,22 @@ export function compileIRToWGSL(node: IRNode, numInputs: number): ElementwiseWGS
   ).join("\n");
   const outputBinding = numInputs;
   const expr = lower(node, inputVar);
+  // Phony-assign every declared input (WGSL `_ = expr;`): with pipeline
+  // layout "auto", a binding the shader never STATICALLY references is
+  // excluded from the generated layout, so createBindGroup (which binds
+  // every buffer the caller passed) fails validation -- and WebGPU
+  // validation errors are asynchronous, so the dispatch silently no-ops
+  // and readback returns ALL ZEROS. Found by the #58 randomized fuzzer on
+  // its first run (an IR graph is free to ignore some of its declared
+  // inputs; every hand-written fixed test happened to use all of them).
+  const phonyUses = Array.from({ length: numInputs }, (_, i) => `  _ = input${i}[0];`).join("\n");
   const code = `${usesErf ? ERF_WGSL_FN : ""}
 ${bindings}
 @group(0) @binding(${outputBinding}) var<storage, read_write> output: array<f32>;
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+${phonyUses}
   if (gid.x >= arrayLength(&output)) {
     return;
   }
