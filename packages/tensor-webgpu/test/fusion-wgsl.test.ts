@@ -88,3 +88,14 @@ test("compileIRToWGSL: traced expression built via Traced (the same API Compiled
   const { code } = compileIRToWGSL(expr.node, 2);
   assert.match(code, /fn main/);
 });
+
+test("compileIRToWGSL: an input the expression never references is still statically used (phony assignment) — the #58 fuzzer's silent-zeros finding", () => {
+  // Passthrough of input 0 with TWO declared inputs: before the fix, input1
+  // was absent from the shader body, "auto" layout dropped its binding,
+  // createBindGroup failed async validation, and the dispatch silently
+  // returned zeros.
+  const node = { kind: "input" as const, index: 0 };
+  const { code } = compileIRToWGSL(node, 2);
+  assert.match(code, /_ = input0\[0\];/);
+  assert.match(code, /_ = input1\[0\];/);
+});
