@@ -354,6 +354,20 @@ export async function closeHarness(): Promise<void> {
   if (!("unavailable" in harness)) harness.close();
 }
 
+/**
+ * Bounded fresh-Chrome retry (issue #49). The single-attempt version of this
+ * harness conflated two very different skip causes under one message: an
+ * environment that genuinely lacks WebGPU prerequisites, and a healthy
+ * environment where Chrome's first cold start raced GPU/X contention and
+ * failed a probe that would succeed seconds later (observed repeatedly on
+ * this machine as transient `NO_NAVIGATOR_GPU` — always passing on isolated
+ * rerun). Retrying with a completely fresh Chrome (new port, new profile)
+ * absorbs the transient case, and the final skip message now names which
+ * case occurred. Missing prerequisites (no Chrome, no Xvfb) are checked
+ * once, before the loop — retrying can't conjure a binary into existence.
+ */
+const HARNESS_ATTEMPTS = 3;
+
 async function buildHarness(): Promise<WebGPUHarness | { unavailable: true; reason: string }> {
   const chromePath = resolveChrome();
   if (!chromePath) {
@@ -363,15 +377,49 @@ async function buildHarness(): Promise<WebGPUHarness | { unavailable: true; reas
     return { unavailable: true, reason: "no DISPLAY and no Xvfb on PATH to create one" };
   }
 
+  const attemptFailures: string[] = [];
+  for (let attempt = 1; attempt <= HARNESS_ATTEMPTS; attempt++) {
+    if (attempt > 1) await new Promise((r) => setTimeout(r, 1000)); // let contention clear
+    // A thrown error (e.g. the CDP WebSocket failing mid-connect) is just
+    // another way an attempt can fail transiently -- convert rather than
+    // letting it escape the retry loop.
+    const result = await attemptHarness(chromePath).catch((err: unknown) => ({
+      failed: `attempt threw: ${err instanceof Error ? err.message : String(err)}`,
+    }));
+    if (!("failed" in result)) {
+      if (attempt > 1) {
+        // Flaky-then-ok deserves a visible trace (issue #49): the machine
+        // was contended, the environment is fine.
+        console.warn(
+          `[webgpu-harness] healthy adapter on attempt ${attempt}/${HARNESS_ATTEMPTS} — earlier fresh-Chrome attempts failed transiently: ${attemptFailures.join("; ")}`,
+        );
+      }
+      return result;
+    }
+    attemptFailures.push(`attempt ${attempt}: ${result.failed}`);
+  }
+  return {
+    unavailable: true,
+    reason:
+      `harness failed to start after ${HARNESS_ATTEMPTS} fresh Chrome launches (${attemptFailures.join("; ")}) — ` +
+      `this environment HAS Chrome and a display path, so this is a startup/contention failure, ` +
+      `not a genuinely WebGPU-less environment; see AGENTS.md's GPU section`,
+  };
+}
+
+async function attemptHarness(chromePath: string): Promise<WebGPUHarness | { failed: string }> {
   const display = await ensureDisplay();
-  // killXvfb below (registered on "exit" immediately, BEFORE we know whether
-  // the probe below even succeeds) is the fix for a real leak this harness
-  // had during development: every early-return path used to kill Chrome but
+  // killXvfb (registered on "exit" immediately, BEFORE we know whether the
+  // probe below even succeeds) is the fix for a real leak this harness had
+  // during development: every early-return path used to kill Chrome but
   // not Xvfb, so a run of N failed/unavailable probes left N orphaned Xvfb
   // processes behind — which, past a few dozen, degraded the whole machine's
   // X/GPU stack enough to make EVERY subsequent probe fail too (observed
   // directly: a healthy adapter one run, then consistent `NO_NAVIGATOR_GPU`
   // a few runs later, cause traced to accumulated Xvfb processes via `ps`).
+  // NOTE (issue #49): per-attempt failure paths deliberately do NOT call
+  // this — the shared Xvfb is reused by the next fresh-Chrome attempt, and
+  // the exit hook alone is what prevents the orphan leak described above.
   const killXvfb = (): void => {
     if (xvfbProc) {
       try {
@@ -401,8 +449,7 @@ async function buildHarness(): Promise<WebGPUHarness | { unavailable: true; reas
   );
   if (!ready) {
     chrome.kill();
-    killXvfb();
-    return { unavailable: true, reason: "headless Chrome did not expose a CDP endpoint in time" };
+    return { failed: "headless Chrome did not expose a CDP endpoint in time" };
   }
 
   const pageUrl = await ensureStaticServer();
@@ -428,8 +475,7 @@ async function buildHarness(): Promise<WebGPUHarness | { unavailable: true; reas
   if (probeValue !== "OK") {
     cdp.close();
     chrome.kill();
-    killXvfb();
-    return { unavailable: true, reason: `headless WebGPU probe failed: ${probeValue ?? "no result"}` };
+    return { failed: `WebGPU probe returned ${probeValue ?? "no result"}` };
   }
 
   const run = async <T>(asyncBody: string, extraCode = ""): Promise<T> => {
