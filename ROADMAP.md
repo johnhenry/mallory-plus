@@ -41,8 +41,9 @@ package exists, the source design conversation, non-goals, risk register), see
 
 ## Open decisions
 
-- **Danfo.js-like ergonomics for `frame-arrow`** — unresolved; `frame-arrow` shipped its own expression-oriented API rather than mimicking Danfo. Whether `adapter-danfo` is worth building, or Danfo idioms should fold into `frame-arrow` directly, is still open.
 - **Rust `Complex`/`Fraction` scalars** (issue #27) — kept open by choice, though the recorded reasoning leans toward "not needed" (mallory-math's boxed scalars already fill the role).
+
+**Resolved:** Danfo.js-like ergonomics for `frame-arrow` — no new `adapter-danfo` package for now; `frame-arrow` keeps its own expression-oriented API (see `docs/PLAN.md` §9 item 2 for the full reasoning).
 
 ## Cross-repo dependencies
 
