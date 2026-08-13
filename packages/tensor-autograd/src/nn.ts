@@ -32,6 +32,60 @@ export abstract class Module {
     return found;
   }
 
+  /**
+   * Same reflection walk as {@link parameters}, but keyed by dotted path
+   * (e.g. `"layer1.weight"` for a `Parameter` nested inside a sub-`Module`
+   * field named `layer1`) — the basis for {@link stateDict}/
+   * {@link loadStateDict} (issue #42), where a checkpoint needs to know
+   * WHICH parameter each saved tensor belongs to, not just a flat list.
+   */
+  namedParameters(): Record<string, Parameter> {
+    const found: Record<string, Parameter> = {};
+    for (const key of Object.keys(this)) {
+      const v = (this as unknown as Record<string, unknown>)[key];
+      if (v instanceof Parameter) {
+        found[key] = v;
+      } else if (v instanceof Module) {
+        for (const [subKey, p] of Object.entries(v.namedParameters())) {
+          found[`${key}.${subKey}`] = p;
+        }
+      }
+    }
+    return found;
+  }
+
+  /** Every named parameter's current (detached) value — a plain, serializable snapshot. See {@link loadStateDict} for the inverse. */
+  stateDict(): Record<string, Tensor> {
+    const out: Record<string, Tensor> = {};
+    for (const [name, p] of Object.entries(this.namedParameters())) out[name] = p.value;
+    return out;
+  }
+
+  /**
+   * Reassigns each named `Parameter`'s mutable `.value` from `dict` (the
+   * SAME "leaf reassignment between steps" mechanism `optim.*` already uses
+   * — see `Variable.value`'s own doc comment: a JS object-reference repoint,
+   * not an in-place Tensor mutation). Throws naming any parameter this
+   * module has that's missing from `dict`, or any `dict` key that doesn't
+   * match a real parameter — a checkpoint silently loading onto the wrong
+   * architecture is exactly the kind of mistake that should be loud, not
+   * silently partial.
+   */
+  loadStateDict(dict: Readonly<Record<string, Tensor>>): void {
+    const named = this.namedParameters();
+    const moduleKeys = new Set(Object.keys(named));
+    const dictKeys = new Set(Object.keys(dict));
+    for (const key of moduleKeys) {
+      if (!dictKeys.has(key)) throw new Error(`loadStateDict: missing parameter "${key}" in the given state dict`);
+    }
+    for (const key of dictKeys) {
+      if (!moduleKeys.has(key)) throw new Error(`loadStateDict: state dict has unexpected parameter "${key}" (not in this module)`);
+    }
+    for (const [name, p] of Object.entries(named)) {
+      p.value = dict[name] as Tensor;
+    }
+  }
+
   zeroGrad(): void {
     for (const p of this.parameters()) p.zeroGrad();
   }
