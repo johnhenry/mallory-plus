@@ -129,6 +129,118 @@ pub unsafe extern "C" fn gemm_f32(
     }
 }
 
+/// Solve `A·x = b` for a square `n x n` system via LU decomposition with
+/// partial pivoting (issue #39, the first native-kernel candidate named in
+/// docs/PLAN.md §9 item 1) — same algorithm as mallory-math's
+/// `MatrixMath.lu`/`solve` (largest-absolute-value-in-column pivot
+/// selection, in-place Doolittle elimination storing L's multipliers where
+/// U's zeros go, forward-substitute `Ly=Pb` then back-substitute `Ux=y`),
+/// so results agree with `adapter-math`'s existing reference-speed `solve`
+/// (which delegates to that same mallory-math algorithm) up to f32-vs-f64
+/// precision — see `adapter-math/src/linalg.ts`'s own doc comment: this
+/// native kernel is meant to sit ALONGSIDE that reference path as a faster
+/// option, not replace it (the reference path stays the correctness
+/// oracle).
+///
+/// `A` is read via row/col strides (never copied by the caller — the
+/// kernel copies it into an owned scratch buffer internally, since partial
+/// pivoting needs row swaps that are far simpler on a packed buffer than
+/// via arbitrary strides). A near-zero pivot (a singular/near-singular
+/// column) writes `0.0` into that row of `x` rather than dividing by
+/// (near-)zero — matching `MatrixMath.solve`'s own documented behavior,
+/// for output-compatibility with the existing reference oracle rather than
+/// inventing new error-handling semantics here.
+///
+/// # Safety
+/// `a_ptr` must describe a valid `n x n` f32 matrix reachable via the given
+/// offset/strides; `b_ptr` must describe `n` valid f32 values reachable via
+/// `b_offset`/`b_stride`; `out_ptr` must describe `n` valid, writable f32
+/// slots reachable via `out_offset`/`out_stride`, non-overlapping with `a`/`b`.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn solve_f32(
+    a_ptr: *const f32,
+    a_offset: isize,
+    a_row_stride: isize,
+    a_col_stride: isize,
+    b_ptr: *const f32,
+    b_offset: isize,
+    b_stride: isize,
+    out_ptr: *mut f32,
+    out_offset: isize,
+    out_stride: isize,
+    n: usize,
+) {
+    // Copy A (n x n) into an owned, packed row-major scratch buffer.
+    let mut a: Vec<f32> = Vec::with_capacity(n * n);
+    for i in 0..n as isize {
+        for j in 0..n as isize {
+            a.push(*a_ptr.offset(a_offset + i * a_row_stride + j * a_col_stride));
+        }
+    }
+    let mut b: Vec<f32> = Vec::with_capacity(n);
+    for i in 0..n as isize {
+        b.push(*b_ptr.offset(b_offset + i * b_stride));
+    }
+
+    // In-place LU with partial pivoting; `perm[i]` = original row now at position i.
+    let mut perm: Vec<usize> = (0..n).collect();
+    for k in 0..n {
+        let mut pivot_row = k;
+        let mut pivot_val = a[k * n + k].abs();
+        for i in (k + 1)..n {
+            let v = a[i * n + k].abs();
+            if v > pivot_val {
+                pivot_val = v;
+                pivot_row = i;
+            }
+        }
+        if pivot_row != k {
+            for j in 0..n {
+                a.swap(k * n + j, pivot_row * n + j);
+            }
+            perm.swap(k, pivot_row);
+        }
+        let pivot = a[k * n + k];
+        if pivot.abs() < f32::EPSILON {
+            continue; // singular column -- leave this row's multipliers at 0, matching MatrixMath.lu
+        }
+        for i in (k + 1)..n {
+            let factor = a[i * n + k] / pivot;
+            a[i * n + k] = factor; // store L's multiplier where U's zero would go (classic in-place LU)
+            for j in (k + 1)..n {
+                a[i * n + j] -= factor * a[k * n + j];
+            }
+        }
+    }
+
+    // Forward-substitute L*y = P*b (L has an implicit unit diagonal, not stored).
+    let mut y = vec![0.0f32; n];
+    for i in 0..n {
+        let mut s = b[perm[i]];
+        for j in 0..i {
+            s -= a[i * n + j] * y[j];
+        }
+        y[i] = s;
+    }
+
+    // Back-substitute U*x = y.
+    let mut x = vec![0.0f32; n];
+    for ii in 0..n {
+        let i = n - 1 - ii;
+        let mut s = y[i];
+        for j in (i + 1)..n {
+            s -= a[i * n + j] * x[j];
+        }
+        let diag = a[i * n + i];
+        x[i] = if diag.abs() < f32::EPSILON { 0.0 } else { s / diag };
+    }
+
+    for i in 0..n as isize {
+        *out_ptr.offset(out_offset + i * out_stride) = x[i as usize];
+    }
+}
+
 /// SIMD128 kernels (issue #13) — measured, then shipped: `docs/spikes/
 /// wasm-simd.md` records a stable ~2.6-3x SIMD-only speedup over an
 /// apples-to-apples contiguous-scalar baseline (~3.2-4.4x total vs. the
@@ -292,6 +404,60 @@ mod tests {
             )
         };
         assert_eq!(out, [58.0, 64.0, 139.0, 154.0]);
+    }
+
+    #[test]
+    fn solve_f32_matches_hand_computed() {
+        // 2x + y = 3, x + 3y = 5 -> x=0.8, y=1.4
+        let a = [2.0f32, 1.0, 1.0, 3.0];
+        let b = [3.0f32, 5.0];
+        let mut out = [0.0f32; 2];
+        unsafe { solve_f32(a.as_ptr(), 0, 2, 1, b.as_ptr(), 0, 1, out.as_mut_ptr(), 0, 1, 2) };
+        assert!((out[0] - 0.8).abs() < 1e-5, "x={}", out[0]);
+        assert!((out[1] - 1.4).abs() < 1e-5, "y={}", out[1]);
+    }
+
+    #[test]
+    fn solve_f32_requires_partial_pivoting() {
+        // 0*x + 1*y = 2, 1*x + 1*y = 3 -- a[0][0]=0 forces a row swap, or a
+        // naive no-pivoting elimination would divide by zero. x=1, y=2.
+        let a = [0.0f32, 1.0, 1.0, 1.0];
+        let b = [2.0f32, 3.0];
+        let mut out = [0.0f32; 2];
+        unsafe { solve_f32(a.as_ptr(), 0, 2, 1, b.as_ptr(), 0, 1, out.as_mut_ptr(), 0, 1, 2) };
+        assert!((out[0] - 1.0).abs() < 1e-5, "x={}", out[0]);
+        assert!((out[1] - 2.0).abs() < 1e-5, "y={}", out[1]);
+    }
+
+    #[test]
+    fn solve_f32_transposed_a_via_strides_no_copy() {
+        // Same system as solve_f32_matches_hand_computed, but A stored as its
+        // transpose and read via swapped row/col strides -- proves the
+        // kernel never needs a packed copy of a transposed operand (A is
+        // symmetric here would trivially pass, so use an asymmetric system).
+        // 2x + 4y = 10, x + 3y = 7 -> x=1, y=2
+        let a = [2.0f32, 1.0, 4.0, 3.0]; // A^T, row-major (2x2): col-major A
+        let b = [10.0f32, 7.0];
+        let mut out = [0.0f32; 2];
+        unsafe {
+            // read a_t as A (2x2): row_stride=1, col_stride=2
+            solve_f32(a.as_ptr(), 0, 1, 2, b.as_ptr(), 0, 1, out.as_mut_ptr(), 0, 1, 2)
+        };
+        assert!((out[0] - 1.0).abs() < 1e-5, "x={}", out[0]);
+        assert!((out[1] - 2.0).abs() < 1e-5, "y={}", out[1]);
+    }
+
+    #[test]
+    fn solve_f32_3x3() {
+        // x + y + z = 6, 2y + 5z = -4, 2x + 5y - z = 27 -> x=5, y=3, z=-2
+        // (classic textbook example)
+        let a = [1.0f32, 1.0, 1.0, 0.0, 2.0, 5.0, 2.0, 5.0, -1.0];
+        let b = [6.0f32, -4.0, 27.0];
+        let mut out = [0.0f32; 3];
+        unsafe { solve_f32(a.as_ptr(), 0, 3, 1, b.as_ptr(), 0, 1, out.as_mut_ptr(), 0, 1, 3) };
+        assert!((out[0] - 5.0).abs() < 1e-3, "x={}", out[0]);
+        assert!((out[1] - 3.0).abs() < 1e-3, "y={}", out[1]);
+        assert!((out[2] - (-2.0)).abs() < 1e-3, "z={}", out[2]);
     }
 
     #[test]

@@ -16,6 +16,10 @@
   "dependencies": {
     "mallory-telemetry": "0.0.1"
   },
+  "devDependencies": {
+    "mallory-adapter-math": "0.0.1",
+    "mallory-tensor-core": "0.0.1"
+  },
   "scripts": {
     "build:wasm:scalar": "cargo build --release --target wasm32-unknown-unknown -p tensor-wasm-kernels && node scripts/copy-wasm.mjs tensor_wasm_kernels.wasm",
     "build:wasm:simd": "RUSTFLAGS=\"-C link-args=--import-memory\" cargo build --release --target wasm32-unknown-unknown -p tensor-wasm-kernels --features simd && node scripts/copy-wasm.mjs tensor_wasm_kernels_simd128.wasm",

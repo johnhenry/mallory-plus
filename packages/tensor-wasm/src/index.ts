@@ -80,6 +80,19 @@ interface KernelExports {
     alpha: number,
     beta: number,
   ): void;
+  solve_f32(
+    aPtr: number,
+    aOffset: number,
+    aRowStride: number,
+    aColStride: number,
+    bPtr: number,
+    bOffset: number,
+    bStride: number,
+    outPtr: number,
+    outOffset: number,
+    outStride: number,
+    n: number,
+  ): void;
 }
 
 /** The SIMD128 module's export surface — only the two contiguous-fast-path kernels (issue #13); everything else still goes through `KernelExports`' scalar/strided kernels, which stay resident in a separate always-loaded module. */
@@ -281,6 +294,7 @@ export class Kernels {
       add_f32_strided: rawExports.add_f32_strided.bind(rawExports),
       mul_f32_strided: rawExports.mul_f32_strided.bind(rawExports),
       gemm_f32: rawExports.gemm_f32.bind(rawExports),
+      solve_f32: rawExports.solve_f32.bind(rawExports),
     };
 
     // SIMD128 fast path (issue #13) — best-effort, never fatal. Any failure
@@ -416,6 +430,42 @@ export class Kernels {
       k,
       1.0,
       0.0,
+    );
+    return out;
+  }
+
+  /**
+   * Solve `A @ x = b` for a square `n x n` system (issue #39), writing
+   * `x` directly into `out`'s WASM buffer. `a` may be a `.transposed()`
+   * view — read via strides, never copied (the kernel copies `A` into its
+   * OWN internal scratch buffer for the LU pivoting, but never requires the
+   * CALLER to pre-pack a transposed/strided operand). `b`/`out` must be
+   * 1-D, `a` must be 2-D square, all matching size `n`. See `linalg.solve`
+   * in `adapter-math` for the reference-speed fallback/correctness oracle
+   * this kernel is meant to sit alongside, not replace.
+   */
+  solveInto(out: WasmTensor, a: WasmTensor, b: WasmTensor): WasmTensor {
+    if (a.shape.length !== 2 || a.shape[0] !== a.shape[1]) {
+      throw new RangeError("solveInto requires a square 2-D matrix for `a`");
+    }
+    const n = a.shape[0] as number;
+    const B = flatSpec(b);
+    const O = flatSpec(out);
+    if (b.shape[0] !== n || out.shape[0] !== n) {
+      throw new RangeError(`solveInto: size mismatch (a is ${n}x${n}, b has ${b.shape[0]}, out has ${out.shape[0]})`);
+    }
+    this.exports.solve_f32(
+      a.bufferPtr,
+      a.elementOffset,
+      a.strides[0] as number,
+      a.strides[1] as number,
+      B.bufferPtr,
+      B.offset,
+      B.stride,
+      O.bufferPtr,
+      O.offset,
+      O.stride,
+      n,
     );
     return out;
   }
