@@ -1,7 +1,7 @@
 {
   "name": "mallory-tensor-wasm",
   "version": "0.0.1",
-  "description": "Rust→WASM CPU kernels for Mallory Plus tensors — flat-numeric extern-C ABI, no wasm-bindgen marshalling on hot paths",
+  "description": "Rust\u2192WASM CPU kernels for Mallory Plus tensors \u2014 flat-numeric extern-C ABI, no wasm-bindgen marshalling on hot paths",
   "type": "module",
   "exports": {
     ".": {
@@ -26,7 +26,8 @@
     "build:wasm": "npm run build:wasm:scalar && npm run build:wasm:simd",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
-    "test": "npm run typecheck && node --test test/*.test.ts"
+    "test": "npm run typecheck && node --test test/*.test.ts && npm run test:bench",
+    "test:bench": "node --test test/*.bench-test.ts"
   },
   "repository": {
     "type": "git",
