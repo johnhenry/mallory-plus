@@ -107,6 +107,23 @@ def main() -> None:
         result = np.sqrt(inputs[0])
     elif op == "log":
         result = np.log(inputs[0])
+    elif op == "unary":
+        # Generic dispatch for issue #64's op-table -- one branch instead of
+        # 25, keyed by "fn" (a numpy ufunc/np.* name). pow/round/cbrt/sign
+        # get their own numpy-name mappings since the JS method name doesn't
+        # match numpy's directly.
+        fn_name = job["fn"]
+        a = inputs[0]
+        if fn_name == "pow":
+            result = np.power(a, job["scalar"])
+        elif fn_name == "neg":
+            result = -a
+        elif fn_name == "sign":
+            result = np.sign(a)
+        elif fn_name == "round":
+            result = np.round(a)  # round-half-to-even, matching the JS test's away-from-.5 exclusion
+        else:
+            result = getattr(np, fn_name)(a)
     elif op == "variance":
         result = inputs[0].var(axis=job.get("axis"), ddof=job.get("ddof", 0))
     elif op == "std":

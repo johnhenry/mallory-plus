@@ -468,6 +468,71 @@ test("differential vs NumPy", { skip }, async (t) => {
     assertClose(a.log(), runOracle(dir, { op: "log", inputs: [aPath] }), "log");
   });
 
+  // ---- unary op-table parity with the compiled IR (issue #64) -------------
+  await t.test("exp/pow/abs/neg/sign/trig/hyperbolic/cbrt/log10/log2/expm1/log1p/floor/ceil/round/trunc match NumPy", () => {
+    // Per-fn: how to build a SAFE-DOMAIN input tensor from a raw random
+    // f64 tensor `r` (values roughly in [-10, 10)), and the Tensor method
+    // under test. `roundSafe` avoids exact .5 boundaries, where JS
+    // Math.round (half-up) and NumPy's np.round (half-to-even) genuinely
+    // disagree by convention -- not a bug on either side, so the test
+    // sidesteps it rather than papering over it with a loose tolerance.
+    const cases: Array<{
+      name: string;
+      fn: string;
+      scalar?: number;
+      domain: (r: Tensor) => Tensor;
+      call: (t: Tensor) => Tensor;
+    }> = [
+      { name: "exp", fn: "exp", domain: (r) => r.mul(0.2), call: (t) => t.exp() }, // keep exp() from overflowing
+      { name: "pow", fn: "pow", scalar: 3, domain: (r) => r, call: (t) => t.pow(3) },
+      { name: "abs", fn: "abs", domain: (r) => r, call: (t) => t.abs() },
+      { name: "neg", fn: "neg", domain: (r) => r, call: (t) => t.neg() },
+      { name: "sign", fn: "sign", domain: (r) => r, call: (t) => t.sign() },
+      { name: "sin", fn: "sin", domain: (r) => r, call: (t) => t.sin() },
+      { name: "cos", fn: "cos", domain: (r) => r, call: (t) => t.cos() },
+      { name: "tan", fn: "tan", domain: (r) => r.mul(0.1), call: (t) => t.tan() }, // stay away from tan's poles
+      { name: "asin", fn: "arcsin", domain: (r) => r.mul(0.09), call: (t) => t.asin() }, // domain [-1,1]
+      { name: "acos", fn: "arccos", domain: (r) => r.mul(0.09), call: (t) => t.acos() },
+      { name: "atan", fn: "arctan", domain: (r) => r, call: (t) => t.atan() },
+      { name: "sinh", fn: "sinh", domain: (r) => r.mul(0.2), call: (t) => t.sinh() },
+      { name: "cosh", fn: "cosh", domain: (r) => r.mul(0.2), call: (t) => t.cosh() },
+      { name: "tanh", fn: "tanh", domain: (r) => r, call: (t) => t.tanh() },
+      { name: "asinh", fn: "arcsinh", domain: (r) => r, call: (t) => t.asinh() },
+      { name: "acosh", fn: "arccosh", domain: (r) => r.abs().add(1.5), call: (t) => t.acosh() }, // domain x >= 1
+      { name: "atanh", fn: "arctanh", domain: (r) => r.mul(0.09), call: (t) => t.atanh() }, // domain (-1,1)
+      { name: "cbrt", fn: "cbrt", domain: (r) => r, call: (t) => t.cbrt() },
+      { name: "log10", fn: "log10", domain: (r) => r.abs().add(0.5), call: (t) => t.log10() }, // domain x > 0
+      { name: "log2", fn: "log2", domain: (r) => r.abs().add(0.5), call: (t) => t.log2() },
+      { name: "expm1", fn: "expm1", domain: (r) => r.mul(0.2), call: (t) => t.expm1() },
+      { name: "log1p", fn: "log1p", domain: (r) => r.abs().add(0.5), call: (t) => t.log1p() }, // domain x > -1
+      { name: "floor", fn: "floor", domain: (r) => r, call: (t) => t.floor() },
+      { name: "ceil", fn: "ceil", domain: (r) => r, call: (t) => t.ceil() },
+      {
+        name: "round",
+        fn: "round",
+        // Push every value at least 0.1 away from the nearest .5 boundary
+        // (half-up vs half-to-even only disagree exactly AT .5).
+        domain: (r) => {
+          const rounded = r.round();
+          const frac = r.sub(rounded);
+          const nearBoundary = frac.abs().lt(0.1);
+          const pushedUp = Tensor.where(frac.gte(0), r.add(0.15), r.sub(0.15));
+          return Tensor.where(nearBoundary, pushedUp, r);
+        },
+        call: (t) => t.round(),
+      },
+      { name: "trunc", fn: "trunc", domain: (r) => r, call: (t) => t.trunc() },
+    ];
+    for (const { name, fn, scalar, domain, call } of cases) {
+      const raw = randomTensor([12], "f64");
+      const a = domain(raw);
+      const aPath = saveTensor(dir, `unary-${name}-a`, a);
+      const oracleJob: Record<string, unknown> = { op: "unary", fn, inputs: [aPath] };
+      if (scalar !== undefined) oracleJob.scalar = scalar;
+      assertClose(call(a), runOracle(dir, oracleJob as never), name);
+    }
+  });
+
   await t.test("relu/sigmoid/gelu match NumPy", () => {
     const a = randomTensor([6], "f64");
     const aPath = saveTensor(dir, "act-a", a);

@@ -912,6 +912,142 @@ export class Tensor {
     return this.#unaryFloat((v) => 0.5 * v * (1 + Math.tanh(c * (v + 0.044715 * v ** 3))));
   }
 
+  // ---- unary op-table parity with the compiled IR (issue #64) --------------
+  //
+  // `sqrt`/`log` above already existed; these fill the rest of the set
+  // `tensor-compile`'s `ir.ts` (`unaryValueAndDeriv`) supports for its
+  // compiled/traced path but eager `Tensor` never got. Every formula here
+  // is the VALUE half of that same function, copied (not re-derived) so the
+  // two backends compute identically — tensor-core has no gradient concept,
+  // so only the value side applies here; the derivative halves stay in
+  // ir.ts, which is the autograd-facing surface.
+
+  /** Elementwise `e^x`. Float dtypes only. */
+  exp(): Tensor {
+    return this.#unaryFloat((v) => Math.exp(v));
+  }
+
+  /** Elementwise `x^exponent` for a SCALAR exponent (the common case `tensor-compile`'s `pow` node covers) — binary tensor-tensor `pow` is out of scope here. Float dtypes only. */
+  pow(exponent: number): Tensor {
+    return this.#unaryFloat((v) => Math.pow(v, exponent));
+  }
+
+  /** Elementwise absolute value. Works on any numeric dtype (unlike the float-only ops above — `Math.abs` is exact on integers too), so this bypasses `#unaryFloat`'s float-dtype guard. */
+  abs(): Tensor {
+    const out = Tensor.zeros(this.shape, { dtype: this.dtype });
+    if (isBigIntDType(this.dtype)) {
+      const outData = out.data as BigInt64Array | BigUint64Array;
+      let i = 0;
+      for (const off of this.elementOffsets()) {
+        const v = this.data[off] as bigint;
+        outData[i++] = v < 0n ? -v : v;
+      }
+      return out;
+    }
+    const outData = out.data as Float32Array | Float64Array;
+    let i = 0;
+    for (const off of this.elementOffsets()) outData[i++] = Math.abs(this.data[off] as number);
+    return out;
+  }
+
+  /** Elementwise negation: `-x`. Same any-dtype scope as {@link abs}. */
+  neg(): Tensor {
+    return this.mul(-1);
+  }
+
+  /** Elementwise sign: `-1`/`0`/`1`. Float dtypes only (matches `ir.ts`'s convention: gradient-free, defined identically to `Math.sign`). */
+  sign(): Tensor {
+    return this.#unaryFloat((v) => Math.sign(v));
+  }
+
+  /** Elementwise sine. Float dtypes only. */
+  sin(): Tensor {
+    return this.#unaryFloat((v) => Math.sin(v));
+  }
+  /** Elementwise cosine. Float dtypes only. */
+  cos(): Tensor {
+    return this.#unaryFloat((v) => Math.cos(v));
+  }
+  /** Elementwise tangent. Float dtypes only. */
+  tan(): Tensor {
+    return this.#unaryFloat((v) => Math.tan(v));
+  }
+  /** Elementwise arcsine. Domain `[-1, 1]`; float dtypes only. */
+  asin(): Tensor {
+    return this.#unaryFloat((v) => Math.asin(v));
+  }
+  /** Elementwise arccosine. Domain `[-1, 1]`; float dtypes only. */
+  acos(): Tensor {
+    return this.#unaryFloat((v) => Math.acos(v));
+  }
+  /** Elementwise arctangent. Float dtypes only. */
+  atan(): Tensor {
+    return this.#unaryFloat((v) => Math.atan(v));
+  }
+
+  /** Elementwise hyperbolic sine. Float dtypes only. */
+  sinh(): Tensor {
+    return this.#unaryFloat((v) => Math.sinh(v));
+  }
+  /** Elementwise hyperbolic cosine. Float dtypes only. */
+  cosh(): Tensor {
+    return this.#unaryFloat((v) => Math.cosh(v));
+  }
+  /** Elementwise hyperbolic tangent. Float dtypes only. */
+  tanh(): Tensor {
+    return this.#unaryFloat((v) => Math.tanh(v));
+  }
+  /** Elementwise inverse hyperbolic sine. Float dtypes only. */
+  asinh(): Tensor {
+    return this.#unaryFloat((v) => Math.asinh(v));
+  }
+  /** Elementwise inverse hyperbolic cosine. Domain `x >= 1`; float dtypes only. */
+  acosh(): Tensor {
+    return this.#unaryFloat((v) => Math.acosh(v));
+  }
+  /** Elementwise inverse hyperbolic tangent. Domain `(-1, 1)`; float dtypes only. */
+  atanh(): Tensor {
+    return this.#unaryFloat((v) => Math.atanh(v));
+  }
+
+  /** Elementwise real cube root (sign-preserving — unlike `x^(1/3)`, `cbrt(-8) === -2`). Float dtypes only. */
+  cbrt(): Tensor {
+    return this.#unaryFloat((v) => Math.cbrt(v));
+  }
+  /** Elementwise base-10 logarithm. Domain `x > 0`; float dtypes only. */
+  log10(): Tensor {
+    return this.#unaryFloat((v) => Math.log10(v));
+  }
+  /** Elementwise base-2 logarithm. Domain `x > 0`; float dtypes only. */
+  log2(): Tensor {
+    return this.#unaryFloat((v) => Math.log2(v));
+  }
+  /** Elementwise `e^x - 1`, precision-preserving for small `x` (vs. `exp(x).sub(1)`). Float dtypes only. */
+  expm1(): Tensor {
+    return this.#unaryFloat((v) => Math.expm1(v));
+  }
+  /** Elementwise `ln(1 + x)`, precision-preserving for small `x`. Domain `x > -1`; float dtypes only. */
+  log1p(): Tensor {
+    return this.#unaryFloat((v) => Math.log1p(v));
+  }
+
+  /** Elementwise floor. Gradient-free (matches `ir.ts`'s "locally constant" convention); float dtypes only. */
+  floor(): Tensor {
+    return this.#unaryFloat((v) => Math.floor(v));
+  }
+  /** Elementwise ceiling. Gradient-free; float dtypes only. */
+  ceil(): Tensor {
+    return this.#unaryFloat((v) => Math.ceil(v));
+  }
+  /** Elementwise round, half-up (matches `Math.round`'s convention, not round-half-to-even). Gradient-free; float dtypes only. */
+  round(): Tensor {
+    return this.#unaryFloat((v) => Math.round(v));
+  }
+  /** Elementwise truncation toward zero. Gradient-free; float dtypes only. */
+  trunc(): Tensor {
+    return this.#unaryFloat((v) => Math.trunc(v));
+  }
+
   /** Softmax along `axis` (default: last axis). Numerically stable (subtracts the per-row max first). */
   softmax(axis: Axis = -1): Tensor {
     if (isBigIntDType(this.dtype)) {
