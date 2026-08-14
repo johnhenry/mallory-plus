@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { Tensor } from "mallory-tensor-core";
 import { Kernels } from "../src/index.ts";
 
 test("addInto writes the sum directly into a pre-allocated resident buffer", async () => {
@@ -162,3 +163,89 @@ test("addInto: a non-contiguous (strided) view is NOT eligible for the SIMD path
 
 // The SIMD-vs-scalar benchmark test moved to benchmark.bench-test.ts (its
 // own serial `node --test` pass) -- see that file's header and issue #49.
+
+// ---- subInto/divInto kernel parity with add/mul (issue #66) ---------------
+
+test("subInto writes the difference directly into a pre-allocated resident buffer", async () => {
+  const kernels = await Kernels.load();
+  const a = kernels.fromArray(new Float32Array([10, 20, 30, 40]), [4]);
+  const b = kernels.fromArray(new Float32Array([1, 2, 3, 4]), [4]);
+  const out = kernels.zeros([4]);
+  kernels.subInto(out, a, b);
+  assert.deepEqual([...out.toFloat32Array()], [9, 18, 27, 36]);
+});
+
+test("divInto writes the quotient directly into a pre-allocated resident buffer", async () => {
+  const kernels = await Kernels.load();
+  const a = kernels.fromArray(new Float32Array([10, 20, 30]), [3]);
+  const b = kernels.fromArray(new Float32Array([2, 4, 5]), [3]);
+  const out = kernels.zeros([3]);
+  kernels.divInto(out, a, b);
+  assert.deepEqual([...out.toFloat32Array()], [5, 5, 6]);
+});
+
+test("subInto/divInto: a non-contiguous (strided) view computes correctly (no SIMD path exists yet for these, so this is the only code path)", async () => {
+  const kernels = await Kernels.load();
+  const full = kernels.fromArray(new Float32Array([100, 10, 200, 20, 300, 30]), [6]);
+  const strided = full.view1D(0, 3, 2); // [100, 200, 300]
+  const b = kernels.fromArray(new Float32Array([1, 2, 3]), [3]);
+  const outSub = kernels.zeros([3]);
+  kernels.subInto(outSub, strided, b);
+  assert.deepEqual([...outSub.toFloat32Array()], [99, 198, 297]);
+  const outDiv = kernels.zeros([3]);
+  kernels.divInto(outDiv, strided, b);
+  assert.deepEqual([...outDiv.toFloat32Array()], [100, 100, 100]);
+});
+
+test("divInto matches IEEE 754 division-by-zero semantics (±Infinity/NaN), same as JS/Tensor.div — not a trap", async () => {
+  const kernels = await Kernels.load();
+  const a = kernels.fromArray(new Float32Array([1, -1, 0]), [3]);
+  const b = kernels.fromArray(new Float32Array([0, 0, 0]), [3]);
+  const out = kernels.zeros([3]);
+  kernels.divInto(out, a, b);
+  const [pos, neg, nan] = out.toFloat32Array();
+  assert.equal(pos, Infinity);
+  assert.equal(neg, -Infinity);
+  assert.ok(Number.isNaN(nan));
+  assert.equal(kernels.poisoned, false, "division by zero must not poison the instance");
+});
+
+test("subInto/divInto allocate ZERO times across repeated calls on resident buffers", async () => {
+  const kernels = await Kernels.load();
+  const a = kernels.fromArray(new Float32Array(1000).fill(9), [1000]);
+  const b = kernels.fromArray(new Float32Array(1000).fill(3), [1000]);
+  const out = kernels.zeros([1000]);
+  const before = kernels.allocCallCount;
+  for (let i = 0; i < 500; i++) {
+    kernels.subInto(out, a, b);
+    kernels.divInto(out, a, b);
+  }
+  assert.equal(kernels.allocCallCount, before);
+  assert.equal(out.toFloat32Array()[0], 3);
+});
+
+test("subInto/divInto agree with mallory-tensor-core's Tensor.sub/Tensor.div on random data (differential leg)", async () => {
+  const kernels = await Kernels.load();
+  const N = 257; // deliberately not a round SIMD-friendly size
+  const aData = Float32Array.from({ length: N }, (_, i) => Math.sin(i) * 37 + 50); // stays away from 0
+  const bData = Float32Array.from({ length: N }, (_, i) => Math.cos(i) * 11 + 20); // stays away from 0
+
+  const a = kernels.fromArray(aData, [N]);
+  const b = kernels.fromArray(bData, [N]);
+  const outSub = kernels.zeros([N]);
+  const outDiv = kernels.zeros([N]);
+  kernels.subInto(outSub, a, b);
+  kernels.divInto(outDiv, a, b);
+
+  const ta = Tensor.fromTypedArray(aData, [N], { dtype: "f32" });
+  const tb = Tensor.fromTypedArray(bData, [N], { dtype: "f32" });
+  const expectedSub = ta.sub(tb).toArray() as number[];
+  const expectedDiv = ta.div(tb).toArray() as number[];
+
+  const gotSub = [...outSub.toFloat32Array()];
+  const gotDiv = [...outDiv.toFloat32Array()];
+  for (let i = 0; i < N; i++) {
+    assert.ok(Math.abs(gotSub[i]! - expectedSub[i]!) < 1e-4, `sub[${i}]: ${gotSub[i]} vs ${expectedSub[i]}`);
+    assert.ok(Math.abs(gotDiv[i]! - expectedDiv[i]!) < 1e-4, `div[${i}]: ${gotDiv[i]} vs ${expectedDiv[i]}`);
+  }
+});
