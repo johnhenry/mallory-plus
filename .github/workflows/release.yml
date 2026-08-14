@@ -130,10 +130,21 @@ jobs:
           # list here -- the hardcoded version of this loop silently rotted
           # (it was missing fft/image/signal/mcp/data), exactly the manifest-
           # drift failure mode issue #47's guard exists for.
-          for f in packages/*/jsr.json adapters/*/jsr.json scalars/*/jsr.json; do
-            dir=$(dirname "$f")
-            echo "::group::jsr publish — $dir"
-            (cd "$dir" && npx --yes jsr publish --allow-slow-types) || \
-              echo "::warning title=JSR publish skipped/failed::$dir (already published, or JSR trusted publishing isn't configured yet — see docs/RELEASING.md)"
-            echo "::endgroup::"
+          # Multi-pass until convergence: a package whose jsr: imports aren't
+          # on JSR yet fails its pass and succeeds on a later one once its
+          # dependencies land (the alphabetical glob is NOT dependency-
+          # ordered -- tensor-autograd sorts before tensor-core; found on
+          # the first real publish run, 2026-08-14). Three passes covers the
+          # family's dependency depth with room to spare.
+          for pass in 1 2 3; do
+            echo "== JSR publish pass $pass =="
+            failures=0
+            for f in packages/*/jsr.json adapters/*/jsr.json scalars/*/jsr.json; do
+              dir=$(dirname "$f")
+              echo "::group::jsr publish — $dir (pass $pass)"
+              (cd "$dir" && npx --yes jsr publish --allow-slow-types) || failures=$((failures+1))
+              echo "::endgroup::"
+            done
+            if [ "$failures" -eq 0 ]; then break; fi
+            echo "::warning title=JSR pass $pass::$failures package(s) not published this pass (already-published versions also count here on re-runs)"
           done
