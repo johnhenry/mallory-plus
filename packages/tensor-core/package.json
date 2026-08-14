@@ -1,6 +1,6 @@
 {
   "name": "mallory-tensor-core",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Typed n-dimensional arrays for JS/TS: dtypes, strides/views, broadcasting, .npy I/O — part of Mallory Plus",
   "type": "module",
   "exports": {

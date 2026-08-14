@@ -55,12 +55,19 @@ test("Frame.toTensor(): all-numeric Frame -> 2D row-major float64 Tensor by defa
   assert.deepEqual(Array.from(tensor.data), [1, 10, 2, 20, 3, 30]);
 });
 
-test("mallory-frame-arrow's package.json lists mallory-tensor-core only as an optional peerDependency", async () => {
+test("mallory-frame-arrow's package.json lists mallory-tensor-core only as an optional peerDependency, pinned to that package's ACTUAL current version", async () => {
   const fs = await import("node:fs/promises");
   const url = await import("node:url");
   const pkgPath = url.fileURLToPath(new URL("../package.json", import.meta.url));
   const pkg = JSON.parse(await fs.readFile(pkgPath, "utf8"));
+  // Read tensor-core's own version rather than hardcoding a literal here --
+  // this test's job is to enforce the EXACT-PIN invariant, not to pin
+  // itself to a version number that a release bump would silently stale.
+  const tensorCorePkgPath = url.fileURLToPath(
+    new URL("../../tensor-core/package.json", import.meta.url),
+  );
+  const tensorCorePkg = JSON.parse(await fs.readFile(tensorCorePkgPath, "utf8"));
   assert.equal(pkg.dependencies?.["mallory-tensor-core"], undefined);
-  assert.equal(pkg.peerDependencies?.["mallory-tensor-core"], "0.0.1");
+  assert.equal(pkg.peerDependencies?.["mallory-tensor-core"], tensorCorePkg.version);
   assert.equal(pkg.peerDependenciesMeta?.["mallory-tensor-core"]?.optional, true);
 });

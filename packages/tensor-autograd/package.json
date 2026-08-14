@@ -1,6 +1,6 @@
 {
   "name": "mallory-tensor-autograd",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Reverse-mode automatic differentiation over mallory-tensor-core Tensors",
   "type": "module",
   "exports": {
@@ -18,7 +18,7 @@
     "test": "npm run typecheck && node --test test/*.test.ts"
   },
   "dependencies": {
-    "mallory-tensor-core": "0.0.1",
+    "mallory-tensor-core": "0.1.0",
     "mallory-telemetry": "0.0.1"
   },
   "devDependencies": {
