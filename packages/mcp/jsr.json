@@ -1,6 +1,7 @@
 {
   "name": "@johnhenry/mallory-mcp",
   "version": "0.0.1",
+  "license": "MIT",
   "exports": "./src/index.ts",
   "imports": {
     "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.30.0",

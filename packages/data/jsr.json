@@ -1,6 +1,7 @@
 {
   "name": "@johnhenry/mallory-data",
   "version": "0.0.1",
+  "license": "MIT",
   "exports": "./src/index.ts",
   "imports": {
     "mallory-iteration": "jsr:@johnhenry/mallory-iteration@^0.0.0",

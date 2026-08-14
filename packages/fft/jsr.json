@@ -1,6 +1,7 @@
 {
   "name": "@johnhenry/mallory-fft",
   "version": "0.0.1",
+  "license": "MIT",
   "exports": "./src/index.ts",
   "imports": {
     "mallory-scalar-types": "jsr:@johnhenry/mallory-scalar-types@^0.0.1",

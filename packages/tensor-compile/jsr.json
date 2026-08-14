@@ -1,6 +1,7 @@
 {
   "name": "@johnhenry/mallory-tensor-compile",
   "version": "0.0.1",
+  "license": "MIT",
   "exports": "./src/index.ts",
   "imports": {
     "mallory-tensor-core": "jsr:@johnhenry/mallory-tensor-core@^0.0.1",

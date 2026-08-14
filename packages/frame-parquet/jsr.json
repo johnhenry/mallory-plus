@@ -1,6 +1,7 @@
 {
   "name": "@johnhenry/mallory-frame-parquet",
   "version": "0.0.1",
+  "license": "MIT",
   "exports": "./src/index.ts",
   "imports": {
     "apache-arrow": "npm:apache-arrow@21.2.0",

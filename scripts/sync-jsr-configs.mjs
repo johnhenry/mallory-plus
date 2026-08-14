@@ -72,6 +72,9 @@ for (const dir of PACKAGE_DIRS) {
   const jsrConfig = {
     name: `@johnhenry/${pkg.name}`,
     version: pkg.version,
+    // JSR hard-requires a license (error[missing-license] otherwise --
+    // found on the first real publish run, 2026-08-14).
+    license: pkg.license ?? "MIT",
     exports: "./src/index.ts",
     ...(Object.keys(imports).length > 0 ? { imports } : {}),
   };
