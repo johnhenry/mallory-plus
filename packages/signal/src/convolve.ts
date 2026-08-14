@@ -61,20 +61,31 @@ export function convolve1D(a: Float64Array, b: Float64Array, mode: ConvolveMode 
   return trimMode(directConvolve1D(a, b), a.length, b.length, mode);
 }
 
-/** Linear convolution of a 1-D Tensor, or each row/column of a 2-D `[N, T]` Tensor, with a 1-D kernel Tensor. */
-export function convolve(input: Tensor, kernel: Tensor, options: ConvolveOptions = {}): Tensor {
-  const mode = options.mode ?? "full";
-  if (kernel.shape.length !== 1) throw new RangeError(`convolve: kernel must be 1-D, got shape [${kernel.shape}]`);
+/**
+ * Apply a `Float64Array, Float64Array -> Float64Array` time-domain op
+ * (`convolve1D` or, for issue #70, `correlate1D`) to a 1-D Tensor or each
+ * row/column of a 2-D `[N, T]` Tensor — the batching/axis-handling shared
+ * by {@link convolve} and `correlate` (see correlate.ts), extracted so
+ * neither reimplements the other's tested batching loop.
+ */
+export function applyTimeDomainOp(
+  opName: string,
+  op: (a: Float64Array, b: Float64Array) => Float64Array,
+  input: Tensor,
+  kernel: Tensor,
+  options: ConvolveOptions,
+): Tensor {
+  if (kernel.shape.length !== 1) throw new RangeError(`${opName}: kernel must be 1-D, got shape [${kernel.shape}]`);
   const kernelFlat = toFlat1D(kernel);
 
   if (input.shape.length === 1) {
-    const out = convolve1D(toFlat1D(input), kernelFlat, mode);
+    const out = op(toFlat1D(input), kernelFlat);
     return Tensor.fromTypedArray(out, [out.length], { dtype: "f64" });
   }
 
   if (input.shape.length === 2) {
     const axis = options.axis ?? 1;
-    if (axis !== 0 && axis !== 1) throw new RangeError(`convolve: axis must be 0 or 1 for a 2-D input, got ${axis}`);
+    if (axis !== 0 && axis !== 1) throw new RangeError(`${opName}: axis must be 0 or 1 for a 2-D input, got ${axis}`);
     const [d0, d1] = input.shape as [number, number];
     const numRows = axis === 1 ? d0 : d1;
     const timeLen = axis === 1 ? d1 : d0;
@@ -85,7 +96,7 @@ export function convolve(input: Tensor, kernel: Tensor, options: ConvolveOptions
       for (let i = 0; i < timeLen; i++) {
         row[i] = (axis === 1 ? (full.at(r, i) as number) : (full.at(i, r) as number));
       }
-      rows.push(convolve1D(row, kernelFlat, mode));
+      rows.push(op(row, kernelFlat));
     }
     const outTimeLen = rows[0]?.length ?? 0;
     const outShape: readonly number[] = axis === 1 ? [numRows, outTimeLen] : [outTimeLen, numRows];
@@ -99,5 +110,11 @@ export function convolve(input: Tensor, kernel: Tensor, options: ConvolveOptions
     return Tensor.fromTypedArray(out, outShape, { dtype: "f64" });
   }
 
-  throw new RangeError(`convolve: input must be 1-D or 2-D, got rank ${input.shape.length}`);
+  throw new RangeError(`${opName}: input must be 1-D or 2-D, got rank ${input.shape.length}`);
+}
+
+/** Linear convolution of a 1-D Tensor, or each row/column of a 2-D `[N, T]` Tensor, with a 1-D kernel Tensor. */
+export function convolve(input: Tensor, kernel: Tensor, options: ConvolveOptions = {}): Tensor {
+  const mode = options.mode ?? "full";
+  return applyTimeDomainOp("convolve", (a, b) => convolve1D(a, b, mode), input, kernel, options);
 }

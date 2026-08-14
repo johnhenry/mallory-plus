@@ -4,10 +4,13 @@
  * `sosFilter`, `butter`, `resamplePoly`. See each module's own doc comment
  * for algorithm sources and v1 scope decisions.
  */
-export { convolve, convolve1D, type ConvolveMode, type ConvolveOptions } from "./convolve.ts";
+export { applyTimeDomainOp, convolve, convolve1D, type ConvolveMode, type ConvolveOptions } from "./convolve.ts";
+export { correlate, correlate1D } from "./correlate.ts";
 export { butter, type ButterOptions, type FilterType } from "./filter-design.ts";
 export { findPeaks, type FindPeaksOptions, type FindPeaksResult } from "./find-peaks.ts";
+export { freqz, type FreqzResult } from "./freqz.ts";
 export { resamplePoly } from "./resample.ts";
 export { sosFilter, type Sos, type SosSection } from "./sos-filter.ts";
 export { istft, stft, type StftOptions } from "./stft.ts";
+export { welch, type WelchOptions } from "./welch.ts";
 export { hammingWindow, hannWindow } from "./window.ts";
