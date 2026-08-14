@@ -104,6 +104,61 @@ pub unsafe extern "C" fn mul_f32_strided(
     }
 }
 
+/// Strided elementwise subtract (`a - b`) — same shape of contract as
+/// `add_f32_strided`. Added alongside `div_f32_strided` (issue #66) for
+/// kernel parity: `add`/`mul` had WASM kernels, `sub`/`div` didn't, for no
+/// principled reason.
+///
+/// # Safety
+/// Same requirements as `add_f32_strided`.
+#[no_mangle]
+pub unsafe extern "C" fn sub_f32_strided(
+    a_ptr: *const f32,
+    a_offset: isize,
+    a_stride: isize,
+    b_ptr: *const f32,
+    b_offset: isize,
+    b_stride: isize,
+    out_ptr: *mut f32,
+    out_offset: isize,
+    out_stride: isize,
+    len: usize,
+) {
+    for i in 0..len as isize {
+        let av = *a_ptr.offset(a_offset + i * a_stride);
+        let bv = *b_ptr.offset(b_offset + i * b_stride);
+        *out_ptr.offset(out_offset + i * out_stride) = av - bv;
+    }
+}
+
+/// Strided elementwise divide (`a / b`) — same shape of contract as
+/// `add_f32_strided`. No special-casing for division by zero: f32 division
+/// follows IEEE 754 (±Infinity / NaN), matching JS `Number` division and
+/// this repo's existing `Tensor.div` — never a panic/trap, so never
+/// interacts with issue #46's poisoning.
+///
+/// # Safety
+/// Same requirements as `add_f32_strided`.
+#[no_mangle]
+pub unsafe extern "C" fn div_f32_strided(
+    a_ptr: *const f32,
+    a_offset: isize,
+    a_stride: isize,
+    b_ptr: *const f32,
+    b_offset: isize,
+    b_stride: isize,
+    out_ptr: *mut f32,
+    out_offset: isize,
+    out_stride: isize,
+    len: usize,
+) {
+    for i in 0..len as isize {
+        let av = *a_ptr.offset(a_offset + i * a_stride);
+        let bv = *b_ptr.offset(b_offset + i * b_stride);
+        *out_ptr.offset(out_offset + i * out_stride) = av / bv;
+    }
+}
+
 /// GEMM: `out = alpha * A@B + beta * out`, A is (m x k), B is (k x n), out is
 /// (m x n). Row/col strides let the caller pass a transposed or otherwise
 /// non-contiguous operand without copying it first — this is the exact ABI
@@ -400,6 +455,52 @@ mod tests {
             mul_f32_strided(a.as_ptr(), 0, 1, b.as_ptr(), 0, 1, out.as_mut_ptr(), 0, 1, 3)
         };
         assert_eq!(out, [10.0, 18.0, 28.0]);
+    }
+
+    #[test]
+    fn sub_f32_strided_contiguous() {
+        let a = [10.0f32, 20.0, 30.0];
+        let b = [1.0f32, 2.0, 3.0];
+        let mut out = [0.0f32; 3];
+        unsafe {
+            sub_f32_strided(a.as_ptr(), 0, 1, b.as_ptr(), 0, 1, out.as_mut_ptr(), 0, 1, 3)
+        };
+        assert_eq!(out, [9.0, 18.0, 27.0]);
+    }
+
+    #[test]
+    fn sub_f32_strided_with_stride_and_offset() {
+        let a = [0.0f32, 11.0, 0.0, 22.0, 0.0, 33.0];
+        let b = [1.0f32, 2.0, 3.0];
+        let mut out = [0.0f32; 3];
+        unsafe {
+            sub_f32_strided(a.as_ptr(), 1, 2, b.as_ptr(), 0, 1, out.as_mut_ptr(), 0, 1, 3)
+        };
+        assert_eq!(out, [10.0, 20.0, 30.0]);
+    }
+
+    #[test]
+    fn div_f32_strided_contiguous() {
+        let a = [10.0f32, 20.0, 30.0];
+        let b = [2.0f32, 4.0, 5.0];
+        let mut out = [0.0f32; 3];
+        unsafe {
+            div_f32_strided(a.as_ptr(), 0, 1, b.as_ptr(), 0, 1, out.as_mut_ptr(), 0, 1, 3)
+        };
+        assert_eq!(out, [5.0, 5.0, 6.0]);
+    }
+
+    #[test]
+    fn div_f32_strided_by_zero_yields_ieee754_infinity_not_a_panic() {
+        let a = [1.0f32, -1.0, 0.0];
+        let b = [0.0f32, 0.0, 0.0];
+        let mut out = [0.0f32; 3];
+        unsafe {
+            div_f32_strided(a.as_ptr(), 0, 1, b.as_ptr(), 0, 1, out.as_mut_ptr(), 0, 1, 3)
+        };
+        assert_eq!(out[0], f32::INFINITY);
+        assert_eq!(out[1], f32::NEG_INFINITY);
+        assert!(out[2].is_nan());
     }
 
     #[test]

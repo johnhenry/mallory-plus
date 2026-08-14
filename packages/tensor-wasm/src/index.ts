@@ -61,6 +61,30 @@ interface KernelExports {
     outStride: number,
     len: number,
   ): void;
+  sub_f32_strided(
+    aPtr: number,
+    aOffset: number,
+    aStride: number,
+    bPtr: number,
+    bOffset: number,
+    bStride: number,
+    outPtr: number,
+    outOffset: number,
+    outStride: number,
+    len: number,
+  ): void;
+  div_f32_strided(
+    aPtr: number,
+    aOffset: number,
+    aStride: number,
+    bPtr: number,
+    bOffset: number,
+    bStride: number,
+    outPtr: number,
+    outOffset: number,
+    outStride: number,
+    len: number,
+  ): void;
   gemm_f32(
     aPtr: number,
     aOffset: number,
@@ -381,6 +405,8 @@ export class Kernels {
       dealloc: guardExport(poison, "dealloc", rawExports.dealloc.bind(rawExports)),
       add_f32_strided: guardExport(poison, "add_f32_strided", rawExports.add_f32_strided.bind(rawExports)),
       mul_f32_strided: guardExport(poison, "mul_f32_strided", rawExports.mul_f32_strided.bind(rawExports)),
+      sub_f32_strided: guardExport(poison, "sub_f32_strided", rawExports.sub_f32_strided.bind(rawExports)),
+      div_f32_strided: guardExport(poison, "div_f32_strided", rawExports.div_f32_strided.bind(rawExports)),
       gemm_f32: guardExport(poison, "gemm_f32", rawExports.gemm_f32.bind(rawExports)),
       solve_f32: guardExport(poison, "solve_f32", rawExports.solve_f32.bind(rawExports)),
     };
@@ -488,6 +514,48 @@ export class Kernels {
       return out;
     }
     this.exports.mul_f32_strided(
+      A.bufferPtr,
+      A.offset,
+      A.stride,
+      B.bufferPtr,
+      B.offset,
+      B.stride,
+      O.bufferPtr,
+      O.offset,
+      O.stride,
+      len,
+    );
+    return out;
+  }
+
+  /** out[i] = a[i] - b[i], writing directly into `out`'s WASM buffer. Zero allocation. No SIMD128 fast path yet (issue #66 — deferred pending a measured win, same discipline `add`/`mul`'s SIMD kernels followed before being added). */
+  subInto(out: WasmTensor, a: WasmTensor, b: WasmTensor): WasmTensor {
+    const A = flatSpec(a);
+    const B = flatSpec(b);
+    const O = flatSpec(out);
+    const len = out.shape.reduce((x, y) => x * y, 1);
+    this.exports.sub_f32_strided(
+      A.bufferPtr,
+      A.offset,
+      A.stride,
+      B.bufferPtr,
+      B.offset,
+      B.stride,
+      O.bufferPtr,
+      O.offset,
+      O.stride,
+      len,
+    );
+    return out;
+  }
+
+  /** out[i] = a[i] / b[i], writing directly into `out`'s WASM buffer. Zero allocation. IEEE 754 semantics on division by zero (±Infinity/NaN), matching `Tensor.div`. No SIMD128 fast path yet (issue #66 — see {@link subInto}). */
+  divInto(out: WasmTensor, a: WasmTensor, b: WasmTensor): WasmTensor {
+    const A = flatSpec(a);
+    const B = flatSpec(b);
+    const O = flatSpec(out);
+    const len = out.shape.reduce((x, y) => x * y, 1);
+    this.exports.div_f32_strided(
       A.bufferPtr,
       A.offset,
       A.stride,
