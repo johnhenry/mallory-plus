@@ -124,6 +124,37 @@ def main() -> None:
             result = np.round(a)  # round-half-to-even, matching the JS test's away-from-.5 exclusion
         else:
             result = getattr(np, fn_name)(a)
+    elif op == "clip":
+        result = np.clip(inputs[0], job.get("min"), job.get("max"))
+    elif op == "prod":
+        result = inputs[0].prod(axis=job.get("axis"))
+    elif op == "pad":
+        # job["padding"] gives [before, after] pairs for the LAST N axes,
+        # matching Tensor.pad's convention -- expand to full-ndim pairs the
+        # way np.pad requires.
+        a = inputs[0]
+        pairs = job["padding"]
+        full = [(0, 0)] * (a.ndim - len(pairs)) + [tuple(p) for p in pairs]
+        result = np.pad(a, full, mode="constant", constant_values=job.get("value", 0))
+    elif op == "split":
+        # Multi-output: parts can have DIFFERING sizes (the cut-point form),
+        # so np.asarray(result) below can't hold them -- write each part to
+        # its own path in job["outputs"] and return early.
+        sections = job["sections"]
+        axis = job.get("axis", 0)
+        parts = np.split(inputs[0], sections, axis=axis)
+        for part, path in zip(parts, job["outputs"]):
+            np.save(path, np.ascontiguousarray(part))
+        return
+    elif op == "repeat":
+        result = np.repeat(inputs[0], job["counts"], axis=job.get("axis", 0))
+    elif op == "flip":
+        result = np.ascontiguousarray(np.flip(inputs[0], axis=job.get("axis")))
+    elif op == "roll":
+        result = np.roll(inputs[0], job["shift"], axis=job.get("axis"))
+    elif op == "nonzero":
+        # np.argwhere -- matches Tensor.nonzero()'s [count, ndim] shape.
+        result = np.ascontiguousarray(np.argwhere(inputs[0]).astype("int64"))
     elif op == "variance":
         result = inputs[0].var(axis=job.get("axis"), ddof=job.get("ddof", 0))
     elif op == "std":

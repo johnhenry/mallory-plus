@@ -551,6 +551,174 @@ export class Tensor {
     );
   }
 
+  // ---- structural/manipulation ops (issue #65) -----------------------------
+  //
+  // A cluster of missing NumPy-standard ops, several implemented as thin
+  // compositions of existing primitives (`take`/`slice`/`where`/`full`)
+  // rather than new elementwise loops — lower risk, and it's what those
+  // primitives are for.
+
+  /** Elementwise bound: values below `min` become `min`, above `max` become `max`. Either bound may be omitted. Distinct from the REDUCTION `min()`/`max()`. Any dtype. */
+  clip(min?: number, max?: number): Tensor {
+    let out: Tensor = this;
+    if (min !== undefined) {
+      out = Tensor.where(out.lt(min), Tensor.full(out.shape, min, { dtype: out.dtype }), out);
+    }
+    if (max !== undefined) {
+      out = Tensor.where(out.gt(max), Tensor.full(out.shape, max, { dtype: out.dtype }), out);
+    }
+    return out;
+  }
+
+  /** Product over all elements (axis omitted) or along one axis — the full-reduction dual of {@link sum} (which `cumsum`/`cumprod` already have a cumulative pair for, but `sum` didn't have a `prod` counterpart). Built on the existing `cumprod`: the running product's LAST entry along the scan axis IS the full product. */
+  prod(axis?: Axis): Tensor {
+    if (axis === undefined) return this.cumprod().select(0, -1);
+    const ax = this.#normalizeAxis(axis);
+    return this.cumprod(ax).select(ax, -1);
+  }
+
+  /**
+   * Pad the LAST `padding.length` axes with `[before, after]` element counts
+   * each (leading axes untouched) — NumPy `pad`-style spec, constant-value
+   * mode only (`options.value`, default 0). Concretely unblocks
+   * `mallory-data`'s `collate.vectors()`, which currently throws on ragged
+   * batches for lack of exactly this primitive.
+   */
+  pad(padding: ReadonlyArray<readonly [number, number]>, options: { value?: number } = {}): Tensor {
+    const ndim = this.ndim;
+    if (padding.length > ndim) {
+      throw new RangeError(`pad: ${padding.length} axis pairs given but tensor has only ${ndim} axes`);
+    }
+    const fullPadding: Array<[number, number]> = this.shape.map((_, i) => {
+      const fromEnd = ndim - i;
+      const idx = padding.length - fromEnd;
+      const pair = idx >= 0 ? padding[idx] : undefined;
+      if (pair && (pair[0] < 0 || pair[1] < 0)) {
+        throw new RangeError("pad: negative padding is not supported (use slice() to shrink instead)");
+      }
+      return pair ? [pair[0], pair[1]] : [0, 0];
+    });
+    const outShape = this.shape.map((d, i) => d + (fullPadding[i] as [number, number])[0] + (fullPadding[i] as [number, number])[1]);
+    const out = Tensor.full(outShape, options.value ?? 0, { dtype: this.dtype });
+    const specs: SliceSpec[] = fullPadding.map(([before], i) => ({
+      start: before,
+      end: before + (this.shape[i] as number),
+    }));
+    out.slice(...specs).#copyFrom(this);
+    return out;
+  }
+
+  /**
+   * Split along `axis` (default 0) into VIEWS (no copy — built on {@link slice}).
+   * `sections` as a number: that many EQUAL parts (throws if it doesn't evenly
+   * divide the axis, matching NumPy `split`'s strict form — see
+   * {@link DType} module docs for the "no silent surprises" convention).
+   * `sections` as an array: explicit CUT-POINT indices along the axis
+   * (NumPy `split`'s array form — `[2, 5]` on a length-8 axis yields three
+   * parts of length 2, 3, 3), not part *sizes*.
+   */
+  split(sections: number | readonly number[], options: { axis?: number } = {}): Tensor[] {
+    const ax = this.#normalizeAxis(options.axis ?? 0);
+    const dim = this.shape[ax] as number;
+    let points: number[];
+    if (typeof sections === "number") {
+      if (sections <= 0 || dim % sections !== 0) {
+        throw new RangeError(`split: axis size ${dim} is not evenly divisible into ${sections} equal sections`);
+      }
+      const size = dim / sections;
+      points = Array.from({ length: sections - 1 }, (_, i) => (i + 1) * size);
+    } else {
+      points = [...sections];
+    }
+    const bounds = [0, ...points, dim];
+    const out: Tensor[] = [];
+    for (let i = 0; i < bounds.length - 1; i++) {
+      const specs: Array<SliceSpec | null> = this.shape.map((_, a) =>
+        a === ax ? { start: bounds[i], end: bounds[i + 1] } : null,
+      );
+      out.push(this.slice(...specs));
+    }
+    return out;
+  }
+
+  /**
+   * Repeat each element along `axis` (default 0) `counts` times — a uniform
+   * count, or an array giving a per-index count (NumPy `repeat`'s full
+   * form). Distinct from {@link broadcastTo}, which requires shape-compatible
+   * broadcasting (size-1 axes only), not arbitrary per-element repetition.
+   * Built on {@link take} — no new copy logic.
+   */
+  repeat(counts: number | readonly number[], options: { axis?: number } = {}): Tensor {
+    const ax = this.#normalizeAxis(options.axis ?? 0);
+    const dim = this.shape[ax] as number;
+    const countArr = typeof counts === "number" ? new Array<number>(dim).fill(counts) : counts;
+    if (countArr.length !== dim) {
+      throw new RangeError(`repeat: counts length ${countArr.length} does not match axis size ${dim}`);
+    }
+    const indices: number[] = [];
+    for (let i = 0; i < dim; i++) {
+      const c = countArr[i] as number;
+      for (let j = 0; j < c; j++) indices.push(i);
+    }
+    return this.take(indices, { axis: ax });
+  }
+
+  /** Reverse along one axis, several axes, or (default) every axis. Built on {@link take}. */
+  flip(axis?: number | readonly number[]): Tensor {
+    const axes = axis === undefined ? this.shape.map((_, i) => i) : Array.isArray(axis) ? axis : [axis];
+    let out: Tensor = this;
+    for (const a of axes) {
+      const ax = out.#normalizeAxis(a);
+      const dim = out.shape[ax] as number;
+      const indices = Array.from({ length: dim }, (_, i) => dim - 1 - i);
+      out = out.take(indices, { axis: ax });
+    }
+    return out;
+  }
+
+  /** Circular shift by `shift` along `axis` (default: flatten, roll, reshape back — NumPy's no-axis convention). Built on {@link take}. */
+  roll(shift: number, options: { axis?: number } = {}): Tensor {
+    if (options.axis === undefined) {
+      return this.contiguous().reshape([this.size]).roll(shift, { axis: 0 }).reshape(this.shape);
+    }
+    const ax = this.#normalizeAxis(options.axis);
+    const dim = this.shape[ax] as number;
+    if (dim === 0) return this;
+    const s = ((shift % dim) + dim) % dim;
+    const indices = Array.from({ length: dim }, (_, i) => (i - s + dim) % dim);
+    return this.take(indices, { axis: ax });
+  }
+
+  /**
+   * Coordinates of every truthy (non-zero) element, as an `[count, ndim]`
+   * `i64` Tensor — one row per element, matching NumPy `argwhere`'s shape
+   * (rather than `nonzero`'s classic tuple-of-1-D-arrays-per-axis form,
+   * which doesn't fit this repo's one-Tensor-return convention as cleanly;
+   * documented deviation, not an oversight).
+   */
+  nonzero(): Tensor {
+    const ndim = this.ndim;
+    const shape = this.shape;
+    const big = isBigIntDType(this.dtype);
+    const rows: number[] = [];
+    let count = 0;
+    const idx = new Array<number>(ndim).fill(0);
+    for (const off of this.elementOffsets()) {
+      const v = this.data[off];
+      const truthy = big ? (v as bigint) !== 0n : (v as number) !== 0;
+      if (truthy) {
+        rows.push(...idx);
+        count++;
+      }
+      for (let a = ndim - 1; a >= 0; a--) {
+        idx[a] = (idx[a] as number) + 1;
+        if ((idx[a] as number) < (shape[a] as number)) break;
+        idx[a] = 0;
+      }
+    }
+    return Tensor.from(rows, { dtype: "i64" }).reshape([count, ndim]);
+  }
+
   // ---- indexing & slicing --------------------------------------------------
 
   /**
