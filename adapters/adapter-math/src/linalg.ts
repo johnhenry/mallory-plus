@@ -65,6 +65,57 @@ export function solve(a: Tensor, b: Tensor): Tensor {
   return fromVector(MatrixMath.solve(toMatrix(a), toVector(b)));
 }
 
+/**
+ * Determinant, via the existing {@link lu}: `sign * product(diag(U))`.
+ * Reference-speed (issue #67). On a singular/near-singular `A`, one of
+ * `U`'s diagonal entries is ~0 (that's what "singular" means for an LU
+ * factorization), so this naturally returns ~0 rather than needing special
+ * handling.
+ */
+export function det(a: Tensor): number {
+  const { U, sign } = lu(a);
+  const n = U.shape[0] as number;
+  let product = sign;
+  for (let i = 0; i < n; i++) {
+    product *= U.at(i, i) as number;
+  }
+  return product;
+}
+
+/**
+ * Square matrix inverse, via `n` calls to the existing {@link solve} — one
+ * unit basis vector per column, assembled back into a matrix. Reference-
+ * speed; the honest cost here specifically is `n` independent LU
+ * factorizations (one per `solve` call) rather than one factorization
+ * reused across all `n` columns — simplicity over micro-optimizing a path
+ * with no measured bottleneck yet, consistent with this module's existing
+ * "reference-speed, not a performance claim" disclosure.
+ *
+ * On a singular/near-singular `A`: does NOT throw. `MatrixMath.solve`'s
+ * own documented convention is to write `0` into a solution's component at
+ * a near-zero pivot rather than divide by it — `inv` inherits that
+ * silently-degenerate-but-defined behavior column by column, matching
+ * {@link solve}'s contract exactly rather than inventing new error
+ * semantics here. Use {@link det} first to check invertibility if that
+ * matters to the caller.
+ */
+export function inv(a: Tensor): Tensor {
+  const n = a.shape[0] as number;
+  if (a.shape.length !== 2 || a.shape[1] !== n) {
+    throw new RangeError(`inv: expected a square matrix, got shape [${a.shape.join(", ")}]`);
+  }
+  const columns: number[][] = [];
+  for (let i = 0; i < n; i++) {
+    const e = new Array<number>(n).fill(0);
+    e[i] = 1;
+    columns.push(toVector(solve(a, fromVector(e))));
+  }
+  // columns[j][i] is the i-th component of the j-th solve (column j of the
+  // inverse) -- transpose into row-major for fromMatrix.
+  const rows: number[][] = Array.from({ length: n }, (_, i) => columns.map((col) => col[i] as number));
+  return fromMatrix(rows);
+}
+
 /** Reduced row echelon form (Gauss-Jordan elimination). Reference-speed. */
 export function rref(a: Tensor): Tensor {
   return fromMatrix(MatrixMath.rref(toMatrix(a)));
