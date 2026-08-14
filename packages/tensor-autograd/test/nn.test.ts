@@ -260,6 +260,93 @@ test("toy training loop: linear regression converges with plain SGD", () => {
   assert.ok(lastLoss < 0.01, `linear regression did not converge: final loss ${lastLoss}`);
 });
 
+// ---- Adam/RMSprop/StepLR (issue #72) -----------------------------------------
+
+test("toy training loop: linear regression converges with plain Adam (weightDecay=0)", () => {
+  const rng = random.seed(4);
+  const model = new nn.Linear(1, 1, { rng });
+  const opt = new optim.Adam(model.parameters(), { lr: 0.05 });
+  assert.equal((opt as unknown as { weightDecay: number }).weightDecay, 0);
+
+  const xs = [1, 2, 3, 4, 5];
+  const X = Tensor.from(xs, { dtype: "f64" }).reshape([5, 1]);
+  const Y = constant(Tensor.from(xs.map((x) => 3 * x + 2), { dtype: "f64" }).reshape([5, 1]));
+
+  let lastLoss = Infinity;
+  for (let epoch = 0; epoch < 500; epoch++) {
+    model.zeroGrad();
+    const loss = nn.mseLoss(model.forward(variable(X)), Y);
+    loss.backward();
+    opt.step();
+    lastLoss = loss.value.item() as number;
+  }
+  assert.ok(lastLoss < 0.01, `Adam did not converge: final loss ${lastLoss}`);
+});
+
+test("toy training loop: XOR-MLP converges with RMSprop", () => {
+  const rng = random.seed(5);
+  class XorNet extends nn.Module {
+    readonly l1 = new nn.Linear(2, 8, { rng });
+    readonly l2 = new nn.Linear(8, 1, { rng });
+    forward(x: Variable): Variable {
+      return this.l2.forward(this.l1.forward(x).relu());
+    }
+  }
+  const model = new XorNet();
+  const opt = new optim.RMSprop(model.parameters(), { lr: 0.01 });
+  const X = Tensor.from([0, 0, 0, 1, 1, 0, 1, 1], { dtype: "f64" }).reshape([4, 2]);
+  const Y = constant(Tensor.from([0, 1, 1, 0], { dtype: "f64" }).reshape([4, 1]));
+
+  let lastLoss = Infinity;
+  for (let epoch = 0; epoch < 3000; epoch++) {
+    model.zeroGrad();
+    const loss = nn.mseLoss(model.forward(variable(X)), Y);
+    loss.backward();
+    opt.step();
+    lastLoss = loss.value.item() as number;
+  }
+  assert.ok(lastLoss < 0.05, `RMSprop did not converge on XOR: final loss ${lastLoss}`);
+});
+
+test("StepLR: effective lr after N calls matches initialLr * gamma^floor(N/stepSize) exactly", () => {
+  const opt = new optim.SGD([], { lr: 1.0 });
+  const scheduler = new optim.StepLR(opt, { stepSize: 3, gamma: 0.5 });
+  const expectedAt = (n: number): number => 1.0 * 0.5 ** Math.floor(n / 3);
+  for (let n = 1; n <= 12; n++) {
+    scheduler.step();
+    const expected = expectedAt(n);
+    assert.ok(Math.abs(opt.lr - expected) < 1e-12, `after ${n} calls: lr=${opt.lr}, expected ${expected}`);
+  }
+});
+
+test("StepLR: does not touch lr before the first stepSize boundary", () => {
+  const opt = new optim.SGD([], { lr: 0.1 });
+  const scheduler = new optim.StepLR(opt, { stepSize: 5, gamma: 0.1 });
+  for (let n = 0; n < 4; n++) scheduler.step();
+  assert.equal(opt.lr, 0.1);
+});
+
+test("StepLR: rejects a non-positive stepSize", () => {
+  const opt = new optim.SGD([], { lr: 0.1 });
+  assert.throws(() => new optim.StepLR(opt, { stepSize: 0, gamma: 0.5 }), RangeError);
+  assert.throws(() => new optim.StepLR(opt, { stepSize: -1, gamma: 0.5 }), RangeError);
+});
+
+test("StepLR composes with any optimizer that has a mutable lr (structural typing, not a class union)", () => {
+  const rng = random.seed(6);
+  const model = new nn.Linear(1, 1, { rng });
+  for (const opt of [
+    new optim.SGD(model.parameters(), { lr: 1 }),
+    new optim.AdamW(model.parameters(), { lr: 1 }),
+    new optim.Adam(model.parameters(), { lr: 1 }),
+    new optim.RMSprop(model.parameters(), { lr: 1 }),
+  ]) {
+    const scheduler = new optim.StepLR(opt, { stepSize: 1, gamma: 0.5 });
+    scheduler.step();
+    assert.equal(opt.lr, 0.5, `${opt.constructor.name}: StepLR should have halved lr`);
+  }
+});
+
 // ---- telemetry hooks (issue #10) --------------------------------------------
 
 test("backward() emits a trace span when a sink is installed, nothing by default", async () => {
