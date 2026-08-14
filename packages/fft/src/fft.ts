@@ -116,6 +116,92 @@ export function fftPadded(input: ComplexTensor): ComplexTensor {
   return fromFlatParts(re, im);
 }
 
+// ---- fft2/ifft2 + fftshift/ifftshift (issue #69) ---------------------------
+//
+// The one bridge between mallory-fft and mallory-image that didn't exist:
+// no 2-D FFT, and critically no fftshift -- the function everyone pairs
+// with a 2-D FFT for spectral-image work (centering the zero-frequency
+// component).
+
+/**
+ * FFT each 1-D line varying along `fftAxis`, holding the other axis fixed
+ * -- iterate the OTHER axis, `select()` drops it (leaving a 1-D line along
+ * `fftAxis`), transform, then `Tensor.stack` re-introduces the dropped
+ * axis at the same position. No in-place tensor mutation needed (this
+ * repo's Tensors have no public mutating API by design) -- pure
+ * select+transform+stack.
+ */
+function fftAlongAxis(input: ComplexTensor, fftAxis: 0 | 1, inverse: boolean): ComplexTensor {
+  const otherAxis = fftAxis === 0 ? 1 : 0;
+  const count = input.shape[otherAxis] as number;
+  const realLines: Tensor[] = [];
+  const imagLines: Tensor[] = [];
+  for (let i = 0; i < count; i++) {
+    const line = ComplexTensor.fromParts(input.real.select(otherAxis, i), input.imag.select(otherAxis, i));
+    const transformed = inverse ? ifft(line) : fft(line);
+    realLines.push(transformed.real);
+    imagLines.push(transformed.imag);
+  }
+  return ComplexTensor.fromParts(
+    Tensor.stack(realLines, { axis: otherAxis }),
+    Tensor.stack(imagLines, { axis: otherAxis }),
+  );
+}
+
+/**
+ * 2-D FFT: separable into two passes of 1-D `fft` (each axis independently
+ * — order doesn't affect the result, the 2-D DFT is separable), reusing
+ * `fft` rather than any new transform math. Both dimensions must be
+ * powers of two (inherited from `fft`'s own requirement; see
+ * {@link fftPadded} for the 1-D escape hatch — no 2-D padded variant yet).
+ */
+export function fft2(input: ComplexTensor): ComplexTensor {
+  if (input.shape.length !== 2) throw new RangeError(`fft2: input must be 2-D, got ${input.shape.length}-D`);
+  return fftAlongAxis(fftAlongAxis(input, 1, false), 0, false);
+}
+
+/** Inverse of {@link fft2}. */
+export function ifft2(input: ComplexTensor): ComplexTensor {
+  if (input.shape.length !== 2) throw new RangeError(`ifft2: input must be 2-D, got ${input.shape.length}-D`);
+  return fftAlongAxis(fftAlongAxis(input, 1, true), 0, true);
+}
+
+function resolveAxes(shape: readonly number[], axes: number | readonly number[] | undefined): number[] {
+  if (axes === undefined) return shape.map((_, i) => i);
+  const list = Array.isArray(axes) ? axes : [axes];
+  return list.map((a) => (a < 0 ? a + shape.length : a));
+}
+
+/**
+ * Circularly shift the zero-frequency component to the center of the
+ * spectrum along `axes` (default: every axis) — `roll(floor(n/2))` per
+ * axis, matching NumPy's `fftshift` exactly (including its even/odd-length
+ * asymmetry with {@link ifftshift}). Works on any dimensionality, not just
+ * 2-D.
+ */
+export function fftshift(input: ComplexTensor, axes?: number | readonly number[]): ComplexTensor {
+  let real = input.real;
+  let imag = input.imag;
+  for (const axis of resolveAxes(input.shape, axes)) {
+    const shift = Math.floor((input.shape[axis] as number) / 2);
+    real = real.roll(shift, { axis });
+    imag = imag.roll(shift, { axis });
+  }
+  return ComplexTensor.fromParts(real, imag);
+}
+
+/** Exact inverse of {@link fftshift} — `roll(-floor(n/2))` per axis. For EVEN-length axes this is identical to `fftshift`; for ODD-length axes it isn't (the center element differs), matching NumPy's own `fftshift`/`ifftshift` asymmetry. */
+export function ifftshift(input: ComplexTensor, axes?: number | readonly number[]): ComplexTensor {
+  let real = input.real;
+  let imag = input.imag;
+  for (const axis of resolveAxes(input.shape, axes)) {
+    const shift = -Math.floor((input.shape[axis] as number) / 2);
+    real = real.roll(shift, { axis });
+    imag = imag.roll(shift, { axis });
+  }
+  return ComplexTensor.fromParts(real, imag);
+}
+
 /**
  * Real-valued convenience wrapper: `fft` of a real `Tensor` (zero-imaginary
  * input), returning the FULL N-point complex spectrum. This is NOT the
