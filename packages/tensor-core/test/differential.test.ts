@@ -54,6 +54,15 @@ interface OracleJob {
   k?: number;
   largest?: boolean;
   condition?: string;
+  fn?: string; // "unary" op dispatch (issue #64)
+  min?: number; // clip
+  max?: number; // clip
+  padding?: Array<[number, number]>; // pad
+  value?: number; // pad fill value
+  sections?: number | number[]; // split
+  outputs?: string[]; // split (multi-output)
+  counts?: number | number[]; // repeat
+  shift?: number; // roll
   output: string;
 }
 
@@ -75,6 +84,19 @@ function runOracle(dir: string, job: Omit<OracleJob, "output">): Tensor {
     stdio: ["ignore", "ignore", "pipe"],
   });
   return Tensor.fromNpy(new Uint8Array(readFileSync(output)));
+}
+
+/** For "split", whose result is N differently-shaped parts — one output path per part. */
+function runOracleMulti(dir: string, job: Omit<OracleJob, "output" | "outputs">, count: number): Tensor[] {
+  const outputs = Array.from({ length: count }, (_, i) =>
+    join(dir, `out-multi-${Math.random().toString(36).slice(2)}-${i}.npy`),
+  );
+  const jobPath = join(dir, "job.json");
+  writeFileSync(jobPath, JSON.stringify({ ...job, outputs }));
+  execFileSync(PYTHON as string, [ORACLE_SCRIPT, jobPath], {
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  return outputs.map((p) => Tensor.fromNpy(new Uint8Array(readFileSync(p))));
 }
 
 function saveTensor(dir: string, name: string, t: Tensor): string {
@@ -527,10 +549,87 @@ test("differential vs NumPy", { skip }, async (t) => {
       const raw = randomTensor([12], "f64");
       const a = domain(raw);
       const aPath = saveTensor(dir, `unary-${name}-a`, a);
-      const oracleJob: Record<string, unknown> = { op: "unary", fn, inputs: [aPath] };
-      if (scalar !== undefined) oracleJob.scalar = scalar;
-      assertClose(call(a), runOracle(dir, oracleJob as never), name);
+      assertClose(call(a), runOracle(dir, { op: "unary", fn, inputs: [aPath], scalar }), name);
     }
+  });
+
+  // ---- structural/manipulation ops (issue #65) -----------------------------
+
+  await t.test("clip matches NumPy (min only, max only, both)", () => {
+    const a = randomTensor([12], "f64").mul(10); // spread wide enough to hit both bounds
+    const aPath = saveTensor(dir, "clip-a", a);
+    assertClose(a.clip(-3, 3), runOracle(dir, { op: "clip", inputs: [aPath], min: -3, max: 3 }), "clip-both");
+    assertClose(a.clip(-3, undefined), runOracle(dir, { op: "clip", inputs: [aPath], min: -3 }), "clip-min");
+    assertClose(a.clip(undefined, 3), runOracle(dir, { op: "clip", inputs: [aPath], max: 3 }), "clip-max");
+  });
+
+  await t.test("prod matches NumPy, full + per-axis (built on cumprod's own tested loop)", () => {
+    const a = randomTensor([2, 3], "f64").mul(0.3).add(1); // keep products from over/underflowing
+    const aPath = saveTensor(dir, "prod-a", a);
+    assertClose(a.prod(), runOracle(dir, { op: "prod", inputs: [aPath] }), "prod-all");
+    assertClose(a.prod(0), runOracle(dir, { op: "prod", inputs: [aPath], axis: 0 }), "prod-axis0");
+    assertClose(a.prod(1), runOracle(dir, { op: "prod", inputs: [aPath], axis: 1 }), "prod-axis1");
+  });
+
+  await t.test("pad matches NumPy constant-mode padding, last-N-axes convention", () => {
+    const a = randomTensor([2, 3], "f64");
+    const aPath = saveTensor(dir, "pad-a", a);
+    const padding: Array<[number, number]> = [[1, 2]]; // last axis only, axis 0 untouched
+    assertClose(
+      a.pad(padding, { value: -7 }),
+      runOracle(dir, { op: "pad", inputs: [aPath], padding, value: -7 }),
+      "pad",
+    );
+  });
+
+  await t.test("split matches NumPy, equal-sections form and cut-point form", () => {
+    const a = randomTensor([8], "f64");
+    const aPath = saveTensor(dir, "split-a", a);
+    const equal = a.split(4);
+    const equalExpected = runOracleMulti(dir, { op: "split", inputs: [aPath], sections: 4 }, 4);
+    assert.equal(equal.length, 4);
+    equal.forEach((part, i) => assertClose(part, equalExpected[i] as Tensor, `split-equal-${i}`));
+
+    const cut = a.split([2, 5]);
+    const cutExpected = runOracleMulti(dir, { op: "split", inputs: [aPath], sections: [2, 5] }, 3);
+    assert.equal(cut.length, 3);
+    cut.forEach((part, i) => assertClose(part, cutExpected[i] as Tensor, `split-cut-${i}`));
+  });
+
+  await t.test("repeat matches NumPy, uniform count and per-index counts", () => {
+    const a = randomTensor([4], "f64");
+    const aPath = saveTensor(dir, "repeat-a", a);
+    assertClose(a.repeat(3), runOracle(dir, { op: "repeat", inputs: [aPath], counts: 3 }), "repeat-uniform");
+    const counts = [1, 0, 2, 3];
+    assertClose(a.repeat(counts), runOracle(dir, { op: "repeat", inputs: [aPath], counts }), "repeat-perindex");
+  });
+
+  await t.test("flip matches NumPy, single axis and all axes", () => {
+    const a = randomTensor([2, 3], "f64");
+    const aPath = saveTensor(dir, "flip-a", a);
+    assertClose(a.flip(1), runOracle(dir, { op: "flip", inputs: [aPath], axis: 1 }), "flip-axis1");
+    assertClose(a.flip(), runOracle(dir, { op: "flip", inputs: [aPath] }), "flip-all");
+  });
+
+  await t.test("roll matches NumPy, per-axis and flattened (no-axis)", () => {
+    const a = randomTensor([2, 3], "f64");
+    const aPath = saveTensor(dir, "roll-a", a);
+    assertClose(a.roll(2, { axis: 1 }), runOracle(dir, { op: "roll", inputs: [aPath], shift: 2, axis: 1 }), "roll-axis");
+    assertClose(a.roll(2), runOracle(dir, { op: "roll", inputs: [aPath], shift: 2 }), "roll-flat");
+  });
+
+  await t.test("nonzero matches NumPy argwhere's [count, ndim] coordinate shape", () => {
+    // Deliberately sparse fixed pattern (not random) so the expected
+    // coordinate set is hand-verifiable, not just "whatever NumPy says".
+    const a = Tensor.from([0, 1, 0, 2, 0, 0, 3, 0], { dtype: "f64" }).reshape([2, 4]);
+    const aPath = saveTensor(dir, "nonzero-a", a);
+    const got = a.nonzero();
+    const expected = runOracle(dir, { op: "nonzero", inputs: [aPath] });
+    assert.equal(got.dtype, "i64");
+    assertClose(got, expected, "nonzero");
+    // Row 0 = [0,1,0,2] -> nonzero at col 1 (val 1), col 3 (val 2).
+    // Row 1 = [0,0,3,0] -> nonzero at col 2 (val 3).
+    assert.deepEqual([...got.contiguous().data], [0n, 1n, 0n, 3n, 1n, 2n]);
   });
 
   await t.test("relu/sigmoid/gelu match NumPy", () => {
