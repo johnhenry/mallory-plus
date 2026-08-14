@@ -27,6 +27,7 @@ const ROOT = new URL("..", import.meta.url).pathname;
 
 const PACKAGE_DIRS = [
   "packages/fft",
+  "packages/data",
   "packages/frame-arrow",
   "packages/frame-parquet",
   "packages/image",
