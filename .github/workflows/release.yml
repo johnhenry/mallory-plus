@@ -125,9 +125,13 @@ jobs:
       - name: Publish every package to JSR
         continue-on-error: true
         run: |
-          for dir in packages/frame-arrow packages/frame-parquet packages/scalar-types packages/telemetry \
-                     packages/tensor-autograd packages/tensor-compile packages/tensor-core \
-                     packages/tensor-wasm adapters/adapter-math adapters/adapter-onnx scalars/unit; do
+          # Derived from the committed jsr.json files (which sync-jsr-configs.mjs
+          # generates from PACKAGE_DIRS) rather than a second hand-maintained
+          # list here -- the hardcoded version of this loop silently rotted
+          # (it was missing fft/image/signal/mcp/data), exactly the manifest-
+          # drift failure mode issue #47's guard exists for.
+          for f in packages/*/jsr.json adapters/*/jsr.json scalars/*/jsr.json; do
+            dir=$(dirname "$f")
             echo "::group::jsr publish — $dir"
             (cd "$dir" && npx --yes jsr publish --allow-slow-types) || \
               echo "::warning title=JSR publish skipped/failed::$dir (already published, or JSR trusted publishing isn't configured yet — see docs/RELEASING.md)"
