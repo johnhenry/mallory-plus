@@ -59,6 +59,38 @@ def main() -> None:
         y = np.convolve(a, b, mode=mode)
         result = {"y": y.tolist()}
 
+    elif op == "correlate":
+        a = np.array(job["a"], dtype=float)
+        b = np.array(job["b"], dtype=float)
+        mode = job.get("mode", "full")
+        y = signal.correlate(a, b, mode=mode)
+        result = {"y": y.tolist()}
+
+    elif op == "sosfreqz":
+        # scipy.signal.sosfreqz's own default grid (whole=False, fs=2*pi):
+        # w[i] = i*pi/worN -- matches freqz.ts's frequency grid exactly
+        # (verified numerically before writing the TS side).
+        sos = np.array(job["sos"], dtype=float)
+        w, h = signal.sosfreqz(sos, worN=job.get("worN", 512))
+        result = {"frequencies": w.tolist(), "real": h.real.tolist(), "imag": h.imag.tolist()}
+
+    elif op == "welch":
+        # return_onesided=False matches welch.ts's documented v1 scope
+        # (two-sided PSD, not scipy's default one-sided-with-doubling).
+        x = np.array(job["x"], dtype=float)
+        window = np.array(job["window"], dtype=float)
+        f, pxx = signal.welch(
+            x,
+            fs=1.0,
+            window=window,
+            nperseg=job["nperseg"],
+            noverlap=job["noverlap"],
+            return_onesided=False,
+            scaling="density",
+            detrend=False,
+        )
+        result = {"frequencies": f.tolist(), "psd": pxx.tolist()}
+
     elif op == "windowed_frame_fft":
         # A primitive, version-stable oracle for our own stft's exact
         # algorithm (windowed-frame -> full FFT, no extra normalization) --

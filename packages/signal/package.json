@@ -1,7 +1,7 @@
 {
   "name": "mallory-signal",
   "version": "0.0.1",
-  "description": "convolve/stft/istft/findPeaks/sosFilter/butter/resamplePoly for mallory-plus (issue #44) — v2/v3 SciPy-equivalent bundle, the signal-processing slice",
+  "description": "convolve/stft/istft/findPeaks/sosFilter/butter/resamplePoly for mallory-plus (issue #44) \u2014 v2/v3 SciPy-equivalent bundle, the signal-processing slice",
   "type": "module",
   "exports": {
     ".": {
@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "mallory-fft": "0.0.1",
+    "mallory-scalar-types": "0.0.1",
     "mallory-tensor-core": "0.0.1"
   },
   "repository": {
