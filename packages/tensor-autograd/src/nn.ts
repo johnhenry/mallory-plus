@@ -188,10 +188,106 @@ export class LayerNorm extends Module {
   }
 }
 
+/**
+ * Composes an ordered list of sub-modules, `forward` chaining them
+ * (issue #71). Stores each layer as a NUMBERED own-property
+ * (`this["0"]`, `this["1"]`, ...) rather than an array field — `Module`'s
+ * existing `parameters()`/`namedParameters()` reflection walk only
+ * recognizes `Parameter`/`Module` values on own properties (an array field
+ * would be invisible to it), so this gets full `parameters()`/
+ * `stateDict()`/`loadStateDict()` support with ZERO changes to the base
+ * `Module` class. Dotted-path names come out as `"0.weight"`, `"1.weight"`,
+ * etc. — the same convention PyTorch's own `nn.Sequential` uses.
+ */
+export class Sequential extends Module {
+  readonly length: number;
+
+  constructor(layers: readonly Module[]) {
+    super();
+    layers.forEach((layer, i) => {
+      (this as unknown as Record<string, Module>)[String(i)] = layer;
+    });
+    this.length = layers.length;
+  }
+
+  forward(x: Variable): Variable {
+    let out = x;
+    for (let i = 0; i < this.length; i++) {
+      out = (this as unknown as Record<string, Module>)[String(i)]!.forward(out) as Variable;
+    }
+    return out;
+  }
+}
+
+/**
+ * Inverted dropout (issue #71): zeroes each element independently with
+ * probability `p`, scaling survivors by `1/(1-p)` so the expected output
+ * magnitude is unchanged whether or not dropout is active — the standard
+ * "inverted" convention (scale at train time, no-op at eval time, rather
+ * than the reverse). `training` is an explicit `forward` parameter, not
+ * module-level mode-switching state (`.train()`/`.eval()`) — this repo has
+ * no such lifecycle elsewhere, and inventing one for just this module
+ * would be scope beyond what's asked.
+ */
+export class Dropout extends Module {
+  readonly p: number;
+
+  constructor(p: number) {
+    super();
+    if (p < 0 || p >= 1) throw new RangeError(`Dropout: p must be in [0, 1), got ${p}`);
+    this.p = p;
+  }
+
+  forward(x: Variable, training: boolean, options: { rng?: Rng } = {}): Variable {
+    if (!training || this.p === 0) return x;
+    // keep[i] = 1 with probability (1-p), else 0 -- P(uniform < p) = p is
+    // exactly the drop event, so "keep" is the >= p side.
+    const keepMask = random
+      .uniform(x.shape, { min: 0, max: 1, dtype: x.dtype, rng: options.rng })
+      .gte(this.p)
+      .cast(x.dtype);
+    const scale = 1 / (1 - this.p);
+    return x.mul(constant(keepMask)).mul(scale);
+  }
+}
+
 /** Mean squared error. */
 export function mseLoss(prediction: Variable, target: Variable): Variable {
   const diff = prediction.sub(target);
   return diff.mul(diff).mean();
+}
+
+/**
+ * Pseudo-Huber (Charbonnier) loss: `delta^2 * (sqrt(1 + ((pred-target)/delta)^2) - 1)`,
+ * averaged. The smooth, fully-differentiable variant of Huber loss —
+ * behaves like scaled L2 near zero and like scaled L1 far from zero
+ * (Huber's whole point: quadratic near the optimum, linear/outlier-robust
+ * far from it), but with a smooth transition instead of Huber's classic
+ * hard piecewise switch at `delta`. Deliberate, not a shortcut: `Variable`
+ * has no conditional/select op yet (see issue #64's own note on this), so
+ * the piecewise form isn't buildable from existing ops without one; the
+ * pseudo-Huber form needs only `sqrt`/`add`/`mul`/`div`, all already
+ * gradient-checked.
+ */
+export function huberLoss(prediction: Variable, target: Variable, delta = 1): Variable {
+  const diff = prediction.sub(target).mul(1 / delta); // Variable.div only accepts another Variable, not a scalar
+  const inner = diff.mul(diff).add(1).sqrt().add(-1);
+  return inner.mul(delta * delta).mean();
+}
+
+/**
+ * Binary cross-entropy FROM RAW LOGITS (matches {@link crossEntropy}'s own
+ * "from logits" contract — sigmoid applied internally, never fed a
+ * pre-squashed probability): `-mean(y*log(sigmoid(x)) + (1-y)*log(1-sigmoid(x)))`.
+ * Needs no conditional (unlike {@link huberLoss}'s situation) — plain
+ * `log`/`mul`/`sub`/`add`/`mean` suffice, and `sigmoid`'s output is always
+ * strictly in `(0, 1)` for finite logits, so `log`/`log(1-p)` never see 0.
+ */
+export function binaryCrossEntropy(logits: Variable, target: Variable): Variable {
+  const p = logits.sigmoid();
+  const term1 = target.mul(p.log());
+  const term2 = target.mul(-1).add(1).mul(p.mul(-1).add(1).log());
+  return term1.add(term2).mul(-1).mean();
 }
 
 /**

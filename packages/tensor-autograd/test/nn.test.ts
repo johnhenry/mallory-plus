@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { Tensor, random } from "mallory-tensor-core";
 import { Variable, constant, nn, optim, variable } from "../src/index.ts";
 import type { Parameter } from "../src/nn.ts";
+import { assertGradientMatches, randomTensor } from "./gradcheck.ts";
 
 // ---- nn building blocks -----------------------------------------------------
 
@@ -75,6 +76,122 @@ test("mseLoss and crossEntropy compute finite, non-negative losses", () => {
   const ce = nn.crossEntropy(logits, labels);
   assert.ok(Number.isFinite(ce.value.item() as number));
   assert.ok((ce.value.item() as number) > 0);
+});
+
+// ---- Sequential/Dropout/huberLoss/binaryCrossEntropy (issue #71) -----------
+
+test("Sequential: forward chains layers in order, matching a hand-composed equivalent", () => {
+  const rng = random.seed(11);
+  const a = new nn.Linear(3, 5, { rng });
+  const b = new nn.Linear(5, 2, { rng });
+  const seq = new nn.Sequential([a, b]);
+  const x = variable(random.uniform([4, 3], { rng, dtype: "f64" }));
+  const viaSequential = seq.forward(x).value.toArray();
+  const viaHandComposed = b.forward(a.forward(x)).value.toArray();
+  assert.deepEqual(viaSequential, viaHandComposed);
+});
+
+test("Sequential: .parameters()/.namedParameters() discover every sub-module's parameters (reflection-walk regression test)", () => {
+  const rng = random.seed(12);
+  const seq = new nn.Sequential([new nn.Linear(2, 3, { rng }), new nn.Linear(3, 4, { rng }), new nn.Linear(4, 1, { rng })]);
+  assert.equal(seq.parameters().length, 6); // 3 layers x (weight + bias)
+  assert.deepEqual(
+    Object.keys(seq.namedParameters()).sort(),
+    ["0.bias", "0.weight", "1.bias", "1.weight", "2.bias", "2.weight"],
+  );
+  // And stateDict/loadStateDict (issue #42) work transparently through Sequential too.
+  const snapshot = seq.stateDict();
+  seq.loadStateDict(snapshot); // must not throw
+  assert.equal(Object.keys(snapshot).length, 6);
+});
+
+test("Dropout: training=false is an exact identity", () => {
+  const dropout = new nn.Dropout(0.5);
+  const x = variable(randomTensor([20]));
+  const out = dropout.forward(x, false);
+  assert.deepEqual(out.value.toArray(), x.value.toArray());
+});
+
+test("Dropout: p=0 is an exact identity even when training=true", () => {
+  const dropout = new nn.Dropout(0);
+  const x = variable(randomTensor([20]));
+  const out = dropout.forward(x, true);
+  assert.deepEqual(out.value.toArray(), x.value.toArray());
+});
+
+test("Dropout: training=true zeroes ~p fraction of elements at a fixed seed, scales survivors by 1/(1-p), and preserves mean output magnitude in expectation", () => {
+  const p = 0.3;
+  const dropout = new nn.Dropout(p);
+  const n = 20000;
+  const x = variable(Tensor.from(new Array(n).fill(1), { dtype: "f64" }));
+  const out = dropout.forward(x, true, { rng: random.seed(99) }).value.toArray() as number[];
+  const zeros = out.filter((v) => v === 0).length;
+  const survivors = out.filter((v) => v !== 0);
+  const expectedScale = 1 / (1 - p);
+  assert.ok(survivors.every((v) => Math.abs(v - expectedScale) < 1e-9), "every surviving element must be scaled by 1/(1-p) exactly");
+  const zeroFraction = zeros / n;
+  assert.ok(Math.abs(zeroFraction - p) < 0.02, `zero fraction ${zeroFraction} should be close to p=${p}`);
+  const mean = out.reduce((a, b) => a + b, 0) / n;
+  assert.ok(Math.abs(mean - 1) < 0.02, `expected mean output ~1 (unchanged in expectation), got ${mean}`);
+});
+
+test("Dropout: rejects an out-of-range p", () => {
+  assert.throws(() => new nn.Dropout(-0.1), RangeError);
+  assert.throws(() => new nn.Dropout(1), RangeError);
+});
+
+test("huberLoss: gradcheck against finite differences", () => {
+  const target = constant(randomTensor([6]));
+  assertGradientMatches((pred) => nn.huberLoss(pred, target, 0.7), randomTensor([6]));
+});
+
+test("huberLoss: near zero, behaves like a scaled MSE (both quadratic near the origin, per the pseudo-Huber definition)", () => {
+  const pred = variable(Tensor.from([1.01, 0.99], { dtype: "f64" }));
+  const target = constant(Tensor.from([1, 1], { dtype: "f64" }));
+  const delta = 1;
+  const huber = nn.huberLoss(pred, target, delta).value.item() as number;
+  const mse = nn.mseLoss(pred, target).value.item() as number;
+  // pseudo-Huber(x) ~ 0.5*x^2 for |x| << delta -- same leading term as mseLoss's mean(diff^2), off by the 0.5 factor.
+  assert.ok(Math.abs(huber - 0.5 * mse) < 1e-4, `huber=${huber} should be ~0.5*mse=${0.5 * mse} for small errors`);
+});
+
+test("huberLoss: far from zero, grows roughly LINEARLY (not quadratically) in the error, the outlier-robustness property", () => {
+  const target = constant(Tensor.from([0], { dtype: "f64" }));
+  const delta = 1;
+  const lossAt = (x: number) => nn.huberLoss(variable(Tensor.from([x], { dtype: "f64" })), target, delta).value.item() as number;
+  const l10 = lossAt(10);
+  const l20 = lossAt(20);
+  const l1000 = lossAt(1000);
+  const l2000 = lossAt(2000);
+  // Far from the origin, doubling the error should roughly double pseudo-Huber's
+  // loss (linear growth) -- unlike mseLoss, which would roughly QUADRUPLE.
+  // At only 10x delta the asymptote hasn't fully kicked in yet (pseudo-Huber
+  // is exactly sqrt(1+x^2)-1, so l20/l10 = (sqrt(401)-1)/(sqrt(101)-1) ~
+  // 2.102, not 2 -- a real, computed value, not test slop) -- a looser bound
+  // there; at 1000x delta it's tight.
+  assert.ok(Math.abs(l20 / l10 - 2) < 0.15, `l20/l10=${l20 / l10} should be roughly 2 (linear growth)`);
+  assert.ok(Math.abs(l2000 / l1000 - 2) < 0.01, `l2000/l1000=${l2000 / l1000} should be ~2 (linear growth)`);
+});
+
+test("binaryCrossEntropy: matches a hand-computed value at logit=0 (p=0.5)", () => {
+  const logits = variable(Tensor.from([0, 0], { dtype: "f64" }));
+  const target = constant(Tensor.from([1, 0], { dtype: "f64" }));
+  const bce = nn.binaryCrossEntropy(logits, target).value.item() as number;
+  // -mean(y*ln(0.5) + (1-y)*ln(0.5)) = -ln(0.5) = ln(2), for EITHER label at p=0.5.
+  assert.ok(Math.abs(bce - Math.log(2)) < 1e-9, `expected ln(2)=${Math.log(2)}, got ${bce}`);
+});
+
+test("binaryCrossEntropy: a confident CORRECT prediction has much lower loss than a confident WRONG one", () => {
+  const target = constant(Tensor.from([1], { dtype: "f64" }));
+  const confidentCorrect = nn.binaryCrossEntropy(variable(Tensor.from([10], { dtype: "f64" })), target).value.item() as number;
+  const confidentWrong = nn.binaryCrossEntropy(variable(Tensor.from([-10], { dtype: "f64" })), target).value.item() as number;
+  assert.ok(confidentCorrect < 1e-3, `confident-correct loss should be tiny, got ${confidentCorrect}`);
+  assert.ok(confidentWrong > 9, `confident-wrong loss should be large, got ${confidentWrong}`);
+});
+
+test("binaryCrossEntropy: gradcheck against finite differences", () => {
+  const target = constant(Tensor.from([1, 0, 1, 0], { dtype: "f64" }));
+  assertGradientMatches((logits) => nn.binaryCrossEntropy(logits, target), randomTensor([4]));
 });
 
 // ---- toy training loop: the issue #9 acceptance criterion -------------------
