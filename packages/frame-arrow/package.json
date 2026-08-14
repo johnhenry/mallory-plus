@@ -1,6 +1,6 @@
 {
   "name": "mallory-frame-arrow",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Immutable, expression-oriented Frame/Series dataframe library on top of apache-arrow — part of Mallory Plus",
   "type": "module",
   "exports": {
