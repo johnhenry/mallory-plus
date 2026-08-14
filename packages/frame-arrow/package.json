@@ -1,6 +1,6 @@
 {
   "name": "mallory-frame-arrow",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Immutable, expression-oriented Frame/Series dataframe library on top of apache-arrow — part of Mallory Plus",
   "type": "module",
   "exports": {
@@ -21,7 +21,7 @@
     "apache-arrow": "21.2.0"
   },
   "peerDependencies": {
-    "mallory-tensor-core": "0.0.1"
+    "mallory-tensor-core": "0.1.0"
   },
   "peerDependenciesMeta": {
     "mallory-tensor-core": {
