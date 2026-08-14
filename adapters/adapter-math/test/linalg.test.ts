@@ -196,3 +196,56 @@ test("norms: frobenius, spectral, condition number agree with hand-computed valu
   close(linalg.spectralNorm(a), 4); // largest singular value
   close(linalg.conditionNumber(a), 4 / 3);
 });
+
+// ---- det/inv (issue #67) ---------------------------------------------------
+
+test("det matches a hand-computed value for a 3x3 (cofactor expansion by hand)", () => {
+  const a = Tensor.from(A3.flat()).reshape([3, 3]);
+  // det(A3) = 4*(5*6-3*1) - 3*(1*6-3*2) + 2*(1*1-5*2) = 4*27 - 3*0 + 2*(-9) = 108 - 0 - 18 = 90
+  // Looser eps than the default: LU-with-partial-pivoting floating-point
+  // error accumulation puts this a few 1e-6 off exact, not a bug.
+  close(linalg.det(a), 90, 1e-4);
+});
+
+test("det matches a hand-computed value for a 2x2", () => {
+  const a = Tensor.from([2, 3, 5, 7]).reshape([2, 2]); // det = 2*7 - 3*5 = -1
+  close(linalg.det(a), -1);
+});
+
+test("det of a singular matrix (a repeated row) is ~0", () => {
+  const singular = Tensor.from([1, 2, 3, 2, 4, 6, 5, 1, 9]).reshape([3, 3]); // row 1 = 2 * row 0
+  close(linalg.det(singular), 0, 1e-8);
+});
+
+test("inv: A * inv(A) == identity (the defining property of a matrix inverse)", () => {
+  const a = Tensor.from(A3.flat()).reshape([3, 3]);
+  const inv = linalg.inv(a);
+  const product = matmulRaw(A3, inv.toArray() as number[][]);
+  closeMatrix(product, [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+  ]);
+});
+
+test("inv matches a hand-computed 2x2 inverse", () => {
+  const a = Tensor.from([4, 7, 2, 6]).reshape([2, 2]); // det = 24-14 = 10
+  const inv = linalg.inv(a);
+  // inv = 1/10 * [[6, -7], [-2, 4]]
+  closeMatrix(inv.toArray() as number[][], [
+    [0.6, -0.7],
+    [-0.2, 0.4],
+  ]);
+});
+
+test("det and inv agree: det(A) * det(inv(A)) ~ 1", () => {
+  const a = Tensor.from(A3.flat()).reshape([3, 3]);
+  const detA = linalg.det(a);
+  const detInvA = linalg.det(linalg.inv(a));
+  close(detA * detInvA, 1, 1e-5);
+});
+
+test("inv rejects a non-square matrix", () => {
+  const a = Tensor.from([1, 2, 3, 4, 5, 6]).reshape([2, 3]);
+  assert.throws(() => linalg.inv(a), RangeError);
+});
