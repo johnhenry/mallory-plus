@@ -6,6 +6,7 @@
 import { type Field, Schema, Table, tableFromIPC, tableToIPC, type Vector } from "apache-arrow";
 import { columnToArray } from "./access.ts";
 import { tableToCSV } from "./csv.ts";
+import { parseCsvToColumns } from "./csv-read.ts";
 import { describeField, describeSchema, type DType, type FieldDescriptor } from "./dtype.ts";
 import { collectPlan, collectPlanAsync } from "./execute.ts";
 import type { Expr } from "./expr.ts";
@@ -55,6 +56,17 @@ export class Frame {
   static fromIPC(bytes: Uint8Array): Frame {
     const table = tableFromIPC(bytes) as Table;
     return Frame.fromArrow(table);
+  }
+
+  /**
+   * The reader counterpart to `.toCSV()` (issue #86): RFC-4180 parsing plus
+   * per-column dtype inference (bool/int64/float64/utf8, widening to the
+   * narrowest type every non-empty cell agrees on -- see csv-read.ts's own
+   * doc comment for the exact rules). Ragged rows and unterminated quotes
+   * throw rather than silently mishandling the input.
+   */
+  static fromCSV(text: string): Frame {
+    return Frame.fromArrow(new Table(parseCsvToColumns(text)));
   }
 
   /**
