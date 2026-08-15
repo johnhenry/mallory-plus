@@ -55,19 +55,29 @@ test("Frame.toTensor(): all-numeric Frame -> 2D row-major float64 Tensor by defa
   assert.deepEqual(Array.from(tensor.data), [1, 10, 2, 20, 3, 30]);
 });
 
-test("mallory-frame-arrow's package.json lists mallory-tensor-core only as an optional peerDependency, pinned to that package's ACTUAL current version", async () => {
+test("mallory-frame-arrow's package.json lists mallory-tensor-core only as an optional peerDependency, as a caret RANGE covering that package's ACTUAL current version (not an exact pin)", async () => {
   const fs = await import("node:fs/promises");
   const url = await import("node:url");
   const pkgPath = url.fileURLToPath(new URL("../package.json", import.meta.url));
   const pkg = JSON.parse(await fs.readFile(pkgPath, "utf8"));
   // Read tensor-core's own version rather than hardcoding a literal here --
-  // this test's job is to enforce the EXACT-PIN invariant, not to pin
+  // this test's job is to enforce the CARET-RANGE invariant, not to pin
   // itself to a version number that a release bump would silently stale.
+  //
+  // v1 exact-pinned this peer, which sounded safer but wasn't: it made
+  // `npm install` ERESOLVE for any consumer already on a newer compatible
+  // tensor-core (johnhenry/mallory-plus#86, filed by mallory-graph, which
+  // depends on tensor-core ^0.1.0). frame-arrow's actual coupling to
+  // tensor-core is a small, stable structural surface (see tensor.ts's own
+  // doc comment -- no static or type-level dependency at all, only a
+  // dynamic import at call time), so a caret range is the right contract:
+  // wide enough to resolve against sibling packages' own ranges, narrow
+  // enough to still reject an actual breaking (0.x -> 0.(x+1)) bump.
   const tensorCorePkgPath = url.fileURLToPath(
     new URL("../../tensor-core/package.json", import.meta.url),
   );
   const tensorCorePkg = JSON.parse(await fs.readFile(tensorCorePkgPath, "utf8"));
   assert.equal(pkg.dependencies?.["mallory-tensor-core"], undefined);
-  assert.equal(pkg.peerDependencies?.["mallory-tensor-core"], tensorCorePkg.version);
+  assert.equal(pkg.peerDependencies?.["mallory-tensor-core"], `^${tensorCorePkg.version}`);
   assert.equal(pkg.peerDependenciesMeta?.["mallory-tensor-core"]?.optional, true);
 });
