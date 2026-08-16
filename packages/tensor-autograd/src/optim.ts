@@ -28,20 +28,57 @@ function gradNorm(params: readonly Parameter[]): number {
   return Math.sqrt(sumSquares);
 }
 
+interface SGDState {
+  buf: Tensor; // momentum buffer
+}
+
+/**
+ * Momentum + Nesterov (issue #89, unblocks mallory-graph#33's momentum
+ * slider): `momentum`/`nesterov` both default to off (`0`/`false`), so
+ * `new SGD(params, { lr })` is byte-identical to the pre-#89 plain-SGD
+ * update — no existing caller's behavior changes. The momentum buffer is
+ * only allocated (per-parameter state, same `Map<id, State>` pattern as
+ * `AdamW`/`RMSprop`) once `momentum !== 0`, matching PyTorch's own
+ * `buf = momentum*buf + grad` update exactly (first step: `buf = grad`,
+ * no dampening term — this codebase doesn't expose one) so a reader
+ * coming from PyTorch recognizes the formula immediately. Nesterov's
+ * lookahead (`d_p = grad + momentum*buf`, applied AFTER the buffer
+ * update) is PyTorch's own convention too, not derived independently.
+ */
 export class SGD {
   readonly params: readonly Parameter[];
   /** Mutable (not `readonly`) so an LR scheduler (e.g. {@link StepLR}, issue #72) can adjust it between epochs — the smaller, less invasive change vs. every optimizer's `step()` routing through a separate "effective lr" indirection. */
   lr: number;
+  readonly momentum: number;
+  readonly nesterov: boolean;
+  readonly #state = new Map<number, SGDState>();
 
-  constructor(params: readonly Parameter[], options: { lr: number }) {
+  constructor(params: readonly Parameter[], options: { lr: number; momentum?: number; nesterov?: boolean }) {
     this.params = params;
     this.lr = options.lr;
+    this.momentum = options.momentum ?? 0;
+    this.nesterov = options.nesterov ?? false;
+    if (this.nesterov && this.momentum === 0) {
+      throw new RangeError("SGD: nesterov requires a nonzero momentum.");
+    }
   }
 
   step(options: StepOptions = {}): void {
     for (const p of this.params) {
       if (!p.grad) continue;
-      p.value = p.value.sub(p.grad.mul(this.lr));
+      if (this.momentum === 0) {
+        p.value = p.value.sub(p.grad.mul(this.lr));
+        continue;
+      }
+      let state = this.#state.get(p.id);
+      if (!state) {
+        state = { buf: p.grad };
+        this.#state.set(p.id, state);
+      } else {
+        state.buf = state.buf.mul(this.momentum).add(p.grad);
+      }
+      const update = this.nesterov ? p.grad.add(state.buf.mul(this.momentum)) : state.buf;
+      p.value = p.value.sub(update.mul(this.lr));
     }
     if (hasSink()) {
       const runId = options.runId ?? "default";
