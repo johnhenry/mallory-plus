@@ -1,6 +1,6 @@
 {
   "name": "mallory-mcp",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "MCP server exposing mallory-math Symbolic evaluation + guarded tensor/linalg computation as agent-callable tools (issue #45) — no arbitrary code execution, structured inputs only",
   "type": "module",
   "exports": {
@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "mallory-adapter-math": "0.1.1",
+    "mallory-adapter-math": "0.1.2",
     "mallory-math": "^0.8.0",
     "mallory-tensor-core": "0.1.0",
     "zod": "^3.25.0"
