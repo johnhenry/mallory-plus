@@ -551,6 +551,49 @@ export class Tensor {
     );
   }
 
+  /**
+   * Sliding-window ("patch") view — NumPy `sliding_window_view` semantics
+   * (issue #84, upstream for the generalized Wang tile laboratory's patch
+   * census / subshift-language machinery). `windowShape` gives the window
+   * size along each of `axes` (default: every axis, so `windowShape.length`
+   * must equal `ndim`). Output shape: the source axes with each windowed
+   * one shrunk in place to `dim - window + 1` (the number of window
+   * positions), followed by the window axes themselves in `axes` order —
+   * e.g. a 2D tensor with `windowShape=[h,w]` and no `axes` given produces
+   * `[outH, outW, h, w]`.
+   *
+   * A pure VIEW, never copies: each window axis reuses the SAME stride as
+   * its source axis (deliberately "double-counting" strides) — stepping
+   * one position along the outer (window-position) axis and one position
+   * along its paired window axis both advance the same distance through
+   * `data`, which is exactly what overlapping windows need. This is the
+   * textbook stride trick `sliding_window_view` itself is built on.
+   */
+  unfold(windowShape: readonly number[], axes?: readonly number[]): Tensor {
+    const rawAxes = axes ?? Array.from({ length: this.ndim }, (_, i) => i);
+    if (rawAxes.length !== windowShape.length) {
+      throw new RangeError(`unfold: windowShape (${windowShape.length}) and axes (${rawAxes.length}) must have the same length`);
+    }
+    const normalizedAxes = rawAxes.map((a) => this.#normalizeAxis(a));
+    const seen = new Set(normalizedAxes);
+    if (seen.size !== normalizedAxes.length) {
+      throw new RangeError(`unfold: duplicate axis in [${rawAxes}]`);
+    }
+    normalizedAxes.forEach((axis, i) => {
+      const w = windowShape[i] as number;
+      const dim = this.shape[axis] as number;
+      if (!Number.isInteger(w) || w <= 0 || w > dim) {
+        throw new RangeError(`unfold: window size ${w} invalid for axis ${axis} of size ${dim}`);
+      }
+    });
+    const outerShape = this.shape.map((d, i) => {
+      const windowIdx = normalizedAxes.indexOf(i);
+      return windowIdx === -1 ? d : d - (windowShape[windowIdx] as number) + 1;
+    });
+    const windowStrides = normalizedAxes.map((a) => this.strides[a] as number);
+    return new Tensor(this.data, [...outerShape, ...windowShape], [...this.strides, ...windowStrides], this.dtype, this.offset);
+  }
+
   // ---- structural/manipulation ops (issue #65) -----------------------------
   //
   // A cluster of missing NumPy-standard ops, several implemented as thin

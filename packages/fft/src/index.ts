@@ -4,4 +4,4 @@
  * and fft.ts for the design notes (boundary contract, v1 scope cuts).
  */
 export { ComplexTensor } from "./complex-tensor.ts";
-export { fft, fft2, fftPadded, fftshift, ifft, ifft2, ifftshift, irfft, rfft } from "./fft.ts";
+export { fft, fft2, fftn, fftPadded, fftshift, ifft, ifft2, ifftn, ifftshift, irfft, rfft } from "./fft.ts";

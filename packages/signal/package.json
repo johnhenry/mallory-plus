@@ -18,9 +18,9 @@
     "test": "npm run typecheck && node --test test/*.test.ts"
   },
   "dependencies": {
-    "mallory-fft": "0.1.0",
+    "mallory-fft": ">=0.1.0 <1.0.0",
     "mallory-scalar-types": "0.0.1",
-    "mallory-tensor-core": "0.1.0"
+    "mallory-tensor-core": ">=0.1.0 <1.0.0"
   },
   "repository": {
     "type": "git",
