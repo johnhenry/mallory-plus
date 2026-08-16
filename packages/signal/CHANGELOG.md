@@ -1,5 +1,13 @@
 # mallory-signal
 
+## 0.2.0
+
+### Minor Changes
+
+- 59162f6: Fixes johnhenry/mallory-plus#90: `butter()` gains `"bandpass"`/`"bandstop"` support, alongside the existing `"lowpass"`/`"highpass"`. `wn` takes a `[low, high]` pair for the two new types (a `number` still works for lowpass/highpass, unchanged and non-breaking) -- expressed via function overloads so the compiler enforces the right shape per `btype` at the call site.
+
+  Implements scipy's `lp2bp_zpk`/`lp2bs_zpk` analog frequency transforms, and replaces the old lowpass/highpass-only `zpk2sos` shortcut (which assumed every digital zero was real and identical, a shape bandpass/bandstop's zeros don't have) with a general real-coefficient pairing: complex-conjugate pairs and leftover real values are grouped independently on the zero side and the pole side, which is provably always the same group count on both sides for any real-coefficient system with equal zero/pole counts -- see the module's own doc comment for the parity argument. Verified byte-identical output to the pre-#90 specialized `zpk2sos` for lowpass/highpass's own shape, and differentially tested end-to-end (via `sosFilter` vs. scipy's `sosfilt`) against real `scipy.signal.butter` for bandpass and bandstop across multiple orders, including the order-dependent edge case where the prototype's single real pole (odd order only) becomes either a complex-conjugate pair or two real poles depending on bandwidth/center-frequency.
+
 ## 0.1.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # mallory-adapter-math
 
+## 0.1.1
+
+### Patch Changes
+
+- mallory-tensor-compile@0.0.3
+
 ## 0.1.0
 
 ### Minor Changes

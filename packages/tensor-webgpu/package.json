@@ -1,6 +1,6 @@
 {
   "name": "mallory-tensor-webgpu",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "WebGPU-accelerated GEMM, attention-adjacent primitives, and #11-IR elementwise fusion for Mallory Plus tensors (issue #12) — Chromium-family browsers only in v1",
   "type": "module",
   "exports": {
@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "mallory-tensor-core": "0.1.0",
-    "mallory-tensor-compile": "0.0.2"
+    "mallory-tensor-compile": "0.0.3"
   },
   "devDependencies": {
     "@webgpu/types": "^0.1.71",
