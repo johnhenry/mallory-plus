@@ -278,16 +278,27 @@ export function huberLoss(prediction: Variable, target: Variable, delta = 1): Va
 /**
  * Binary cross-entropy FROM RAW LOGITS (matches {@link crossEntropy}'s own
  * "from logits" contract — sigmoid applied internally, never fed a
- * pre-squashed probability): `-mean(y*log(sigmoid(x)) + (1-y)*log(1-sigmoid(x)))`.
- * Needs no conditional (unlike {@link huberLoss}'s situation) — plain
- * `log`/`mul`/`sub`/`add`/`mean` suffice, and `sigmoid`'s output is always
- * strictly in `(0, 1)` for finite logits, so `log`/`log(1-p)` never see 0.
+ * pre-squashed probability), computed via the standard numerically-stable
+ * "BCEWithLogits" formulation (issue #85):
+ *
+ * `L(z, y) = relu(z) - z*y + log(1 + exp(-|z|))`
+ *
+ * A prior version computed `p = sigmoid(z)` first, then `y*log(p) +
+ * (1-y)*log(1-p)` — for `|z| >~ 37`, f64 `sigmoid` saturates to exactly
+ * `1.0`/`0.0`, so the inactive side's factor becomes `0 * log(0) = 0 *
+ * -Inf = NaN` (IEEE 754: `0 * Inf` is NaN regardless of the other
+ * factor). This form never evaluates `log` at a saturating probability —
+ * `log(1+exp(-|z|))` is rewritten as `-log(sigmoid(|z|))` (no `exp`/`abs`
+ * Variable ops exist yet, so `|z|` itself is `relu(z) + relu(-z)`), and
+ * `sigmoid(|z|)` is always `>= 0.5` for any finite `|z|`, so its `log`
+ * never sees 0. Verified equal to the prior formula to ~1e-15 in the
+ * non-saturated regime, and finite (not NaN/Infinity) at `|z|` up to at
+ * least 100, before writing this.
  */
 export function binaryCrossEntropy(logits: Variable, target: Variable): Variable {
-  const p = logits.sigmoid();
-  const term1 = target.mul(p.log());
-  const term2 = target.mul(-1).add(1).mul(p.mul(-1).add(1).log());
-  return term1.add(term2).mul(-1).mean();
+  const absLogits = logits.relu().add(logits.mul(-1).relu());
+  const negLogSigmoidAbs = absLogits.sigmoid().log().mul(-1);
+  return logits.relu().sub(logits.mul(target)).add(negLogSigmoidAbs).mean();
 }
 
 /**

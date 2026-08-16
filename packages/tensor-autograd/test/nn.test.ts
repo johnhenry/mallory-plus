@@ -194,6 +194,34 @@ test("binaryCrossEntropy: gradcheck against finite differences", () => {
   assertGradientMatches((logits) => nn.binaryCrossEntropy(logits, target), randomTensor([4]));
 });
 
+// ---- BCEWithLogits reformulation: saturated-logit NaN fix (issue #85) ------
+
+test("binaryCrossEntropy: saturated (converged) logits produce a finite, near-zero loss, not NaN -- the issue's own deterministic repro", () => {
+  const logits = variable(Tensor.from([50, -50], { dtype: "f64" }).reshape([2, 1]));
+  const target = constant(Tensor.from([1, 0], { dtype: "f64" }).reshape([2, 1]));
+  const bce = nn.binaryCrossEntropy(logits, target).value.item() as number;
+  assert.ok(Number.isFinite(bce), `expected a finite loss, got ${bce}`);
+  assert.ok(Math.abs(bce) < 1e-9, `expected ~0 for two confident-correct predictions, got ${bce}`);
+});
+
+test("binaryCrossEntropy: gradient stays finite (not NaN) at saturated logits -- the actual failure mode that poisoned weights on the next backward()", () => {
+  const logits = variable(Tensor.from([50, -50], { dtype: "f64" }).reshape([2, 1]));
+  const target = constant(Tensor.from([1, 0], { dtype: "f64" }).reshape([2, 1]));
+  nn.binaryCrossEntropy(logits, target).backward();
+  const grad = logits.grad!.toArray() as number[];
+  for (const g of grad.flat(Infinity) as number[]) {
+    assert.ok(Number.isFinite(g), `expected a finite gradient, got ${g}`);
+  }
+});
+
+test("binaryCrossEntropy: a confidently WRONG prediction still produces a large but finite loss (not Infinity), even more saturated than the 'confident WRONG' test above", () => {
+  const logits = variable(Tensor.from([50], { dtype: "f64" }));
+  const target = constant(Tensor.from([0], { dtype: "f64" }));
+  const bce = nn.binaryCrossEntropy(logits, target).value.item() as number;
+  assert.ok(Number.isFinite(bce), `expected a finite loss, got ${bce}`);
+  assert.ok(Math.abs(bce - 50) < 1e-6, `expected ~50 (relu(50) - 50*0 + log(1+exp(-50)) ~= 50), got ${bce}`);
+});
+
 // ---- toy training loop: the issue #9 acceptance criterion -------------------
 
 test("toy training loop: XOR-MLP converges with AdamW", () => {
