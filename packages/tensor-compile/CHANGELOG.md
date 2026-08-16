@@ -1,5 +1,12 @@
 # mallory-tensor-compile
 
+## 0.0.4
+
+### Patch Changes
+
+- Updated dependencies [3f3824a]
+  - mallory-tensor-autograd@0.2.1
+
 ## 0.0.3
 
 ### Patch Changes

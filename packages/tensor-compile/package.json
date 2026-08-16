@@ -1,6 +1,6 @@
 {
   "name": "mallory-tensor-compile",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Elementwise expression IR + fusion for mallory-plus (issue #11) — trace once, execute fused; the shared IR target for the future WebGPU kernel DSL and the Symbolic bridge",
   "type": "module",
   "exports": {
@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "mallory-tensor-core": "0.1.0",
-    "mallory-tensor-autograd": "0.2.0"
+    "mallory-tensor-autograd": "0.2.1"
   },
   "devDependencies": {
     "mallory-math": "^0.8.0"
