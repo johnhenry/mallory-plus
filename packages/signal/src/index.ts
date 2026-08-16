@@ -6,6 +6,7 @@
  */
 export { applyTimeDomainOp, convolve, convolve1D, type ConvolveMode, type ConvolveOptions } from "./convolve.ts";
 export { correlate, correlate1D } from "./correlate.ts";
+export { correlate2D } from "./correlate2d.ts";
 export { butter, type FilterType } from "./filter-design.ts";
 export { findPeaks, type FindPeaksOptions, type FindPeaksResult } from "./find-peaks.ts";
 export { freqz, type FreqzResult } from "./freqz.ts";

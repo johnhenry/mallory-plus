@@ -322,6 +322,75 @@ export function eigGeneral(a: Tensor): ComplexNumber[] {
   return eigenvalues;
 }
 
+export interface PowerIterationResult {
+  /** The dominant (Perron) eigenvalue estimate — real, via the Rayleigh quotient `vᵀAv` on the (unit-normalized) current iterate `v`, so a negative dominant eigenvalue is captured correctly (not just its magnitude). */
+  eigenvalue: number;
+  /** The corresponding unit-normalized eigenvector estimate. */
+  eigenvector: number[];
+  iterations: number;
+  /** `false` if `maxIterations` was reached without the eigenvalue estimate settling to within `tolerance`. */
+  converged: boolean;
+}
+
+/**
+ * Dominant (Perron) eigenvalue via power iteration (issue #84) — matrix-
+ * free: takes a `matvec` closure (`v => A·v`) rather than a materialized
+ * Tensor, so callers with an implicit/structural matrix (e.g. a height-h
+ * strip's transfer matrix, `|tiles|^h × |tiles|^h` for the generalized
+ * Wang tile laboratory, johnhenry/mallory-graph#92 — dense enough that
+ * `eigGeneral`'s O(n³) Hessenberg-QR would be far too slow, or the matrix
+ * may never need materializing at all) never need to build the matrix.
+ * `eigGeneral` stays the differential-test oracle for small cases where
+ * the FULL spectrum (not just the dominant eigenvalue) or a materialized
+ * matrix is actually available/needed.
+ *
+ * Standard formulation: normalize `v`, apply `matvec`, take the Rayleigh
+ * quotient `vᵀ(Av)` as the eigenvalue estimate (available for free — no
+ * extra `matvec` call — since `v` is already unit-normalized from the
+ * previous step), re-normalize the result for the next iterate. Converges
+ * geometrically at rate `|λ₂/λ₁|` (the ratio of the second-largest to
+ * largest eigenvalue magnitude) — slow when the spectral gap is small, a
+ * known, accepted limitation of plain power iteration (no shift-invert
+ * acceleration here).
+ */
+export function powerIteration(
+  matvec: (v: readonly number[]) => number[],
+  n: number,
+  options: { maxIterations?: number; tolerance?: number; initial?: readonly number[] } = {},
+): PowerIterationResult {
+  if (n <= 0) throw new RangeError(`powerIteration: n must be positive, got ${n}`);
+  const maxIterations = options.maxIterations ?? 1000;
+  const tolerance = options.tolerance ?? 1e-10;
+
+  const normalize = (v: readonly number[]): number[] => {
+    const norm = Math.sqrt(v.reduce((s, x) => s + x * x, 0));
+    if (norm === 0) throw new Error("powerIteration: encountered a zero vector (matvec(v) collapsed v to 0)");
+    return v.map((x) => x / norm);
+  };
+  const dot = (a: readonly number[], b: readonly number[]): number => a.reduce((s, x, i) => s + x * (b[i] as number), 0);
+
+  let v = normalize(options.initial ?? Array.from({ length: n }, (_, i) => 1 / (i + 1)));
+  let eigenvalue = Number.NaN;
+  let converged = false;
+  let iterations = 0;
+
+  for (; iterations < maxIterations; iterations++) {
+    const w = matvec(v);
+    if (w.length !== n) throw new RangeError(`powerIteration: matvec returned a length-${w.length} vector, expected ${n}`);
+    const newEigenvalue = dot(v, w);
+    if (Number.isFinite(eigenvalue) && Math.abs(newEigenvalue - eigenvalue) < tolerance) {
+      eigenvalue = newEigenvalue;
+      converged = true;
+      iterations += 1;
+      break;
+    }
+    eigenvalue = newEigenvalue;
+    v = normalize(w);
+  }
+
+  return { eigenvalue, eigenvector: v, iterations, converged };
+}
+
 /** Singular value decomposition `A = U·Σ·Vᵀ` (via the eigendecomposition of `AᵀA`). `S` is 1-D (the diagonal), descending. Reference-speed. */
 export function svd(a: Tensor): SVDDecomposition {
   const { U, S, V } = MatrixMath.svd(toMatrix(a));

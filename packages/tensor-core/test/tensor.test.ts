@@ -731,6 +731,56 @@ test("broadcastTo expands size-1 axes via stride 0", () => {
   assert.throws(() => t.broadcastTo([4, 5]), RangeError);
 });
 
+// ---- unfold (issue #84, sliding-window / patch view) -----------------------
+
+test("unfold: 1D sliding windows of size 3 over 5 elements produce 3 overlapping patches", () => {
+  const t = Tensor.from([0, 1, 2, 3, 4], { dtype: "f64" });
+  const w = t.unfold([3]);
+  assert.deepEqual([...w.shape], [3, 3]);
+  assert.deepEqual(w.toArray(), [
+    [0, 1, 2],
+    [1, 2, 3],
+    [2, 3, 4],
+  ]);
+  assert.equal(w.data, t.data, "a pure view, no copy");
+});
+
+test("unfold: 2D 2x2 windows over a 4x4 grid match hand-computed patches (verified via a standalone node -e script before writing this)", () => {
+  const t = Tensor.arange(16).reshape([4, 4]);
+  const w = t.unfold([2, 2]);
+  assert.deepEqual([...w.shape], [3, 3, 2, 2]);
+  const arr = w.toArray() as number[][][][];
+  assert.deepEqual(arr[0]?.[0], [
+    [0, 1],
+    [4, 5],
+  ]);
+  assert.deepEqual(arr[1]?.[2], [
+    [6, 7],
+    [10, 11],
+  ]);
+  assert.deepEqual(arr[2]?.[2], [
+    [10, 11],
+    [14, 15],
+  ]);
+});
+
+test("unfold: an explicit axes subset windows only those axes, leaving the rest untouched", () => {
+  const t = Tensor.arange(24).reshape([2, 4, 3]);
+  const w = t.unfold([2], [1]);
+  assert.deepEqual([...w.shape], [2, 3, 3, 2]);
+  const arr = w.toArray() as number[][][][];
+  // w[b][i][c][k] === t[b][i+k][c]
+  assert.equal(arr[0]?.[1]?.[2]?.[1], (t.toArray() as number[][][])[0]?.[2]?.[2]);
+  assert.equal(arr[1]?.[0]?.[0]?.[0], (t.toArray() as number[][][])[1]?.[0]?.[0]);
+});
+
+test("unfold: rejects a mismatched windowShape/axes length, a too-large window, and a duplicate axis", () => {
+  const t = Tensor.arange(16).reshape([4, 4]);
+  assert.throws(() => t.unfold([2, 2, 2]), RangeError);
+  assert.throws(() => t.unfold([5]), RangeError);
+  assert.throws(() => t.unfold([2, 2], [0, 0]), RangeError);
+});
+
 test("sqrt rejects bigint dtypes", () => {
   const t = Tensor.from([4, 9], { dtype: "i64" });
   assert.throws(() => t.sqrt(), TypeError);

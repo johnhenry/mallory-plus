@@ -173,6 +173,59 @@ function resolveAxes(shape: readonly number[], axes: number | readonly number[] 
 }
 
 /**
+ * FFT every 1-D line along `axis` of an arbitrary-rank tensor, holding
+ * every other axis fixed — the n-D generalization of {@link fftAlongAxis}
+ * (which is hardcoded to exactly 2 axes). Recursive descent: pick the
+ * first axis that ISN'T `axis`, iterate its indices via `select` (which
+ * drops that axis, shifting `axis`'s own index down by one if the dropped
+ * axis was before it), recurse on the resulting rank-(n-1) tensor, then
+ * `Tensor.stack` the results back at the dropped axis's position. Base
+ * case: a 1-D tensor (axis must be 0 there) — apply {@link fft}/{@link ifft}
+ * directly, same as {@link fftAlongAxis}'s own base transform.
+ */
+function fftAlongAxisN(input: ComplexTensor, axis: number, inverse: boolean): ComplexTensor {
+  if (input.shape.length === 1) {
+    return inverse ? ifft(input) : fft(input);
+  }
+  const pivotAxis = axis === 0 ? 1 : 0;
+  const count = input.shape[pivotAxis] as number;
+  const nextAxis = axis > pivotAxis ? axis - 1 : axis;
+  const realSlices: Tensor[] = [];
+  const imagSlices: Tensor[] = [];
+  for (let i = 0; i < count; i++) {
+    const slice = ComplexTensor.fromParts(input.real.select(pivotAxis, i), input.imag.select(pivotAxis, i));
+    const transformed = fftAlongAxisN(slice, nextAxis, inverse);
+    realSlices.push(transformed.real);
+    imagSlices.push(transformed.imag);
+  }
+  return ComplexTensor.fromParts(
+    Tensor.stack(realSlices, { axis: pivotAxis }),
+    Tensor.stack(imagSlices, { axis: pivotAxis }),
+  );
+}
+
+/**
+ * n-D FFT (issue #84, upstream for the generalized Wang tile laboratory's
+ * diffraction-spectrum machinery — 3-D for Wang cubes, `fft2` already
+ * covers the 2-D case today). Separable, like `fft2`: one 1-D `fft` pass
+ * per axis in `axes` (default: every axis), order doesn't affect the
+ * result. Every transformed axis's length must be a power of two
+ * (inherited from `fft`).
+ */
+export function fftn(input: ComplexTensor, axes?: number | readonly number[]): ComplexTensor {
+  let out = input;
+  for (const axis of resolveAxes(input.shape, axes)) out = fftAlongAxisN(out, axis, false);
+  return out;
+}
+
+/** Inverse of {@link fftn}. */
+export function ifftn(input: ComplexTensor, axes?: number | readonly number[]): ComplexTensor {
+  let out = input;
+  for (const axis of resolveAxes(input.shape, axes)) out = fftAlongAxisN(out, axis, true);
+  return out;
+}
+
+/**
  * Circularly shift the zero-frequency component to the center of the
  * spectrum along `axes` (default: every axis) — `roll(floor(n/2))` per
  * axis, matching NumPy's `fftshift` exactly (including its even/odd-length

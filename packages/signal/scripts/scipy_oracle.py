@@ -66,6 +66,12 @@ def main() -> None:
         y = signal.correlate(a, b, mode=mode)
         result = {"y": y.tolist()}
 
+    elif op == "correlate2d":
+        a = np.array(job["a"], dtype=float)
+        b = np.array(job["b"], dtype=float)
+        y = signal.correlate2d(a, b, mode="full")
+        result = {"y": y.tolist()}
+
     elif op == "sosfreqz":
         # scipy.signal.sosfreqz's own default grid (whole=False, fs=2*pi):
         # w[i] = i*pi/worN -- matches freqz.ts's frequency grid exactly
