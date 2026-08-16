@@ -1,6 +1,6 @@
 {
   "name": "mallory-adapter-onnx",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "ONNX Runtime Web wrapper (issue #18, mode 1 only) — onnx.load(modelSource)/model.run(inputs) marshalling between mallory-tensor-core's Tensor and onnxruntime-web's Tensor. Backend selection delegates entirely to ONNX Runtime Web; v1 does not route it through our own device abstraction.",
   "type": "module",
   "exports": {
@@ -18,7 +18,7 @@
     "test": "npm run typecheck && node --test test/*.test.ts"
   },
   "dependencies": {
-    "mallory-tensor-core": "0.1.0",
+    "mallory-tensor-core": "0.2.0",
     "onnxruntime-web": "^1.27.0"
   },
   "repository": {

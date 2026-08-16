@@ -1,5 +1,12 @@
 # mallory-frame-arrow
 
+## 1.0.0
+
+### Patch Changes
+
+- Updated dependencies [262a154]
+  - mallory-tensor-core@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes
