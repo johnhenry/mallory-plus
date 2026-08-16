@@ -1,5 +1,11 @@
 # mallory-tensor-webgpu
 
+## 0.0.3
+
+### Patch Changes
+
+- mallory-tensor-compile@0.0.3
+
 ## 0.0.2
 
 ### Patch Changes

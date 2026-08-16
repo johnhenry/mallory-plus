@@ -22,7 +22,7 @@
     "mallory-tensor-core": "0.1.0"
   },
   "devDependencies": {
-    "mallory-tensor-autograd": "0.1.0"
+    "mallory-tensor-autograd": "0.2.0"
   },
   "repository": {
     "type": "git",
