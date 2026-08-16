@@ -260,6 +260,78 @@ test("toy training loop: linear regression converges with plain SGD", () => {
   assert.ok(lastLoss < 0.01, `linear regression did not converge: final loss ${lastLoss}`);
 });
 
+// ---- SGD momentum/Nesterov (issue #89) --------------------------------------
+
+test("SGD: momentum defaults to 0 -- byte-identical to the plain (pre-#89) update", () => {
+  const p1 = new nn.Parameter(Tensor.from([1], { dtype: "f64" }));
+  const p2 = new nn.Parameter(Tensor.from([1], { dtype: "f64" }));
+  const opt1 = new optim.SGD([p1], { lr: 0.1 });
+  const opt2 = new optim.SGD([p2], { lr: 0.1, momentum: 0 });
+  for (const g of [1, 1, 1]) {
+    p1.grad = Tensor.from([g], { dtype: "f64" });
+    p2.grad = Tensor.from([g], { dtype: "f64" });
+    opt1.step();
+    opt2.step();
+    assert.equal(p1.value.item(), p2.value.item());
+  }
+  assert.ok(Math.abs((p1.value.item() as number) - 0.7) < 1e-12); // 1 - 0.1*1 - 0.1*1 - 0.1*1
+});
+
+test("SGD: classic momentum matches hand-computed buf = momentum*buf + grad, param -= lr*buf", () => {
+  const p = new nn.Parameter(Tensor.from([1], { dtype: "f64" }));
+  const opt = new optim.SGD([p], { lr: 0.1, momentum: 0.9 });
+  // buf: 1 -> 1.9 -> 2.71 ; param: 0.9 -> 0.71 -> 0.439 (hand-verified via a standalone node -e script)
+  const expected = [0.9, 0.71, 0.43899999999999995];
+  for (const target of expected) {
+    p.grad = Tensor.from([1], { dtype: "f64" });
+    opt.step();
+    assert.ok(Math.abs((p.value.item() as number) - target) < 1e-12, `expected ${target}, got ${p.value.item()}`);
+  }
+});
+
+test("SGD: Nesterov matches hand-computed d_p = grad + momentum*buf (buf updated first)", () => {
+  const p = new nn.Parameter(Tensor.from([1], { dtype: "f64" }));
+  const opt = new optim.SGD([p], { lr: 0.1, momentum: 0.9, nesterov: true });
+  // d_p: 1.9 -> 2.71 -> 3.439 ; param: 0.81 -> 0.539 -> 0.1951 (hand-verified via a standalone node -e script)
+  const expected = [0.81, 0.539, 0.1951];
+  for (const target of expected) {
+    p.grad = Tensor.from([1], { dtype: "f64" });
+    opt.step();
+    assert.ok(Math.abs((p.value.item() as number) - target) < 1e-9, `expected ${target}, got ${p.value.item()}`);
+  }
+});
+
+test("SGD: nesterov without a nonzero momentum throws", () => {
+  assert.throws(() => new optim.SGD([], { lr: 0.1, nesterov: true }), RangeError);
+  assert.throws(() => new optim.SGD([], { lr: 0.1, momentum: 0, nesterov: true }), RangeError);
+});
+
+test("toy training loop: linear regression converges faster with momentum than without, same lr/epoch budget", () => {
+  const xs = [1, 2, 3, 4, 5];
+  const X = Tensor.from(xs, { dtype: "f64" }).reshape([5, 1]);
+  const Y = constant(Tensor.from(xs.map((x) => 3 * x + 2), { dtype: "f64" }).reshape([5, 1]));
+
+  function finalLoss(opt: optim.SGD, model: InstanceType<typeof nn.Linear>, epochs: number): number {
+    let lastLoss = Infinity;
+    for (let epoch = 0; epoch < epochs; epoch++) {
+      model.zeroGrad();
+      const loss = nn.mseLoss(model.forward(variable(X)), Y);
+      loss.backward();
+      opt.step();
+      lastLoss = loss.value.item() as number;
+    }
+    return lastLoss;
+  }
+
+  const plainModel = new nn.Linear(1, 1, { rng: random.seed(7) });
+  const plainLoss = finalLoss(new optim.SGD(plainModel.parameters(), { lr: 0.01 }), plainModel, 200);
+
+  const momentumModel = new nn.Linear(1, 1, { rng: random.seed(7) }); // same seed -- identical starting weights
+  const momentumLoss = finalLoss(new optim.SGD(momentumModel.parameters(), { lr: 0.01, momentum: 0.9 }), momentumModel, 200);
+
+  assert.ok(momentumLoss < plainLoss, `momentum (${momentumLoss}) should converge faster than plain SGD (${plainLoss}) over the same 200 epochs`);
+});
+
 // ---- Adam/RMSprop/StepLR (issue #72) -----------------------------------------
 
 test("toy training loop: linear regression converges with plain Adam (weightDecay=0)", () => {
