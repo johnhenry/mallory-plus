@@ -1,5 +1,16 @@
 # mallory-fft
 
+## 0.2.0
+
+### Minor Changes
+
+- 262a154: Add `fftn`/`ifftn`: n-D FFT, the general case `fft2`/`ifft2` already cover in 2-D. Separable (one `fft` pass per axis), optional `axes` subset. Upstream for the generalized Wang tile laboratory's diffraction-spectrum machinery on Wang cubes (johnhenry/mallory-graph#92). Fixes #84 (item 2 of 4).
+
+### Patch Changes
+
+- Updated dependencies [262a154]
+  - mallory-tensor-core@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
   "name": "mallory-data",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Async dataset pipelines for mallory-plus (issue #22) — the v2 `data` namespace: a curated Dataset facade over mallory-iteration (chunk/batch/shuffle/epochs/mapConcurrent/prefetch/fold, AbortSignal cancellation) producing Tensor batches for tensor-autograd's trainer",
   "type": "module",
   "exports": {
@@ -19,10 +19,10 @@
   },
   "dependencies": {
     "mallory-iteration": "^0.0.0",
-    "mallory-tensor-core": "0.1.0"
+    "mallory-tensor-core": "0.2.0"
   },
   "devDependencies": {
-    "mallory-tensor-autograd": "0.2.1"
+    "mallory-tensor-autograd": "0.2.2"
   },
   "repository": {
     "type": "git",

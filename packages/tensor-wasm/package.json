@@ -22,8 +22,8 @@
     "mallory-telemetry": "0.0.1"
   },
   "devDependencies": {
-    "mallory-adapter-math": "0.1.2",
-    "mallory-tensor-core": "0.1.0"
+    "mallory-adapter-math": "0.2.0",
+    "mallory-tensor-core": "0.2.0"
   },
   "scripts": {
     "build:wasm:scalar": "cargo build --release --target wasm32-unknown-unknown -p tensor-wasm-kernels && node scripts/copy-wasm.mjs tensor_wasm_kernels.wasm",

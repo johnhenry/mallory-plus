@@ -1,5 +1,14 @@
 # mallory-mcp
 
+## 0.0.5
+
+### Patch Changes
+
+- Updated dependencies [262a154]
+- Updated dependencies [262a154]
+  - mallory-adapter-math@0.2.0
+  - mallory-tensor-core@0.2.0
+
 ## 0.0.4
 
 ### Patch Changes
