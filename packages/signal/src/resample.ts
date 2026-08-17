@@ -66,7 +66,9 @@ export function resamplePoly(signal: Tensor, up: number, down: number): Tensor {
   if (!Number.isInteger(up) || up < 1) throw new RangeError(`resamplePoly: up must be a positive integer, got ${up}`);
   if (!Number.isInteger(down) || down < 1) throw new RangeError(`resamplePoly: down must be a positive integer, got ${down}`);
 
-  const x = Float64Array.from(signal.contiguous().toArray() as number[]);
+  // Read-only below (only `.slice()`d into fresh arrays), so no defensive
+  // copy is needed even when `.data` aliases `signal`'s own storage.
+  const x = signal.contiguous().data as Float64Array;
   const g = gcdInt(up, down);
   const u = up / g;
   const d = down / g;

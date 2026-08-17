@@ -1,18 +1,16 @@
 import type { DType, Tensor } from "mallory-tensor-core";
 
-/** Flatten a Tensor's contiguous values into a plain Float64Array, row-major. Reference-speed (walks the nested toArray() output), not a hot-path kernel. */
+/**
+ * Flatten a Tensor's contiguous values into a plain Float64Array, row-major.
+ * `.data` (after `.contiguous()`) is already the flat, row-major storage for
+ * any ndim -- no boxed-nested-array walk needed. Only converts (copies) when
+ * the source isn't already f64 (e.g. f32, per `assertFloatDtype`'s v1
+ * scope); when it already is f64, returns the tensor's own backing store
+ * directly (callers only read it, never mutate it).
+ */
 export function flattenToFloat64(t: Tensor): Float64Array {
-  const nested = t.contiguous().toArray();
-  const flat: number[] = [];
-  const walk = (x: unknown): void => {
-    if (Array.isArray(x)) {
-      for (const v of x) walk(v);
-    } else {
-      flat.push(Number(x));
-    }
-  };
-  walk(nested);
-  return Float64Array.from(flat);
+  const data = t.contiguous().data as Float32Array | Float64Array;
+  return data instanceof Float64Array ? data : Float64Array.from(data);
 }
 
 /** resize/normalize v1 scope: float dtypes only (f32/f64) -- not uint8 raw pixel data, which would need explicit rounding/clamping semantics this package doesn't design yet. Clear error rather than silently mishandling an integer/bool dtype. */

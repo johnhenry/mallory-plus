@@ -33,7 +33,9 @@ function isPowerOfTwo(n: number): boolean {
 
 export function welch(signal: Tensor, options: WelchOptions = {}): { frequencies: number[]; psd: Tensor } {
   if (signal.shape.length !== 1) throw new RangeError("welch: v1 supports 1-D Tensor only");
-  const data = Float64Array.from(signal.contiguous().toArray() as number[]);
+  // Read-only below, so no defensive copy is needed even when `.data`
+  // aliases `signal`'s own storage.
+  const data = signal.contiguous().data as Float64Array;
 
   const nperseg = options.nperseg ?? Math.min(DEFAULT_NPERSEG, data.length);
   if (!isPowerOfTwo(nperseg)) {
@@ -62,8 +64,8 @@ export function welch(signal: Tensor, options: WelchOptions = {}): { frequencies
     const frame = new Float64Array(nperseg);
     for (let i = 0; i < nperseg; i++) frame[i] = (data[start + i] as number) * (window[i] as number);
     const spectrum = fft(ComplexTensor.fromReal(Tensor.fromTypedArray(frame, [nperseg], { dtype: "f64" })));
-    const specReal = spectrum.real.toArray() as number[];
-    const specImag = spectrum.imag.toArray() as number[];
+    const specReal = spectrum.real.contiguous().data as Float64Array;
+    const specImag = spectrum.imag.contiguous().data as Float64Array;
     for (let k = 0; k < nperseg; k++) {
       const re = specReal[k] as number;
       const im = specImag[k] as number;

@@ -51,8 +51,11 @@ function trimMode(full: Float64Array, n: number, m: number, mode: ConvolveMode):
   return full.slice(start, start + outLen);
 }
 
+// Read-only downstream (directConvolve1D/correlate1D never mutate `a`/`b`),
+// so `.data` can be used directly without a defensive copy even when
+// `contiguous()` aliases the source tensor's own backing store.
 function toFlat1D(t: Tensor): Float64Array {
-  return Float64Array.from(t.contiguous().toArray() as number[]);
+  return t.contiguous().data as Float64Array;
 }
 
 /** 1-D linear convolution of two plain `Float64Array`s. The core primitive `convolve` (Tensor-oriented) delegates to. */
