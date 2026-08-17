@@ -7,36 +7,64 @@
  * explicit v1 scope ("these three primitives, not a fused kernel").
  *
  * Shape convention throughout: `Q`/`K`/`V` are `(batch, seq, dim)` row-major
- * contiguous `Float32Array`s (batch folds leading axes the same way
- * `Tensor.matmul`'s batch broadcasting does, but v1 requires Q/K/V to already
- * share one batch size — no broadcasting inside the kernel).
+ * contiguous, f32.
+ *
+ * GPU residency (issue #100): all three primitives take and return
+ * {@link GPUTensor}, not `Float32Array` — chaining `runQKT` -> `runSoftmax` ->
+ * `runWeightedSum` (as scaled-dot-product-attention does) used to round-trip
+ * every intermediate through the CPU (`Float32Array` out of one call,
+ * re-uploaded as a fresh storage buffer by the next), even though nothing
+ * outside the GPU ever needed to see those intermediates. Each function now
+ * dispatches directly against its inputs' existing `GPUBuffer`s and wraps its
+ * output buffer as a `GPUTensor` via `GPUTensor.fromBuffer` (device.ts) — no
+ * host copy happens until/unless a caller explicitly calls `.toTensor()`/
+ * `.toFloat32Array()` on a result. No wait/fence is needed between chained
+ * calls either: every dispatch here goes through `device.queue`, and WebGPU
+ * serializes queue submissions in order, so a later dispatch reading a
+ * buffer an earlier dispatch wrote is automatically ordered correctly.
+ * Callers own every `GPUTensor` they get back and must `.free()` it
+ * (including intermediates they don't read back) — this module never frees
+ * a caller-supplied input.
  */
+import { GPUTensor } from "./device.ts";
 import {
-  allocateOutputBuffer,
-  readBackFloat32,
-  uploadStorageBuffer,
+  acquireBuffer,
+  allocateGPUResidentBuffer,
+  getOrCreateComputePipeline,
+  releaseBuffer,
   type SizedBuffer,
 } from "./gpu-runtime.ts";
 
 const TILE = 8;
 
 function dims4Uniform(device: GPUDevice, values: readonly [number, number, number, number]): SizedBuffer {
-  const buffer = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-  device.queue.writeBuffer(buffer, 0, new Uint32Array(values));
-  return { buffer, byteLength: 16 };
+  const sized = acquireBuffer(device, 16, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+  device.queue.writeBuffer(sized.buffer, 0, new Uint32Array(values));
+  return sized;
 }
 
-async function dispatch3D(
+/** A read-only view of a `GPUTensor`'s buffer as a dispatch binding — this module never releases/destroys it, ownership stays with whoever holds the `GPUTensor`. */
+function bindingOf(t: GPUTensor): SizedBuffer {
+  return { buffer: t.buffer, byteLength: t.buffer.size, usage: GPUBufferUsage.STORAGE };
+}
+
+/**
+ * Dispatch a compute shader (3-D workgroup grid) and wrap its output buffer
+ * as a `GPUTensor` of `outShape` WITHOUT reading it back — the GPU-resident
+ * counterpart of the old `dispatch3D`, which always staged the result out to
+ * a `Float32Array` before returning.
+ */
+function dispatch3DResident(
   device: GPUDevice,
   code: string,
   bindings: readonly SizedBuffer[],
   outputIndex: number,
+  outShape: readonly number[],
   x: number,
   y: number,
   z: number,
-): Promise<Float32Array> {
-  const module = device.createShaderModule({ code });
-  const pipeline = device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: "main" } });
+): GPUTensor {
+  const pipeline = getOrCreateComputePipeline(device, code);
   const bindGroup = device.createBindGroup({
     layout: pipeline.getBindGroupLayout(0),
     entries: bindings.map((b, i) => ({ binding: i, resource: { buffer: b.buffer } })),
@@ -48,7 +76,7 @@ async function dispatch3D(
   pass.dispatchWorkgroups(Math.max(1, x), Math.max(1, y), Math.max(1, z));
   pass.end();
   device.queue.submit([encoder.finish()]);
-  return readBackFloat32(device, bindings[outputIndex] as SizedBuffer);
+  return GPUTensor.fromBuffer(device, (bindings[outputIndex] as SizedBuffer).buffer, outShape);
 }
 
 const QKT_WGSL = `
@@ -80,38 +108,42 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
  * `scores[b, i, j] = sum_d Q[b, i, d] * K[b, j, d]` — `Q @ K^T` per batch,
  * unscaled (callers apply `1/sqrt(dim)` themselves, e.g. by pre-scaling `Q`,
  * matching how most reference attention implementations separate the scale
- * from the matmul rather than baking it into the kernel).
+ * from the matmul rather than baking it into the kernel). `q`/`k` must
+ * already be `(batch, seqQ|seqK, dim)`-shaped `GPUTensor`s (e.g. via
+ * `toWebGPU`); the result is a GPU-resident `(batch, seqQ, seqK)` `GPUTensor`
+ * — call `.toTensor()`/`.toFloat32Array()` on it if you need it on the CPU,
+ * or pass it straight into `runSoftmax` to stay on-device.
  */
 export async function runQKT(
   device: GPUDevice,
-  q: Float32Array,
-  k: Float32Array,
+  q: GPUTensor,
+  k: GPUTensor,
   batch: number,
   seqQ: number,
   seqK: number,
   dim: number,
-): Promise<Float32Array> {
-  if (q.length !== batch * seqQ * dim) throw new RangeError("runQKT: Q shape mismatch");
-  if (k.length !== batch * seqK * dim) throw new RangeError("runQKT: K shape mismatch");
-  const bufQ = uploadStorageBuffer(device, q);
-  const bufK = uploadStorageBuffer(device, k);
-  const bufOut = allocateOutputBuffer(device, batch * seqQ * seqK);
+): Promise<GPUTensor> {
+  if (q.shape.length !== 3 || q.shape[0] !== batch || q.shape[1] !== seqQ || q.shape[2] !== dim) {
+    throw new RangeError(`runQKT: Q shape [${q.shape}] does not match (batch=${batch}, seqQ=${seqQ}, dim=${dim})`);
+  }
+  if (k.shape.length !== 3 || k.shape[0] !== batch || k.shape[1] !== seqK || k.shape[2] !== dim) {
+    throw new RangeError(`runQKT: K shape [${k.shape}] does not match (batch=${batch}, seqK=${seqK}, dim=${dim})`);
+  }
+  const bufOut = allocateGPUResidentBuffer(device, batch * seqQ * seqK);
   const dims = dims4Uniform(device, [seqQ, seqK, dim, batch]);
   try {
-    return await dispatch3D(
+    return dispatch3DResident(
       device,
       QKT_WGSL,
-      [bufQ, bufK, bufOut, dims],
+      [bindingOf(q), bindingOf(k), bufOut, dims],
       2,
+      [batch, seqQ, seqK],
       Math.ceil(seqK / TILE),
       Math.ceil(seqQ / TILE),
       batch,
     );
   } finally {
-    bufQ.buffer.destroy();
-    bufK.buffer.destroy();
-    bufOut.buffer.destroy();
-    dims.buffer.destroy();
+    releaseBuffer(device, dims);
   }
 }
 
@@ -144,27 +176,29 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 /**
  * Numerically stable softmax along the LAST axis of a `(rows, cols)`
- * row-major buffer (one GPU invocation per row; `cols` is walked serially
- * within the invocation, matching `Tensor.softmax`'s per-row reduction
- * shape — a parallel-reduction version is future work once profiling shows
- * this naive one is the bottleneck, not before).
+ * row-major `GPUTensor` (one GPU invocation per row; `cols` is walked
+ * serially within the invocation, matching `Tensor.softmax`'s per-row
+ * reduction shape — a parallel-reduction version is future work once
+ * profiling shows this naive one is the bottleneck, not before). `x`'s shape
+ * just needs `rows * cols` elements (e.g. a `(batch, seqQ, seqK)` QKT result
+ * viewed as `(batch*seqQ, seqK)` — `rows`/`cols` are taken as given, not
+ * inferred from `x.shape`, matching the pre-#100 signature). Returns a
+ * GPU-resident `(rows, cols)` `GPUTensor`.
  */
 export async function runSoftmax(
   device: GPUDevice,
-  x: Float32Array,
+  x: GPUTensor,
   rows: number,
   cols: number,
-): Promise<Float32Array> {
-  if (x.length !== rows * cols) throw new RangeError("runSoftmax: shape mismatch");
-  const bufX = uploadStorageBuffer(device, x);
-  const bufOut = allocateOutputBuffer(device, rows * cols);
+): Promise<GPUTensor> {
+  const size = x.shape.reduce((a, b) => a * b, 1);
+  if (size !== rows * cols) throw new RangeError(`runSoftmax: x has ${size} elements, expected rows*cols ${rows * cols}`);
+  const bufOut = allocateGPUResidentBuffer(device, rows * cols);
   const dims = dims4Uniform(device, [rows, cols, 0, 0]);
   try {
-    return await dispatch3D(device, SOFTMAX_WGSL, [bufX, bufOut, dims], 1, Math.ceil(rows / 64), 1, 1);
+    return dispatch3DResident(device, SOFTMAX_WGSL, [bindingOf(x), bufOut, dims], 1, [rows, cols], Math.ceil(rows / 64), 1, 1);
   } finally {
-    bufX.buffer.destroy();
-    bufOut.buffer.destroy();
-    dims.buffer.destroy();
+    releaseBuffer(device, dims);
   }
 }
 
@@ -195,38 +229,40 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 /**
  * `out[b, i, d] = sum_j weights[b, i, j] * V[b, j, d]` — `weights @ V` per
  * batch (the softmax'd attention weights times the value tensor; `weights`
- * is typically `runSoftmax`'s output, but this function takes plain data so
- * it composes with any `(batch, seqQ, seqK)` weight tensor).
+ * is typically `runSoftmax`'s output, but this function takes any
+ * `(batch, seqQ, seqK)`-shaped `GPUTensor`). Returns a GPU-resident
+ * `(batch, seqQ, dim)` `GPUTensor`.
  */
 export async function runWeightedSum(
   device: GPUDevice,
-  weights: Float32Array,
-  v: Float32Array,
+  weights: GPUTensor,
+  v: GPUTensor,
   batch: number,
   seqQ: number,
   seqK: number,
   dim: number,
-): Promise<Float32Array> {
-  if (weights.length !== batch * seqQ * seqK) throw new RangeError("runWeightedSum: weights shape mismatch");
-  if (v.length !== batch * seqK * dim) throw new RangeError("runWeightedSum: V shape mismatch");
-  const bufW = uploadStorageBuffer(device, weights);
-  const bufV = uploadStorageBuffer(device, v);
-  const bufOut = allocateOutputBuffer(device, batch * seqQ * dim);
+): Promise<GPUTensor> {
+  const weightsSize = weights.shape.reduce((a, b) => a * b, 1);
+  if (weightsSize !== batch * seqQ * seqK) {
+    throw new RangeError(`runWeightedSum: weights has ${weightsSize} elements, expected batch*seqQ*seqK ${batch * seqQ * seqK}`);
+  }
+  if (v.shape.length !== 3 || v.shape[0] !== batch || v.shape[1] !== seqK || v.shape[2] !== dim) {
+    throw new RangeError(`runWeightedSum: V shape [${v.shape}] does not match (batch=${batch}, seqK=${seqK}, dim=${dim})`);
+  }
+  const bufOut = allocateGPUResidentBuffer(device, batch * seqQ * dim);
   const dims = dims4Uniform(device, [seqQ, seqK, dim, batch]);
   try {
-    return await dispatch3D(
+    return dispatch3DResident(
       device,
       WEIGHTED_SUM_WGSL,
-      [bufW, bufV, bufOut, dims],
+      [bindingOf(weights), bindingOf(v), bufOut, dims],
       2,
+      [batch, seqQ, dim],
       Math.ceil(dim / TILE),
       Math.ceil(seqQ / TILE),
       batch,
     );
   } finally {
-    bufW.buffer.destroy();
-    bufV.buffer.destroy();
-    bufOut.buffer.destroy();
-    dims.buffer.destroy();
+    releaseBuffer(device, dims);
   }
 }

@@ -19,8 +19,11 @@
  * rather than one shader per shape.
  */
 import {
+  acquireBuffer,
   allocateOutputBuffer,
+  getOrCreateComputePipeline,
   readBackFloat32,
+  releaseBuffer,
   uploadStorageBuffer,
   type SizedBuffer,
 } from "./gpu-runtime.ts";
@@ -56,12 +59,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 /** `GEMM_WGSL`'s Dims struct, `std140`-ish layout: 4 x u32 = 16 bytes. */
 function dimsUniform(device: GPUDevice, m: number, n: number, k: number): SizedBuffer {
-  const buffer = device.createBuffer({
-    size: 16,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-  });
-  device.queue.writeBuffer(buffer, 0, new Uint32Array([m, n, k, 0]));
-  return { buffer, byteLength: 16 };
+  const sized = acquireBuffer(device, 16, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+  device.queue.writeBuffer(sized.buffer, 0, new Uint32Array([m, n, k, 0]));
+  return sized;
 }
 
 /**
@@ -92,10 +92,10 @@ export async function runGemmWGSL(
     // needs.
     return await runGemm2D(device, GEMM_WGSL, [bufA, bufB, bufOut, dims], m, n);
   } finally {
-    bufA.buffer.destroy();
-    bufB.buffer.destroy();
-    bufOut.buffer.destroy();
-    dims.buffer.destroy();
+    releaseBuffer(device, bufA);
+    releaseBuffer(device, bufB);
+    releaseBuffer(device, bufOut);
+    releaseBuffer(device, dims);
   }
 }
 
@@ -106,8 +106,7 @@ async function runGemm2D(
   m: number,
   n: number,
 ): Promise<Float32Array> {
-  const module = device.createShaderModule({ code });
-  const pipeline = device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: "main" } });
+  const pipeline = getOrCreateComputePipeline(device, code);
   const bindGroup = device.createBindGroup({
     layout: pipeline.getBindGroupLayout(0),
     entries: bindings.map((b, i) => ({ binding: i, resource: { buffer: b.buffer } })),

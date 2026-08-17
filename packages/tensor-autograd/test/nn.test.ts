@@ -57,6 +57,73 @@ test("Embedding: gather forward, scatter-add backward accumulates duplicate indi
   assert.deepEqual(g[2], [1, 1, 1]);
 });
 
+test("Embedding: sparse backward matches the dense reference implementation exactly (differential test)", () => {
+  // Reference: the OLD dense-allocation algorithm this replaced (issue #100)
+  // -- a full (numEmbeddings x embeddingDim) zero table, scatter-added into
+  // by row index. Recomputed here independently so the new sparse
+  // Map<rowIdx, Float64Array> path (nn.ts's Embedding.forward) has something
+  // to be checked against, not just "doesn't crash".
+  function denseReferenceGrad(
+    idxArray: number[],
+    gRows: number[][],
+    numEmbeddings: number,
+    embeddingDim: number,
+  ): number[][] {
+    const acc: number[][] = Array.from({ length: numEmbeddings }, () =>
+      new Array(embeddingDim).fill(0),
+    );
+    idxArray.forEach((rowIdx, i) => {
+      for (let d = 0; d < embeddingDim; d++) {
+        (acc[rowIdx] as number[])[d] += (gRows[i] as number[])[d] as number;
+      }
+    });
+    return acc;
+  }
+
+  const numEmbeddings = 40;
+  const embeddingDim = 6;
+  const emb = new nn.Embedding(numEmbeddings, embeddingDim, { rng: random.seed(7) });
+  // Duplicates AND untouched rows, to exercise accumulation and zero-fill alike.
+  const rawIndices = [3, 17, 3, 0, 39, 17, 17, 22];
+  const indices = Tensor.from(rawIndices, { dtype: "i32" });
+
+  const out = emb.forward(indices);
+  // Distinct upstream gradient per row (not all-ones) so accumulation order/
+  // values are actually exercised, not just counted.
+  const gradOutput = Tensor.from(
+    rawIndices.flatMap((_, i) => Array.from({ length: embeddingDim }, (_, d) => i * 10 + d + 1)),
+    { dtype: "f64" },
+  ).reshape([rawIndices.length, embeddingDim]);
+  out.backward(gradOutput);
+
+  const actual = emb.weight.grad?.toArray() as number[][];
+  const gRows = gradOutput.toArray() as number[][];
+  const expected = denseReferenceGrad(rawIndices, gRows, numEmbeddings, embeddingDim);
+
+  assert.deepEqual(actual, expected);
+});
+
+test("Embedding: backward on a large table stays fast regardless of table size (sparse, not dense-allocation, accumulation)", () => {
+  // Issue #100's own repro: batch-of-3 into a 50,000x256 table measured
+  // ~770ms under the old dense-per-call allocation. This asserts the fix
+  // keeps a small batch's backward call well under that, on a table of the
+  // same scale.
+  const numEmbeddings = 50_000;
+  const embeddingDim = 256;
+  const emb = new nn.Embedding(numEmbeddings, embeddingDim, { rng: random.seed(3) });
+  const indices = Tensor.from([10, 42, 1000], { dtype: "i32" });
+  const out = emb.forward(indices);
+
+  const start = performance.now();
+  out.sum().backward();
+  const elapsedMs = performance.now() - start;
+
+  assert.ok(
+    elapsedMs < 200,
+    `backward() took ${elapsedMs}ms for a batch-of-3 into a ${numEmbeddings}x${embeddingDim} table; expected well under the ~770ms dense-allocation baseline`,
+  );
+});
+
 test("LayerNorm: normalizes the last axis to ~zero mean, ~unit variance", () => {
   const ln = new nn.LayerNorm(4);
   const x = variable(Tensor.from([1, 2, 3, 100, -5, 0, 5, 10], { dtype: "f64" }).reshape([2, 4]));

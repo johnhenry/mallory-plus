@@ -106,6 +106,25 @@ export class GPUTensor {
     return new GPUTensor(device, buffer, shape);
   }
 
+  /**
+   * Wrap an ALREADY-POPULATED GPU buffer as a `GPUTensor` with no host
+   * round-trip (issue #100) — for op implementations (attention.ts, gemm.ts,
+   * elementwise.ts) that compute directly into a buffer they allocated (e.g.
+   * a compute shader's output) and want the result to stay GPU-resident for
+   * chaining into further dispatches, rather than reading it back to a
+   * `Float32Array` just to re-upload it via {@link fromFloat32Array}. `buffer`
+   * must already be sized for `shape` (`shapeSize(shape) * 4` bytes, f32) and
+   * usable both as a dispatch output and, if the caller ever calls
+   * {@link toTensor}/{@link toFloat32Array} on the result or reuses it as an
+   * upload target, as a copy source/destination too — i.e. it should carry at
+   * least `STORAGE`, and typically `COPY_SRC`/`COPY_DST` as well, matching
+   * what {@link fromFloat32Array} itself allocates (`gpu-runtime.ts`'s
+   * `allocateGPUResidentBuffer` returns exactly that combination).
+   */
+  static fromBuffer(device: GPUDevice, buffer: GPUBuffer, shape: Shape): GPUTensor {
+    return new GPUTensor(device, buffer, shape);
+  }
+
   /** Read the buffer back into a plain `Float32Array` (host copy — for `.toTensor()` or inspection/testing). */
   async toFloat32Array(): Promise<Float32Array> {
     if (this.#freed) throw new Error("GPUTensor: use after free()");
