@@ -5,7 +5,7 @@
  * `Parameter`/`Module` instances via a reflection pass over own properties,
  * per the source design's explicit preference.
  */
-import { Tensor, random, type Rng } from "mallory-tensor-core";
+import { Tensor, random, allocate, isBigIntDType, type AnyTypedArray, type Rng } from "mallory-tensor-core";
 import { Variable, constant } from "./variable.ts";
 
 /** A leaf Variable that always requires grad and is collected by `Module.parameters()`. */
@@ -136,28 +136,56 @@ export class Embedding extends Module {
    * weight rows (accumulating duplicates) — tensor-core has no native
    * scatter-add primitive yet, so this loops over plain arrays. Fine for
    * v1/toy-scale embedding tables; a real scatter-add kernel is future work.
+   *
+   * Accumulation is sparse: contributions land in a `Map<rowIdx, Float64Array>`
+   * keyed by the (few) touched rows, not a dense `numEmbeddings x embeddingDim`
+   * table walked/filled on every backward call — that dense allocation used
+   * to dominate cost (measured ~770ms for a batch-of-3 gradient into a
+   * 50,000x256 table) regardless of how few rows the batch actually touched.
+   * The only full-table-sized allocation left is the final zero-initialized
+   * typed array `Tensor.fromTypedArray` needs (a native allocation, not a
+   * JS-level fill loop), scattered into only at the touched rows.
    */
   forward(indices: Tensor): Variable {
     const idxArray = [...(indices.toArray() as (number | bigint)[])].map(Number);
     const gathered = this.weight.value.take(idxArray, { axis: 0 });
     const [numEmbeddings, embeddingDim] = this.weight.value.shape as [number, number];
+    const dtype = this.weight.value.dtype;
 
     return Variable.fromOp(gathered, [this.weight], (g) => {
       const gRows = g.contiguous().toArray() as number[][];
-      const acc: number[][] = Array.from({ length: numEmbeddings }, () =>
-        new Array(embeddingDim).fill(0),
-      );
+
+      const acc = new Map<number, Float64Array>();
       idxArray.forEach((rowIdx, i) => {
+        let row = acc.get(rowIdx);
+        if (!row) {
+          row = new Float64Array(embeddingDim);
+          acc.set(rowIdx, row);
+        }
+        const gRow = gRows[i] as number[];
         for (let d = 0; d < embeddingDim; d++) {
-          (acc[rowIdx] as number[])[d] += (gRows[i] as number[])[d] as number;
+          (row as Float64Array)[d] += gRow[d] as number;
         }
       });
-      return [
-        Tensor.from(acc.flat(), { dtype: this.weight.value.dtype }).reshape([
-          numEmbeddings,
-          embeddingDim,
-        ]),
-      ];
+
+      const flat = allocate(dtype, numEmbeddings * embeddingDim);
+      if (isBigIntDType(dtype)) {
+        const big = flat as unknown as { [i: number]: bigint };
+        for (const [rowIdx, row] of acc) {
+          const base = rowIdx * embeddingDim;
+          for (let d = 0; d < embeddingDim; d++) {
+            big[base + d] = BigInt(Math.trunc(row[d] as number));
+          }
+        }
+      } else {
+        const numeric = flat as Exclude<AnyTypedArray, BigInt64Array | BigUint64Array>;
+        for (const [rowIdx, row] of acc) {
+          const base = rowIdx * embeddingDim;
+          numeric.set(row, base);
+        }
+      }
+
+      return [Tensor.fromTypedArray(flat, [numEmbeddings, embeddingDim], { dtype })];
     });
   }
 }

@@ -120,11 +120,27 @@ const EXPORT_KEYWORD_RE = /^([ \t]*)export\s+(function|const|class|async functio
  * used only by its `asVariableOp`, which this bundler has no need to load)
  * that this "one shared IR, second backend" package's low-level kernels
  * genuinely don't need.
+ *
+ * Only scans REAL import/re-export-from lines (reusing `IMPORT_FROM_RE`/
+ * `REEXPORT_FROM_RE`, the same patterns `cleanModuleSyntax` strips), not a
+ * bare `from\s*["'][^"']+["']/` scan over the whole file — that looser
+ * pattern used to false-positive on doc-comment prose containing the
+ * substring `from "..."` (found via device.ts's module doc, which discusses
+ * `detectWebGPU`'s `reason` string and literally contains the text `from
+ * "API not present ... at all"` split across two comment lines; `[^"']+`
+ * happily spans the intervening newline and lands on some later unrelated
+ * `"`), which bundleForBrowser then tried to resolve as a real dependency
+ * specifier and threw on.
  */
 function extractSpecifiers(source: string): string[] {
   const specs: string[] = [];
   const withoutTypeOnlyImports = source.replace(/^[ \t]*import\s+type\b[\s\S]*?from\s*["'][^"']+["'];?[ \t]*$/gm, "");
-  for (const m of withoutTypeOnlyImports.matchAll(/from\s*["']([^"']+)["']/g)) specs.push(m[1] as string);
+  const importLines = withoutTypeOnlyImports.match(IMPORT_FROM_RE) ?? [];
+  const reexportLines = withoutTypeOnlyImports.match(REEXPORT_FROM_RE) ?? [];
+  for (const line of [...importLines, ...reexportLines]) {
+    const m = /from\s*["']([^"']+)["']/.exec(line);
+    if (m) specs.push(m[1] as string);
+  }
   return specs;
 }
 
@@ -142,8 +158,38 @@ function transpileOne(absPath: string): string {
   return outputText;
 }
 
+/**
+ * An import statement's braced specifier list is dropped entirely by
+ * `cleanModuleSyntax` (the imported names are expected to already exist as
+ * top-level declarations once the dependency module's own `export` keywords
+ * are stripped and it's concatenated into the same flat scope) — EXCEPT for
+ * an aliased specifier (`orig as alias`, e.g. tensor-core/index.ts's `seed as
+ * rngSeed`): the dependency module only ever declares `orig`, so the
+ * importing module's later references to `alias` would be a silent
+ * `ReferenceError` once the import line is deleted. This emits an explicit
+ * `const alias = orig;` rebinding for exactly those specifiers so aliasing
+ * survives the flatten (by this point `ts.transpileModule` has already
+ * elided any purely-type-only specifiers, so every remaining name here is a
+ * real runtime value).
+ */
+function aliasBindingsFor(importStatement: string): string {
+  const braced = /\{([\s\S]*)\}/.exec(importStatement);
+  if (!braced) return "";
+  const bindings: string[] = [];
+  for (const rawItem of (braced[1] as string).split(",")) {
+    const item = rawItem.trim();
+    if (!item) continue;
+    const asMatch = /^(\S+)\s+as\s+(\S+)$/.exec(item);
+    if (asMatch) bindings.push(`const ${asMatch[2]} = ${asMatch[1]};`);
+  }
+  return bindings.join("\n");
+}
+
 function cleanModuleSyntax(js: string): string {
-  return js.replace(REEXPORT_FROM_RE, "").replace(IMPORT_FROM_RE, "").replace(EXPORT_KEYWORD_RE, "$1$2");
+  return js
+    .replace(REEXPORT_FROM_RE, "")
+    .replace(IMPORT_FROM_RE, (m) => aliasBindingsFor(m))
+    .replace(EXPORT_KEYWORD_RE, "$1$2");
 }
 
 function resolveSpecifier(spec: string, fromFile: string): string | undefined {

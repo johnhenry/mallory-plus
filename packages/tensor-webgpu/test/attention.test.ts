@@ -103,9 +103,13 @@ test("runQKT: matches a CPU reference (batched Q @ K^T)", async (t) => {
     `
     const adapter = await navigator.gpu.requestAdapter();
     const device = await adapter.requestDevice();
-    const q = new Float32Array(${JSON.stringify(Array.from(q))});
-    const k = new Float32Array(${JSON.stringify(Array.from(k))});
-    const out = await runQKT(device, q, k, ${batch}, ${seqQ}, ${seqK}, ${dim});
+    const q = GPUTensor.fromFloat32Array(device, new Float32Array(${JSON.stringify(Array.from(q))}), [${batch}, ${seqQ}, ${dim}]);
+    const k = GPUTensor.fromFloat32Array(device, new Float32Array(${JSON.stringify(Array.from(k))}), [${batch}, ${seqK}, ${dim}]);
+    const outT = await runQKT(device, q, k, ${batch}, ${seqQ}, ${seqK}, ${dim});
+    const out = await outT.toFloat32Array();
+    q.free();
+    k.free();
+    outT.free();
     return Array.from(out);
     `,
     bundle,
@@ -129,8 +133,11 @@ test("runSoftmax: matches a CPU reference and each row sums to 1", async (t) => 
     `
     const adapter = await navigator.gpu.requestAdapter();
     const device = await adapter.requestDevice();
-    const x = new Float32Array(${JSON.stringify(Array.from(x))});
-    const out = await runSoftmax(device, x, ${rows}, ${cols});
+    const x = GPUTensor.fromFloat32Array(device, new Float32Array(${JSON.stringify(Array.from(x))}), [${rows}, ${cols}]);
+    const outT = await runSoftmax(device, x, ${rows}, ${cols});
+    const out = await outT.toFloat32Array();
+    x.free();
+    outT.free();
     return Array.from(out);
     `,
     bundle,
@@ -161,9 +168,13 @@ test("runWeightedSum: matches a CPU reference (batched weights @ V)", async (t) 
     `
     const adapter = await navigator.gpu.requestAdapter();
     const device = await adapter.requestDevice();
-    const weights = new Float32Array(${JSON.stringify(Array.from(weights))});
-    const v = new Float32Array(${JSON.stringify(Array.from(v))});
-    const out = await runWeightedSum(device, weights, v, ${batch}, ${seqQ}, ${seqK}, ${dim});
+    const weights = GPUTensor.fromFloat32Array(device, new Float32Array(${JSON.stringify(Array.from(weights))}), [${batch}, ${seqQ}, ${seqK}]);
+    const v = GPUTensor.fromFloat32Array(device, new Float32Array(${JSON.stringify(Array.from(v))}), [${batch}, ${seqK}, ${dim}]);
+    const outT = await runWeightedSum(device, weights, v, ${batch}, ${seqQ}, ${seqK}, ${dim});
+    const out = await outT.toFloat32Array();
+    weights.free();
+    v.free();
+    outT.free();
     return Array.from(out);
     `,
     bundle,
@@ -194,12 +205,21 @@ test("attention primitives compose: QK^T -> softmax -> weighted-sum matches a CP
     `
     const adapter = await navigator.gpu.requestAdapter();
     const device = await adapter.requestDevice();
-    const q = new Float32Array(${JSON.stringify(Array.from(q))});
-    const k = new Float32Array(${JSON.stringify(Array.from(k))});
-    const v = new Float32Array(${JSON.stringify(Array.from(v))});
+    const q = GPUTensor.fromFloat32Array(device, new Float32Array(${JSON.stringify(Array.from(q))}), [${batch}, ${seqQ}, ${dim}]);
+    const k = GPUTensor.fromFloat32Array(device, new Float32Array(${JSON.stringify(Array.from(k))}), [${batch}, ${seqK}, ${dim}]);
+    const v = GPUTensor.fromFloat32Array(device, new Float32Array(${JSON.stringify(Array.from(v))}), [${batch}, ${seqK}, ${dim}]);
+    // Stay GPU-resident end-to-end (issue #100): scores/weights are never
+    // read back to the CPU here, only the final weighted-sum output is.
     const scores = await runQKT(device, q, k, ${batch}, ${seqQ}, ${seqK}, ${dim});
     const weights = await runSoftmax(device, scores, ${batch * seqQ}, ${seqK});
-    const out = await runWeightedSum(device, weights, v, ${batch}, ${seqQ}, ${seqK}, ${dim});
+    const outT = await runWeightedSum(device, weights, v, ${batch}, ${seqQ}, ${seqK}, ${dim});
+    const out = await outT.toFloat32Array();
+    q.free();
+    k.free();
+    v.free();
+    scores.free();
+    weights.free();
+    outT.free();
     return Array.from(out);
     `,
     bundle,

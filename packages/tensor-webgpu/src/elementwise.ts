@@ -15,6 +15,7 @@ import {
   allocateOutputBuffer,
   dispatchCompute,
   readBackFloat32,
+  releaseBuffer,
   uploadStorageBuffer,
   workgroupsFor,
   type SizedBuffer,
@@ -46,7 +47,7 @@ export async function runElementwiseWGSL(
     dispatchCompute(device, code, [...inputBuffers, outputBuffer], workgroupsFor(elementCount, WORKGROUP_SIZE));
     return await readBackFloat32(device, outputBuffer);
   } finally {
-    for (const b of inputBuffers) b.buffer.destroy();
-    outputBuffer.buffer.destroy();
+    for (const b of inputBuffers) releaseBuffer(device, b);
+    releaseBuffer(device, outputBuffer);
   }
 }

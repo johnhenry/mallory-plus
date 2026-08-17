@@ -17,8 +17,14 @@ export { runElementwiseWGSL } from "./elementwise.ts";
 export {
   uploadStorageBuffer,
   allocateOutputBuffer,
+  allocateGPUResidentBuffer,
+  acquireBuffer,
+  releaseBuffer,
+  destroyBufferPool,
   readBackFloat32,
   dispatchCompute,
+  getOrCreateComputePipeline,
+  pipelineCacheSize,
   workgroupsFor,
   type SizedBuffer,
 } from "./gpu-runtime.ts";
