@@ -18,6 +18,8 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from ._arrow_nan import dataframe_to_table
+
 
 def read_parquet(
     path: str,
@@ -38,6 +40,10 @@ def write_parquet(df: pd.DataFrame, path: str, compression: str = "snappy") -> N
     which needed a bring-your-own WASM compressor -- see
     mallory-frame-parquet's src/zstd.ts), so there's no analogous footgun
     to guard against here.
+
+    Uses ``dataframe_to_table`` (not a bare ``pa.Table.from_pandas``) so
+    genuine NaN values in plain float columns round-trip as NaN rather than
+    being silently coerced to Arrow null (see ``_arrow_nan.py``).
     """
-    table = pa.Table.from_pandas(df, preserve_index=False)
+    table = dataframe_to_table(df, preserve_index=False)
     pq.write_table(table, path, compression=compression)

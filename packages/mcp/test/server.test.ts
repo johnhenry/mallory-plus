@@ -148,6 +148,17 @@ test("oversized inputs are rejected fast by the element cap", async () => {
   await client.close();
 });
 
+test("linalg_solve's b vector is rejected fast by the element cap too (not just a)", async () => {
+  const client = await connectedClient();
+  const { raw } = await call(client, "linalg_solve", {
+    a: [[1]],
+    b: Array.from({ length: 1_000_001 }, () => 1),
+  });
+  assert.equal(raw.isError, true);
+  assert.match(raw.content[0]?.text ?? "", /element cap/);
+  await client.close();
+});
+
 test("malformed expressions surface as isError results with the parser's message", async () => {
   const client = await connectedClient();
   const { raw } = await call(client, "symbolic_simplify", { expression: "x +* 2)(" });
