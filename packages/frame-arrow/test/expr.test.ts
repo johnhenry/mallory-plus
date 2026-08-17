@@ -70,6 +70,15 @@ test("a bare aggregate expression used outside aggregate()/overAll() throws a cl
   );
 });
 
+test("arithmetic on a non-numeric column throws instead of silently writing NaN as a valid value (issue #102)", () => {
+  const frame = Frame.fromArrow(
+    new Table({ name: vectorFromArray(["alice", "bob"], new Utf8()) }),
+  );
+  assert.throws(() => frame.withColumns({ bad: col("name").sub(1) }).toRows(), /requires numeric operands/);
+  assert.throws(() => frame.withColumns({ bad: col("name").mul(2) }).toRows(), /requires numeric operands/);
+  assert.throws(() => frame.withColumns({ bad: col("name").add(1) }).toRows(), /requires numeric operands/);
+});
+
 test("lit() wraps a literal for use on the left-hand side, and comparisons handle null propagation", () => {
   const frame = Frame.fromArrow(
     new Table({ x: vectorFromArray([1, null, 3], new Float64()) }),

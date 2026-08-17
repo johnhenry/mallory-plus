@@ -348,12 +348,27 @@ export function execute(node: PlanNode, wanted: Wanted): Table {
         return v;
       });
 
+      // Monotonically-increasing tag appended to every null/undefined key
+      // component so it can never equal any other key string -- including
+      // another null-keyed row on the other side. NULL never equals NULL in a
+      // join (standard SQL/Arrow semantics); the previous code emitted the same
+      // literal "\0null" marker for every null, so two unrelated null-keyed rows
+      // from opposite sides spuriously matched each other.
+      let joinNullSeq = 0;
       const keyStrAt = (vectors: readonly Vector[], i: number): string =>
         vectors
           .map((v) => {
             const val = v.get(i);
-            if (val === null || val === undefined) return " null";
-            return typeof val === "bigint" ? `b:${val}` : JSON.stringify(val);
+            if (val === null || val === undefined) return ` null:${joinNullSeq++}`;
+            if (typeof val === "bigint" || typeof val === "number") {
+              // Normalize by logical numeric value regardless of int64 (bigint)
+              // vs float64 (number) representation, so e.g. an int64 column
+              // holding 1n and a float64 column holding 1.0 join as the same
+              // key -- matching the intentional bigint/number reconciliation
+              // eval-expr.ts's compareOp does for `eq` (loose `==`).
+              return `n:${typeof val === "bigint" ? Number(val) : val}`;
+            }
+            return JSON.stringify(val);
           })
           .join("");
 
