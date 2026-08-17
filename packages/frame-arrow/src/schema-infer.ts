@@ -13,7 +13,10 @@
  * - `fn.sum()` mirrors that rule (int64 in -> int64 out, everything else ->
  *   float64). `fn.count()` is always int64. `fn.mean()`/`fn.stddev()` are
  *   always float64.
- * - `fn.month()` produces int32.
+ * - `fn.month()` produces int32; every other `fn.*` scalar math function
+ *   (issue #38 — sin/cos/exp/ln/sqrt/...) produces float64, matching
+ *   `Math.*`'s own return type and mirroring the arithmetic-promotion rule
+ *   above (there is no int-in/int-out elementary math function here).
  */
 import { Bool, DataType, Field, Int32, Int64, Schema, Utf8, Float64 } from "apache-arrow";
 import {
@@ -69,6 +72,6 @@ export function inferExprType(expr: Expr, schema: Schema): DataType {
     return new Float64(); // mean, stddev
   }
   if (expr instanceof OverAllExpr) return inferExprType(expr.agg, schema);
-  if (expr instanceof ScalarFnExpr) return new Int32(); // month()
+  if (expr instanceof ScalarFnExpr) return expr.op === "month" ? new Int32() : new Float64();
   throw new Error(`inferExprType: unhandled expr (kind=${(expr as Expr).kind})`);
 }

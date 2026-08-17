@@ -28,7 +28,69 @@ export type CompareOp = "eq" | "ne" | "lt" | "lte" | "gt" | "gte";
 export type LogicalOp = "and" | "or";
 export type ArithOp = "add" | "sub" | "mul" | "div";
 export type AggOp = "count" | "sum" | "mean" | "stddev";
-export type ScalarFnOp = "month";
+
+/**
+ * Elementary unary math functions available via `fn.*` for computed columns
+ * (issue #38: growing `fn.*` beyond just `month`, on `frame-arrow`'s own
+ * merits — e.g. `withColumns({ y: fn.sin(col('x')) })`).
+ *
+ * Deliberately spelled to match `mallory-math`'s `Symbolic` `FuncName` union
+ * 1:1 (same 41 names, including "ln" rather than tensor-compile's "log"),
+ * not because `frame-arrow` depends on `mallory-math` (it doesn't — no new
+ * dependency here) but so that an *external* bridge translating a
+ * `Symbolic` `Expr`'s `{ type: "func", name, arg }` nodes into `fn.*` calls
+ * can do so with a plain identity lookup, the same way `mallory-adapter-math`'s
+ * `UNARY_FUNC_MAP` (adapters/adapter-math/src/expr.ts) already does for the
+ * `tensor-compile` IR target. See `mallory-adapter-math`'s `compileFrameExpr`
+ * for that second compile target.
+ */
+export const SCALAR_MATH_FUNCS = [
+  "sin",
+  "cos",
+  "tan",
+  "exp",
+  "ln",
+  "sqrt",
+  "asin",
+  "acos",
+  "atan",
+  "sinh",
+  "cosh",
+  "tanh",
+  "cot",
+  "sec",
+  "csc",
+  "asinh",
+  "acosh",
+  "atanh",
+  "coth",
+  "sech",
+  "csch",
+  "acot",
+  "asec",
+  "acsc",
+  "acoth",
+  "asech",
+  "acsch",
+  "abs",
+  "log10",
+  "log2",
+  "cbrt",
+  "floor",
+  "ceil",
+  "round",
+  "sign",
+  "trunc",
+  "expm1",
+  "log1p",
+  "sigmoid",
+  "erf",
+  "relu",
+] as const;
+
+export type ScalarMathFuncName = (typeof SCALAR_MATH_FUNCS)[number];
+
+export type ScalarFnOp = "month" | ScalarMathFuncName;
 
 export abstract class Expr {
   abstract readonly kind: string;
@@ -218,6 +280,12 @@ export function lit(value: Scalar): LiteralExpr {
   return new LiteralExpr(value);
 }
 
+/** `fn.sin(...)/cos(...)/...` — one entry per {@link SCALAR_MATH_FUNCS} name, all built the same
+ * way as `fn.month` (a per-row `ScalarFnExpr`, valid inside `withColumns`/`filter`, NOT a reduction). */
+const scalarMathFns = Object.fromEntries(
+  SCALAR_MATH_FUNCS.map((name) => [name, (expr: Expr): ScalarFnExpr => new ScalarFnExpr(name, expr)]),
+) as { [K in ScalarMathFuncName]: (expr: Expr) => ScalarFnExpr };
+
 export const fn = {
   count: (expr?: Expr): AggExpr => new AggExpr("count", expr ?? null),
   sum: (expr: Expr): AggExpr => new AggExpr("sum", expr),
@@ -231,4 +299,5 @@ export const fn = {
    * timestamps are unaffected by this caveat (there's no tz to localize to).
    */
   month: (expr: Expr): ScalarFnExpr => new ScalarFnExpr("month", expr),
+  ...scalarMathFns,
 };
