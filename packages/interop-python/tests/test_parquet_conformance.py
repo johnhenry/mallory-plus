@@ -67,6 +67,30 @@ def test_write_then_read_back_round_trips_exactly_snappy():
         assert pd.isna(back["y"].tolist()[1])
 
 
+def test_write_then_read_back_preserves_nan_as_nan_not_null():
+    """issue #103: same NaN-vs-null distinction as
+    test_ipc_conformance.py's version of this test -- a genuine NaN in a
+    plain (non-nullable-extension) float column must round-trip as NaN, not
+    get silently coerced to an Arrow/Parquet null."""
+    df = pd.DataFrame({"y": [1.1, float("nan"), 3.3]})
+    with tempfile.TemporaryDirectory() as tmp:
+        path = str(Path(tmp) / "nan_roundtrip.parquet")
+        write_parquet(df, path)
+
+        # The written file itself must hold a real NaN, not a Parquet null,
+        # for the affected value.
+        table = pq.read_table(path)
+        assert table.column("y").null_count == 0
+
+        back = read_parquet(path)
+        values = back["y"].tolist()
+        assert values[0] == 1.1
+        assert values[2] == 3.3
+        nan_value = values[1]
+        assert nan_value is not pd.NA
+        assert nan_value != nan_value  # NaN is the only value unequal to itself
+
+
 def test_write_zstd_produces_a_file_pyarrow_reads_directly():
     # A sanity check that write_parquet's zstd path is a REAL codec, not
     # frame-parquet's own JS-side footgun (pyarrow ships a native zstd

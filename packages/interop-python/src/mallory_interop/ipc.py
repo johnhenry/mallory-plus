@@ -13,6 +13,8 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.ipc as ipc
 
+from ._arrow_nan import dataframe_to_table
+
 
 def read_ipc(path: str) -> pd.DataFrame:
     """Read an Arrow IPC file into a pandas DataFrame.
@@ -28,8 +30,13 @@ def read_ipc(path: str) -> pd.DataFrame:
 
 
 def write_ipc(df: pd.DataFrame, path: str) -> None:
-    """Write a pandas DataFrame to an Arrow IPC file."""
-    table = pa.Table.from_pandas(df, preserve_index=False)
+    """Write a pandas DataFrame to an Arrow IPC file.
+
+    Uses ``dataframe_to_table`` (not a bare ``pa.Table.from_pandas``) so
+    genuine NaN values in plain float columns round-trip as NaN rather than
+    being silently coerced to Arrow null (see ``_arrow_nan.py``).
+    """
+    table = dataframe_to_table(df, preserve_index=False)
     with pa.OSFile(path, "wb") as sink:
         with ipc.new_file(sink, table.schema) as writer:
             writer.write_table(table)

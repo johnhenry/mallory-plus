@@ -17,6 +17,8 @@ import tempfile
 from pathlib import Path
 
 import pandas as pd
+import pyarrow as pa
+import pyarrow.ipc as ipc
 
 from mallory_interop import read_ipc, write_ipc
 
@@ -69,3 +71,31 @@ def test_write_then_read_back_round_trips_exactly():
         assert back["y"].tolist()[0] == 1.1
         assert pd.isna(back["y"].tolist()[1])
         assert back["y"].tolist()[2] == 3.3
+
+
+def test_write_then_read_back_preserves_nan_as_nan_not_null():
+    """issue #103: a genuine NaN in a plain (non-nullable-extension) float
+    column must round-trip as NaN, not get silently coerced to an Arrow
+    null -- those are different things (not-a-number vs. missing), and
+    pyarrow's default `Table.from_pandas` conversion collapses them."""
+    df = pd.DataFrame({"y": [1.1, float("nan"), 3.3]})
+    with tempfile.TemporaryDirectory() as tmp:
+        path = str(Path(tmp) / "nan_roundtrip.arrow")
+        write_ipc(df, path)
+
+        # The written file itself must hold a real NaN, not an Arrow null,
+        # for the affected value.
+        with pa.memory_map(path, "rb") as source:
+            table = ipc.open_file(source).read_all()
+        assert table.column("y").null_count == 0
+
+        back = read_ipc(path)
+        values = back["y"].tolist()
+        assert values[0] == 1.1
+        assert values[2] == 3.3
+        nan_value = values[1]
+        # A real NaN is falsy under `is pd.NA` and `!=` itself; a null read
+        # back through read_ipc's `pd.ArrowDtype` types_mapper would be
+        # `pd.NA` instead, which fails the float-NaN self-inequality check.
+        assert nan_value is not pd.NA
+        assert nan_value != nan_value  # NaN is the only value unequal to itself

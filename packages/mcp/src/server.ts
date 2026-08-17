@@ -237,6 +237,7 @@ export function buildServer(): McpServer {
     },
     ({ a, b }) => {
       try {
+        if (b.length > MAX_ELEMENTS) throw new Error(`b exceeds the ${MAX_ELEMENTS}-element cap`);
         const A = toNumberMatrix(a, "a");
         const B = Tensor.from(b, { dtype: "f64" });
         const x = linalg.solve(A, B);
