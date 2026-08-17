@@ -24,7 +24,7 @@ export interface FindPeaksResult {
 }
 
 /** Every plateau-aware local maximum's representative index (the midpoint of a flat plateau, floor-rounded, matching scipy's convention) and value. */
-function localMaxima(x: readonly number[]): { indices: number[]; heights: number[] } {
+function localMaxima(x: Float64Array): { indices: number[]; heights: number[] } {
   const indices: number[] = [];
   const heights: number[] = [];
   let i = 1;
@@ -57,7 +57,7 @@ function localMaxima(x: readonly number[]): { indices: number[]; heights: number
  * you'd have to descend from the peak before you could walk to a higher
  * peak without re-ascending past the starting peak's own height).
  */
-function prominences(x: readonly number[], peakIndices: readonly number[]): number[] {
+function prominences(x: Float64Array, peakIndices: readonly number[]): number[] {
   const n = x.length;
   return peakIndices.map((peakIdx) => {
     const peakHeight = x[peakIdx] as number;
@@ -80,24 +80,71 @@ function prominences(x: readonly number[], peakIndices: readonly number[]): numb
   });
 }
 
-/** Greedy tallest-first selection: repeatedly take the tallest remaining peak, discard every other remaining peak within `distance` samples of it. Matches scipy's exact `_select_by_peak_distance` algorithm. */
+/**
+ * Greedy tallest-first selection: repeatedly take the tallest remaining
+ * peak, discard every other remaining peak within `distance` samples of it.
+ * Matches scipy's exact `_select_by_peak_distance` algorithm.
+ *
+ * `indices` arrives already sorted ascending by position -- `localMaxima`
+ * scans left-to-right, and any height/prominence filtering upstream uses
+ * `Array.prototype.filter`, which preserves relative order. That sortedness
+ * means the set of candidates within `distance` of an accepted peak is
+ * always a *contiguous* run around it in position-rank space, so instead of
+ * rescanning every other candidate for every accepted peak (O(n^2)), walk
+ * outward left/right from each accepted peak only as far as `distance`
+ * reaches. A doubly linked list over "still-alive" ranks (`left`/`right`)
+ * lets each walk skip already-suppressed candidates in O(1) per hop and
+ * relinks past whatever it just suppressed, so no rank is ever revisited
+ * once dead -- O(n log n) total (the height sort dominates; the suppression
+ * walk itself is O(n) amortized, standard union-find-style path
+ * compression). Produces bit-identical output to the O(n^2) version: both
+ * compute the same "first sufficiently tall, earlier-processed peak within
+ * `distance` wins" union over accepted peaks' windows, just at different
+ * speeds.
+ */
 function filterByDistance(indices: number[], heights: number[], distance: number): boolean[] {
   const n = indices.length;
   const keep = new Array<boolean>(n).fill(true);
+  if (n === 0) return keep;
+
+  const left = new Array<number>(n);
+  const right = new Array<number>(n);
+  for (let k = 0; k < n; k++) {
+    left[k] = k - 1;
+    right[k] = k + 1;
+  }
+
   const order = indices.map((_, i) => i).sort((a, b) => (heights[b] as number) - (heights[a] as number));
+
   for (const i of order) {
     if (!keep[i]) continue;
-    for (let j = 0; j < n; j++) {
-      if (j === i || !keep[j]) continue;
-      if (Math.abs((indices[j] as number) - (indices[i] as number)) < distance) keep[j] = false;
+    const pos = indices[i] as number;
+
+    let k = left[i] as number;
+    while (k >= 0 && pos - (indices[k] as number) < distance) {
+      keep[k] = false;
+      k = left[k] as number;
     }
+    left[i] = k;
+    if (k >= 0) right[k] = i;
+
+    let m = right[i] as number;
+    while (m < n && (indices[m] as number) - pos < distance) {
+      keep[m] = false;
+      m = right[m] as number;
+    }
+    right[i] = m;
+    if (m < n) left[m] = i;
   }
+
   return keep;
 }
 
 export function findPeaks(signal: Tensor, options: FindPeaksOptions = {}): FindPeaksResult {
   if (signal.shape.length !== 1) throw new RangeError("findPeaks: v1 supports 1-D Tensor only");
-  const x = signal.contiguous().toArray() as number[];
+  // Read-only below, so no defensive copy is needed even when `.data`
+  // aliases `signal`'s own storage.
+  const x = signal.contiguous().data as Float64Array;
 
   let { indices, heights } = localMaxima(x);
 

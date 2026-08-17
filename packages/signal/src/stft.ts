@@ -52,7 +52,9 @@ function resolveParams(
 /** `signal[T]` -> a `[numFrames, nperseg]` ComplexTensor spectrogram (one full-nperseg-point FFT per windowed frame). */
 export function stft(signal: Tensor, options: StftOptions = {}): ComplexTensor {
   if (signal.shape.length !== 1) throw new RangeError("stft: v1 supports 1-D Tensor only");
-  const data = Float64Array.from(signal.contiguous().toArray() as number[]);
+  // Read-only below, so no defensive copy is needed even when `.data`
+  // aliases `signal`'s own storage.
+  const data = signal.contiguous().data as Float64Array;
   const { window, nperseg, hop } = resolveParams(Math.min(DEFAULT_NPERSEG, data.length), options);
   const numFrames = Math.floor((data.length - nperseg) / hop) + 1;
   if (numFrames < 1) {
@@ -66,8 +68,8 @@ export function stft(signal: Tensor, options: StftOptions = {}): ComplexTensor {
     const frameReal = new Float64Array(nperseg);
     for (let i = 0; i < nperseg; i++) frameReal[i] = (data[start + i] as number) * (window[i] as number);
     const spectrum = fft(ComplexTensor.fromReal(Tensor.fromTypedArray(frameReal, [nperseg], { dtype: "f64" })));
-    const specReal = spectrum.real.toArray() as number[];
-    const specImag = spectrum.imag.toArray() as number[];
+    const specReal = spectrum.real.contiguous().data as Float64Array;
+    const specImag = spectrum.imag.contiguous().data as Float64Array;
     for (let k = 0; k < nperseg; k++) {
       realOut[f * nperseg + k] = specReal[k] as number;
       imagOut[f * nperseg + k] = specImag[k] as number;
@@ -104,7 +106,7 @@ export function istft(spectrogram: ComplexTensor, options: StftOptions = {}): Te
         Tensor.fromTypedArray(frameReal, [nperseg], { dtype: "f64" }),
         Tensor.fromTypedArray(frameImag, [nperseg], { dtype: "f64" }),
       ),
-    ).real.toArray() as number[];
+    ).real.contiguous().data as Float64Array;
     const start = f * hop;
     for (let i = 0; i < nperseg; i++) {
       out[start + i] = (out[start + i] as number) + (reconstructed[i] as number) * (window[i] as number);

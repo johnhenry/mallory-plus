@@ -65,10 +65,17 @@ function transform(re: Float64Array, im: Float64Array, invert: boolean): void {
   }
 }
 
+// `transform` mutates `re`/`im` in place, and `contiguous()` returns the
+// SAME Tensor (aliasing its live backing store) when the input is already
+// packed -- so `.data` must still be defensively copied here (unlike the
+// other toArray() sites in this repo, which are read-only). `Float64Array.
+// from(...)` over a flat typed array is still the fix: it drops toArray()'s
+// expensive boxed-nested-array walk while keeping the copy `transform`
+// needs to avoid mutating the caller's tensor storage.
 function toFlatParts(t: ComplexTensor): { re: Float64Array; im: Float64Array } {
   return {
-    re: Float64Array.from(t.real.contiguous().toArray() as number[]),
-    im: Float64Array.from(t.imag.contiguous().toArray() as number[]),
+    re: Float64Array.from(t.real.contiguous().data as Float64Array),
+    im: Float64Array.from(t.imag.contiguous().data as Float64Array),
   };
 }
 
@@ -110,8 +117,8 @@ export function fftPadded(input: ComplexTensor): ComplexTensor {
   while (n < n0) n <<= 1;
   const re = new Float64Array(n);
   const im = new Float64Array(n);
-  re.set(input.real.contiguous().toArray() as number[]);
-  im.set(input.imag.contiguous().toArray() as number[]);
+  re.set(input.real.contiguous().data as Float64Array);
+  im.set(input.imag.contiguous().data as Float64Array);
   transform(re, im, false);
   return fromFlatParts(re, im);
 }

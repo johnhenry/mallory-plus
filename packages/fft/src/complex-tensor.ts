@@ -82,10 +82,17 @@ export class ComplexTensor {
 
   /** Flatten to a plain `ComplexNumber[]` — the boxed-at-the-edge exit point (row-major order for ndim > 1). */
   toComplexArray(): ComplexNumber[] {
-    const reFlat = this.real.contiguous().toArray() as unknown;
-    const imFlat = this.imag.contiguous().toArray() as unknown;
-    const reArr = (Array.isArray(reFlat) ? (reFlat as (number | unknown[])[]).flat(Infinity) : [reFlat]) as number[];
-    const imArr = (Array.isArray(imFlat) ? (imFlat as (number | unknown[])[]).flat(Infinity) : [imFlat]) as number[];
-    return reArr.map((r, i) => new ComplexNumber(r, imArr[i] as number));
+    // `.data` (after `.contiguous()`) is already the flat, row-major storage
+    // for any ndim -- no need to build a nested array via toArray() and
+    // re-flatten it with `.flat(Infinity)`. Read-only here (never mutated),
+    // so no defensive copy is needed even when `.data` aliases the source
+    // tensor's own backing store.
+    const reFlat = this.real.contiguous().data;
+    const imFlat = this.imag.contiguous().data;
+    const out = new Array<ComplexNumber>(reFlat.length);
+    for (let i = 0; i < reFlat.length; i++) {
+      out[i] = new ComplexNumber(reFlat[i] as number, imFlat[i] as number);
+    }
+    return out;
   }
 }

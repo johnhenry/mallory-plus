@@ -15,7 +15,10 @@ export function sosFilter(sos: Sos, signal: Tensor): Tensor {
   if (signal.shape.length !== 1) throw new RangeError("sosFilter: v1 supports 1-D Tensor only");
   if (sos.length === 0) throw new RangeError("sosFilter: sos must have at least one section");
 
-  let data = Float64Array.from(signal.contiguous().toArray() as number[]);
+  // Read-only below (each section reads `data[n]` into a fresh `out`
+  // array, then rebinds `data = out` -- the original array is never
+  // mutated in place), so no defensive copy is needed here.
+  let data = signal.contiguous().data as Float64Array;
 
   for (const section of sos) {
     const [b0raw, b1raw, b2raw, a0, a1raw, a2raw] = section;
