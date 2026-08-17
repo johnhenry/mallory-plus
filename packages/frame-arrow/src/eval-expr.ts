@@ -91,8 +91,22 @@ function arithOp(op: ArithOp, a: unknown, b: unknown): unknown {
         return a / b; // bigint division truncates toward zero — documented
     }
   }
-  const an = typeof a === "bigint" ? Number(a) : (a as number);
-  const bn = typeof b === "bigint" ? Number(b) : (b as number);
+  // Non-numeric operands (e.g. a string column) would otherwise fall through to
+  // JS's `+`/`-`/`*`/`/` coercion rules — "-"/"*"/"/" silently produce NaN, and
+  // "+" silently concatenates strings — and that NaN/garbage then gets written
+  // into the output Arrow column as a normal VALID value (nullCount() stays 0),
+  // making the corruption invisible to any null-checking consumer. Throw instead,
+  // consistent with this file's other hard type-misuse errors (AggExpr used
+  // outside aggregate()/overAll(), ScalarFnExpr's unhandled op, evalColumn's
+  // missing-column check).
+  if (typeof a !== "number" && typeof a !== "bigint") {
+    throw new Error(`arithmetic op "${op}" requires numeric operands, got ${typeof a} (${JSON.stringify(a)})`);
+  }
+  if (typeof b !== "number" && typeof b !== "bigint") {
+    throw new Error(`arithmetic op "${op}" requires numeric operands, got ${typeof b} (${JSON.stringify(b)})`);
+  }
+  const an = typeof a === "bigint" ? Number(a) : a;
+  const bn = typeof b === "bigint" ? Number(b) : b;
   switch (op) {
     case "add":
       return an + bn;
