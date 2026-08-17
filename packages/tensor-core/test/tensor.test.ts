@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { mock, test } from "node:test";
 import {
   BYTES_PER_ELEMENT,
   Tensor,
@@ -88,6 +88,72 @@ test("contiguous() packs a non-contiguous view into new storage", () => {
     [2, 5],
     [3, 6],
   ]);
+});
+
+// Issue #99: flatten()/roll()/#cumulative() used to route through
+// contiguous() unconditionally, which copies even when the source is
+// already contiguous but merely doesn't own its whole buffer (nonzero
+// offset, or size < data.length) — a case reshape() already handled
+// correctly by checking `isContiguous` alone. `select()` on a leading axis
+// is a convenient way to build exactly that kind of view: contiguous, but
+// offset by a full "page" into a larger backing buffer.
+test("flatten()/roll()/cumsum() reuse an already-contiguous view instead of copying, even with a non-zero offset", () => {
+  const t = Tensor.arange(24).reshape([2, 2, 2, 3]);
+  const sub = t.select(0, 1); // shape [2,2,3]; contiguous; offset=12; doesn't span the whole buffer
+  assert.equal(sub.isContiguous, true);
+  assert.notEqual(sub.offset, 0);
+  assert.notEqual(sub.size, sub.data.length);
+
+  // Baseline established by the audit: reshape() already avoids copying here.
+  assert.equal(sub.reshape([sub.size]).data, sub.data);
+
+  // Regression: flatten() previously called contiguous() unconditionally,
+  // which (unlike reshape()) additionally requires offset === 0 and a
+  // fully-occupied buffer, so it copied `sub` even though it was already
+  // contiguous.
+  const flattenSpy = mock.method(sub, "contiguous");
+  assert.equal(sub.flatten().data, sub.data);
+  assert.equal(flattenSpy.mock.callCount(), 0, "flatten() should not call contiguous() on an already-contiguous view");
+  flattenSpy.mock.restore();
+
+  // roll() (no axis) flattens first; that intermediate step should reuse
+  // `sub`'s storage rather than pre-copying (the final take()-based gather
+  // still allocates fresh output — that part is unavoidable and untested
+  // here; differential.test.ts covers roll()'s correctness).
+  const rollSpy = mock.method(sub, "contiguous");
+  sub.roll(1);
+  assert.equal(rollSpy.mock.callCount(), 0, "roll() should not call contiguous() on an already-contiguous view");
+  rollSpy.mock.restore();
+
+  // cumsum()/cumprod() (axis omitted) flatten via the same fast path
+  // (cumsum()'s own output is always a fresh, freshly-allocated tensor —
+  // it's the redundant pre-copy of `sub` that this test targets).
+  const cumsumSpy = mock.method(sub, "contiguous");
+  sub.cumsum();
+  assert.equal(cumsumSpy.mock.callCount(), 0, "cumsum() should not call contiguous() on an already-contiguous view");
+  cumsumSpy.mock.restore();
+});
+
+test("flatten()/roll()/cumsum() still copy when the source is genuinely non-contiguous", () => {
+  const t = Tensor.from([1, 2, 3, 4, 5, 6], { dtype: "f64" }).reshape([2, 3]);
+  const p = t.permute([1, 0]); // non-contiguous
+  assert.equal(p.isContiguous, false);
+
+  const flattenSpy = mock.method(p, "contiguous");
+  const flattened = p.flatten();
+  assert.equal(flattenSpy.mock.callCount(), 1);
+  assert.deepEqual(flattened.toArray(), [1, 4, 2, 5, 3, 6]);
+  flattenSpy.mock.restore();
+
+  const rollSpy = mock.method(p, "contiguous");
+  p.roll(1);
+  assert.equal(rollSpy.mock.callCount(), 1);
+  rollSpy.mock.restore();
+
+  const cumsumSpy = mock.method(p, "contiguous");
+  assert.deepEqual(p.cumsum().toArray(), [1, 5, 7, 12, 15, 21]);
+  assert.equal(cumsumSpy.mock.callCount(), 1);
+  cumsumSpy.mock.restore();
 });
 
 test("reshape supports -1 inference and rejects non-contiguous input", () => {

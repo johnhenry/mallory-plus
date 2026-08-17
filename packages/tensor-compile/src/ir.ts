@@ -226,6 +226,16 @@ function unaryValueAndDeriv(op: UnaryOp, x: number): { value: number; deriv: num
   }
 }
 
+/** Shared with {@link evalValue} so the two evaluators can't drift on what counts as "true" for a comparison. */
+const CMP_OPS: Record<CmpOp, (a: number, b: number) => boolean> = {
+  lt: (a, b) => a < b,
+  le: (a, b) => a <= b,
+  gt: (a, b) => a > b,
+  ge: (a, b) => a >= b,
+  eq: (a, b) => a === b,
+  ne: (a, b) => a !== b,
+};
+
 export function evalWithGrad(node: IRNode, inputs: readonly number[], numInputs: number): ValueAndGrad {
   switch (node.kind) {
     case "input": {
@@ -313,16 +323,8 @@ export function evalWithGrad(node: IRNode, inputs: readonly number[], numInputs:
     case "cmp": {
       const l = evalWithGrad(node.left, inputs, numInputs);
       const r = evalWithGrad(node.right, inputs, numInputs);
-      const CMP: Record<CmpOp, (a: number, b: number) => boolean> = {
-        lt: (a, b) => a < b,
-        le: (a, b) => a <= b,
-        gt: (a, b) => a > b,
-        ge: (a, b) => a >= b,
-        eq: (a, b) => a === b,
-        ne: (a, b) => a !== b,
-      };
       // Locally constant almost everywhere: gradient is 0, same convention as floor/sign/etc.
-      return { value: CMP[node.op](l.value, r.value) ? 1 : 0, grad: zeros(numInputs) };
+      return { value: CMP_OPS[node.op](l.value, r.value) ? 1 : 0, grad: zeros(numInputs) };
     }
     case "select": {
       // Short-circuits: only the taken branch is evaluated, so (unlike a
@@ -333,6 +335,65 @@ export function evalWithGrad(node: IRNode, inputs: readonly number[], numInputs:
       return cond.value !== 0
         ? evalWithGrad(node.then, inputs, numInputs)
         : evalWithGrad(node.else, inputs, numInputs);
+    }
+  }
+}
+
+/**
+ * Forward value ONLY — same recursive structure as {@link evalWithGrad}
+ * (and built from the exact same per-op formulas: `unaryValueAndDeriv` and
+ * `CMP_OPS`), but never allocates or propagates a `grad` array. Gradient
+ * bookkeeping is `O(numInputs)` extra work *per node* in `evalWithGrad`
+ * (a fresh array plus a `.map()` at every "input"/"const"/binary/cmp node);
+ * over a `CompiledFn.forward()` call — many elements x several IR nodes,
+ * every one of which discarded the gradient it just computed — that dwarfs
+ * the actual arithmetic (measured 571ms vs 37ms, ~15x, for a 6-node/
+ * 3-input/200k-element compiled function; see issue #99). Callers that only
+ * want the forward value (`CompiledFn.forward()`) should use this instead;
+ * `evalWithGrad` remains the entry point for anything that also needs
+ * gradients (`CompiledFn.forwardWithGrad()` / `asVariableOp()`).
+ */
+export function evalValue(node: IRNode, inputs: readonly number[]): number {
+  switch (node.kind) {
+    case "input":
+      return inputs[node.index] as number;
+    case "const":
+      return node.value;
+    case "unary":
+      return unaryValueAndDeriv(node.op, evalValue(node.arg, inputs)).value;
+    case "binary": {
+      const l = evalValue(node.left, inputs);
+      const r = evalValue(node.right, inputs);
+      switch (node.op) {
+        case "add":
+          return l + r;
+        case "sub":
+          return l - r;
+        case "mul":
+          return l * r;
+        case "div":
+          return l / r;
+        case "pow":
+          return Math.pow(l, r);
+        case "atan2":
+          return Math.atan2(l, r);
+        case "hypot":
+          return Math.hypot(l, r);
+        case "min":
+          return l <= r ? l : r;
+        case "max":
+          return l >= r ? l : r;
+      }
+    }
+    case "cmp": {
+      const l = evalValue(node.left, inputs);
+      const r = evalValue(node.right, inputs);
+      return CMP_OPS[node.op](l, r) ? 1 : 0;
+    }
+    case "select": {
+      // Same short-circuit as evalWithGrad's "select" case.
+      const cond = evalValue(node.cond, inputs);
+      return cond !== 0 ? evalValue(node.then, inputs) : evalValue(node.else, inputs);
     }
   }
 }

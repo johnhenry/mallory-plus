@@ -465,6 +465,21 @@ export class Tensor {
     );
   }
 
+  /**
+   * C-order-strided tensor sharing the SAME storage when the source is
+   * already contiguous — regardless of `offset` or whether it spans the
+   * whole underlying buffer. Cheaper than {@link contiguous}, whose fast
+   * path additionally requires `offset === 0` and a fully-occupied buffer
+   * (by design: `contiguous()` hands back a tensor that owns its buffer
+   * outright, e.g. for NPY serialization). Callers that only need
+   * C-order strides to `reshape()` against — `flatten()`, `roll()`,
+   * `#cumulative()` — don't need that stronger guarantee, so they route
+   * through this instead of unconditionally copying.
+   */
+  #contiguousView(): Tensor {
+    return this.isContiguous ? this : this.contiguous();
+  }
+
   /** Drop size-1 axes — all of them, or just `axis` if given. A VIEW. */
   squeeze(axis?: Axis): Tensor {
     let axesToRemove: Set<number>;
@@ -521,7 +536,7 @@ export class Tensor {
         `flatten: invalid range [${start}, ${end}] for ndim ${this.ndim}`,
       );
     }
-    const packed = this.contiguous();
+    const packed = this.#contiguousView();
     const flatSize = packed.shape.slice(s, e + 1).reduce((a, b) => a * b, 1);
     return packed.reshape([
       ...packed.shape.slice(0, s),
@@ -722,7 +737,7 @@ export class Tensor {
   /** Circular shift by `shift` along `axis` (default: flatten, roll, reshape back — NumPy's no-axis convention). Built on {@link take}. */
   roll(shift: number, options: { axis?: number } = {}): Tensor {
     if (options.axis === undefined) {
-      return this.contiguous().reshape([this.size]).roll(shift, { axis: 0 }).reshape(this.shape);
+      return this.#contiguousView().reshape([this.size]).roll(shift, { axis: 0 }).reshape(this.shape);
     }
     const ax = this.#normalizeAxis(options.axis);
     const dim = this.shape[ax] as number;
@@ -1895,7 +1910,7 @@ export class Tensor {
   }
 
   #cumulative(axis: Axis | undefined, op: "add" | "mul"): Tensor {
-    const source = axis === undefined ? this.contiguous().reshape([this.size]) : this;
+    const source = axis === undefined ? this.#contiguousView().reshape([this.size]) : this;
     const ax = axis === undefined ? 0 : source.#normalizeAxis(axis);
     const big = isBigIntDType(source.dtype);
     const out = Tensor.zeros(source.shape, { dtype: source.dtype });
