@@ -10,9 +10,17 @@
  */
 import { broadcastShapes, Tensor, type DType, type Shape } from "mallory-tensor-core";
 import { sumToShape, Variable } from "mallory-tensor-autograd";
-import { evalWithGrad, Traced, type IRNode } from "./ir.ts";
+import { evalValue, evalWithGrad, Traced, type IRNode } from "./ir.ts";
 
-export { Traced, evalWithGrad, type IRNode, type UnaryOp, type BinaryOp, type CmpOp } from "./ir.ts";
+export {
+  Traced,
+  evalValue,
+  evalWithGrad,
+  type IRNode,
+  type UnaryOp,
+  type BinaryOp,
+  type CmpOp,
+} from "./ir.ts";
 
 const FLOAT_DTYPES: readonly DType[] = ["f32", "f64"];
 
@@ -82,7 +90,14 @@ export class CompiledFn {
     return { outShape, dtype, broadcasted };
   }
 
-  /** Fused forward value only — one pass over the output, no intermediate Tensors materialized. */
+  /**
+   * Fused forward value only — one pass over the output, no intermediate
+   * Tensors materialized, and (issue #99) no gradient computed either:
+   * unlike {@link forwardWithGrad}, this routes through `evalValue`, which
+   * skips the per-node `grad` array `evalWithGrad` always builds and
+   * discards when only the value is wanted (~15x faster in the measured
+   * case — 6-node/3-input/200k-element compiled function, 571ms -> 37ms).
+   */
   forward(...tensors: Tensor[]): Tensor {
     const { outShape, dtype, broadcasted } = this.#broadcastInputs(tensors);
     const out = Tensor.zeros(outShape, { dtype });
@@ -94,7 +109,7 @@ export class CompiledFn {
         const step = (iters[k] as Generator<number>).next();
         scratch[k] = (broadcasted[k] as Tensor).data[step.value as number] as number;
       }
-      outData[outOff] = evalWithGrad(this.output, scratch, this.numInputs).value;
+      outData[outOff] = evalValue(this.output, scratch);
     }
     return out;
   }
