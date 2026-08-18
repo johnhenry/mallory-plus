@@ -21,6 +21,7 @@ export {
   NotExpr,
   OverAllExpr,
   ScalarFnExpr,
+  SCALAR_MATH_FUNCS,
   col,
   fn,
   lit,
@@ -30,6 +31,7 @@ export {
   type LogicalOp,
   type Scalar,
   type ScalarFnOp,
+  type ScalarMathFuncName,
 } from "./expr.ts";
 export { UnsupportedTypeError, describeField, describeSchema, type DType } from "./dtype.ts";
 export { bigintSafeReplacer, stringifyRows } from "./safe-json.ts";

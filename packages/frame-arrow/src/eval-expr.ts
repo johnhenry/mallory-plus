@@ -34,7 +34,77 @@ import {
   type ArithOp,
   type CompareOp,
   type LogicalOp,
+  type ScalarMathFuncName,
 } from "./expr.ts";
+
+/**
+ * `erf` via Abramowitz & Stegun 7.1.26 (|error| <= 1.5e-7) — the exact same
+ * approximation `tensor-compile`'s IR evaluator uses (packages/tensor-compile/src/ir.ts),
+ * copied rather than imported so `frame-arrow` stays dependency-free of
+ * `tensor-compile`. Keeping the formula identical means `fn.erf()` agrees
+ * numerically with the `tensor-compile`-IR path a `Symbolic` expression would
+ * otherwise take, for anyone cross-checking the two compile targets (#38).
+ */
+function erf(x: number): number {
+  const sign = x < 0 ? -1 : 1;
+  const ax = Math.abs(x);
+  const a1 = 0.254829592;
+  const a2 = -0.284496736;
+  const a3 = 1.421413741;
+  const a4 = -1.453152027;
+  const a5 = 1.061405429;
+  const p = 0.3275911;
+  const t = 1 / (1 + p * ax);
+  const y = 1 - (((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t) * Math.exp(-ax * ax);
+  return sign * y;
+}
+
+/** Value-only formulas for every {@link ScalarMathFuncName} — matches `tensor-compile`'s
+ * `unaryValueAndDeriv` value branch (packages/tensor-compile/src/ir.ts) so a computed column's
+ * `fn.*` result and a `Symbolic`-compiled-to-IR tensor evaluation of the same function agree. */
+const SCALAR_MATH_FN: Record<ScalarMathFuncName, (x: number) => number> = {
+  sin: Math.sin,
+  cos: Math.cos,
+  tan: Math.tan,
+  exp: Math.exp,
+  ln: Math.log,
+  sqrt: Math.sqrt,
+  asin: Math.asin,
+  acos: Math.acos,
+  atan: Math.atan,
+  sinh: Math.sinh,
+  cosh: Math.cosh,
+  tanh: Math.tanh,
+  cot: (x) => 1 / Math.tan(x),
+  sec: (x) => 1 / Math.cos(x),
+  csc: (x) => 1 / Math.sin(x),
+  asinh: Math.asinh,
+  acosh: Math.acosh,
+  atanh: Math.atanh,
+  coth: (x) => 1 / Math.tanh(x),
+  sech: (x) => 1 / Math.cosh(x),
+  csch: (x) => 1 / Math.sinh(x),
+  acot: (x) => Math.atan(1 / x),
+  asec: (x) => Math.acos(1 / x),
+  acsc: (x) => Math.asin(1 / x),
+  acoth: (x) => 0.5 * Math.log((x + 1) / (x - 1)),
+  asech: (x) => Math.acosh(1 / x),
+  acsch: (x) => Math.asinh(1 / x),
+  abs: Math.abs,
+  log10: Math.log10,
+  log2: Math.log2,
+  cbrt: Math.cbrt,
+  floor: Math.floor,
+  ceil: Math.ceil,
+  round: Math.round,
+  sign: Math.sign,
+  trunc: Math.trunc,
+  expm1: Math.expm1,
+  log1p: Math.log1p,
+  sigmoid: (x) => 1 / (1 + Math.exp(-x)),
+  erf,
+  relu: (x) => (x > 0 ? x : 0),
+};
 
 function evalColumn(table: Table, name: string): unknown[] {
   const vector = table.getChild(name) as Vector | null;
@@ -147,11 +217,23 @@ export function evalRowwise(expr: Expr, table: Table): unknown[] {
     return new Array(n).fill(scalar);
   }
   if (expr instanceof ScalarFnExpr) {
-    const inner = evalRowwise(expr.inner, table) as (number | null)[];
+    const inner = evalRowwise(expr.inner, table);
     if (expr.op === "month") {
-      return inner.map((ms) => (ms === null ? null : new Date(ms).getUTCMonth() + 1));
+      return (inner as (number | null)[]).map((ms) => (ms === null ? null : new Date(ms).getUTCMonth() + 1));
     }
-    throw new Error(`unhandled scalar fn "${expr.op}"`);
+    const mathFn = SCALAR_MATH_FN[expr.op as ScalarMathFuncName];
+    if (!mathFn) {
+      throw new Error(`unhandled scalar fn "${expr.op}"`);
+    }
+    // Same numeric-type guard as arithOp: throw on non-numeric input rather than
+    // silently writing NaN as a valid column value.
+    return inner.map((v) => {
+      if (v === null || v === undefined) return null;
+      if (typeof v !== "number" && typeof v !== "bigint") {
+        throw new Error(`fn.${expr.op}() requires a numeric operand, got ${typeof v} (${JSON.stringify(v)})`);
+      }
+      return mathFn(typeof v === "bigint" ? Number(v) : v);
+    });
   }
   if (expr instanceof AggExpr) {
     throw new Error(
