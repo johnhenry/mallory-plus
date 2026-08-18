@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "build:wasm": "npm run build:wasm -w mallory-tensor-wasm",
-    "build": "npm run build:wasm && npm run build -w mallory-scalar-types -w mallory-tensor-core -w mallory-telemetry -w mallory-tensor-wasm -w mallory-tensor-autograd -w mallory-tensor-compile -w mallory-tensor-webgpu -w mallory-adapter-math -w mallory-unit -w mallory-adapter-onnx -w mallory-frame-arrow -w mallory-frame-parquet -w mallory-fft -w mallory-image -w mallory-signal -w mallory-mcp -w mallory-data",
+    "build": "npm run build:wasm && npm run build -w mallory-scalar-types -w mallory-tensor-core -w mallory-telemetry -w mallory-tensor-wasm -w mallory-tensor-autograd -w mallory-tensor-compile -w mallory-tensor-webgpu -w mallory-frame-arrow -w mallory-adapter-math -w mallory-unit -w mallory-adapter-onnx -w mallory-frame-parquet -w mallory-fft -w mallory-image -w mallory-signal -w mallory-mcp -w mallory-data",
     "test:manifest": "node --test test/*.test.ts",
     "test": "npm run test:manifest && npm run test -w mallory-scalar-types -w mallory-tensor-core -w mallory-telemetry -w mallory-tensor-wasm -w mallory-tensor-autograd -w mallory-tensor-compile -w mallory-tensor-webgpu -w mallory-adapter-math -w mallory-unit -w mallory-adapter-onnx -w mallory-frame-arrow -w mallory-frame-parquet -w mallory-fft -w mallory-image -w mallory-signal -w mallory-mcp -w mallory-data",
     "check": "npm run check --workspaces --if-present",
