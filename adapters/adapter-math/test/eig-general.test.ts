@@ -39,7 +39,7 @@ function oracleEigenvalues(matrix: number[][]): Array<[number, number]> {
 
 const TOL = 1e-4;
 
-/** Greedy nearest-match set comparison: every mallory eigenvalue must have
+/** Greedy nearest-match set comparison: every @johnhenry/math eigenvalue must have
  * an unclaimed NumPy eigenvalue within tolerance, and vice versa (both
  * directions catch both "extra" and "missing" eigenvalues). */
 function assertSameEigenvalueSet(

@@ -8,7 +8,7 @@
  */
 export { ComplexNumber, Rational, Decimal } from "@johnhenry/math";
 
-// "Fraction" is math.js vocabulary; the Mallory implementation is Rational.
+// "Fraction" is math.js vocabulary; the @johnhenry/math implementation is Rational.
 // Alias provided for adapter-mathjs familiarity only.
 export { Rational as Fraction } from "@johnhenry/math";
 

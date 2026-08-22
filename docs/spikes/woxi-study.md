@@ -1,9 +1,9 @@
-# Woxi study — what a Wolfram Language reimplementation teaches the Mallory family
+# Woxi study — what a Wolfram Language reimplementation teaches the math family
 
 **Studied 2026-08-13.** Woxi ([github.com/ad-si/Woxi](https://github.com/ad-si/Woxi),
 [woxi.ad-si.com](https://woxi.ad-si.com/)) is a Wolfram Language / Mathematica
 reimplementation in Rust (AGPL-3.0, ~800 stars, 8k+ commits, largely
-AI-agent-written). It is a similar-but-distinct neighbor: where Mallory built
+AI-agent-written). It is a similar-but-distinct neighbor: where the math family built
 its own JS-native API with adapters to incumbents (PLAN.md non-goal 11), Woxi
 chose full API compatibility with one incumbent. Sources: the project site and
 repo, plus two Hacker News threads
@@ -41,7 +41,7 @@ what's actionable, record what was considered and NOT adopted.
    `Symbolic` itself has no external oracle** — see "Actionable" below.
 2. **The reference isn't gospel.** Woxi's author found cases "where Mathematica
    itself didn't quite do things correctly"; HN noted even Wolfram
-   users bolt on Rubi because built-in `Integrate` has gaps. Mallory's
+   users bolt on Rubi because built-in `Integrate` has gaps. the math family's
    equivalents: the apache-arrow `Table.concat` zero-row bug (#31, filed and
    fixed here), hyparquet quirks, and the deliberate decision NOT to chase
    scipy's arbitrary SOS section-grouping byte-for-byte (signal #44) — test the
@@ -52,11 +52,11 @@ what's actionable, record what was considered and NOT adopted.
    unreviewed tests actually do," and "reviewing correctness is harder than
    writing correct code." The defense that actually held up was the oracle:
    a test whose expectation comes from wolframscript is self-reviewing in a
-   way a hand-typed expectation is not. This is precisely why Mallory's
+   way a hand-typed expectation is not. This is precisely why the math family's
    convention is oracle-anchored tests over expectation dumps — keep it.
 4. **Disclose coverage boundaries loudly.** A single visible gap in a flagship
    feature (`// ∫ tan(x) dx — not implemented`) read to HN as "everything
-   looks very naive" (anematode). Mallory's "documented v1 simplification /
+   looks very naive" (anematode). the math family's "documented v1 simplification /
    real, disclosed gap" habit (rfft's full-spectrum note, butter's
    lowpass-only note, checkpoint's not-real-npz note) is the right defense.
 5. **Positioning.** HN consensus: Mathematica's moat is "polish and overall
@@ -77,7 +77,7 @@ real Mathematica core is essentially "parametrized PROLOG rules with a large
 library." The counterpoint (nextaccountic, sfpotter): rules-all-the-way-down
 is slow without a JIT; hand-written host-language kernels are "pre-jitted."
 
-**Mallory mapping:** @johnhenry/math's `Symbolic` is the Woxi shape today — its
+**math-family mapping:** @johnhenry/math's `Symbolic` is the Woxi shape today — its
 simplify/differentiate rules are TS code over the `Expr` tagged union. The
 adapted middle path (NOT rules-all-the-way-down): since `Expr` is already a
 plain, serializable discriminated union, a **data-driven rewrite-rule table**
@@ -93,14 +93,14 @@ bottleneck exists yet at this project's scale.
 - **`functions.csv`-style parity manifest.** Powers Woxi's compatibility
   story, and gave them a free test corpus (an HN user donated 1,275 real
   Mathematica notebooks to run). But it only pays off when you CLAIM parity
-  with an incumbent's surface. Mallory deliberately implements curated subsets
+  with an incumbent's surface. the math family deliberately implements curated subsets
   with its own API — the honest equivalents are the per-package "v1
   scope/deferred" doc-comment sections and the issue tracker, which already
-  exist. A NumPy/SciPy parity ledger would misrepresent Mallory's goals.
+  exist. A NumPy/SciPy parity ledger would misrepresent the math family's goals.
 - **Full API compatibility with an incumbent.** Woxi's bet buys them free
   documentation, a free corpus, and users' existing code — at the price of
   inheriting every wart and a forever-chase of a moving target (they're "at
-  Mathematica 6.0," which shipped in 2007). Mallory's adapter strategy stays.
+  Mathematica 6.0," which shipped in 2007). the math family's adapter strategy stays.
 - **AGPL / clean-room concerns.** Interesting thread material (Lotus v.
   Borland cited for "API clones don't infringe"), irrelevant here — Mallory is
   MIT and its API is its own.
@@ -109,10 +109,10 @@ bottleneck exists yet at this project's scale.
 
 Second pass: cloned the repo (shallow) and surveyed the source directly —
 ~500k lines under `src/` (plus ~294k of tests), 316 Rust files. **License
-wall, repeated for emphasis: Woxi is AGPL-3.0 and Mallory is MIT — nothing
+wall, repeated for emphasis: Woxi is AGPL-3.0 and the math family is MIT — nothing
 below may be copied as code; these are architecture observations and
 methodology, which are not copyrightable.** The corpus question this pass
-also settled (Rubi, not WL notebooks) is tracked as `johnhenry/mallory#16`.
+also settled (Rubi, not WL notebooks) is tracked as `johnhenry/math#16`.
 
 ### Test methodology (the best material in the repo)
 
@@ -123,7 +123,7 @@ also settled (Rubi, not WL notebooks) is tracked as `johnhenry/mallory#16`.
    tests get oracle-verified — by a 1,900-line script that *parses the Rust
    test source* to extract `assert_eq!(interpret("…"), "…")` pairs and
    replays them through wolframscript. A conformance suite derived from the
-   unit tests, with no parallel corpus to maintain. Mallory analogue: our
+   unit tests, with no parallel corpus to maintain. math-family analogue: our
    oracles generate expectations rather than replaying them, which is the
    same closed loop — but the "extract-and-replay your own unit tests
    against the oracle" trick is worth remembering if a second reference
@@ -137,7 +137,7 @@ also settled (Rubi, not WL notebooks) is tracked as `johnhenry/mallory#16`.
    every run. Genuinely attractive pattern for @johnhenry/math's COOKBOOK.md
    someday: examples that can't rot.
 4. **Differential fuzzer design** (`src/bin/diff_fuzz.rs`, ~1,450 lines) —
-   the mechanics now folded into `johnhenry/mallory#14`:
+   the mechanics now folded into `johnhenry/math#14`:
    - **Spec-table generation, not grammar generation**: a curated table of
      `(function, argument-shape list)` with an `Arg` enum as the type system
      (`Num`, `IntIn(lo,hi)`, `Poly`, `PredFn`, …), ranges chosen so
@@ -202,7 +202,7 @@ also settled (Rubi, not WL notebooks) is tracked as `johnhenry/mallory#16`.
    cascade of hardcoded heuristics whose order matters*. ~53k lines of
    algebra as opaque compiled code that nothing can inspect, extend, or
    override from the language. This is the strongest possible evidence for
-   `johnhenry/mallory#15`'s middle path (rules as data, algorithms as
+   `johnhenry/math#15`'s middle path (rules as data, algorithms as
    code) — and Woxi even shows where the boundary belongs: their
    generate-and-score Simplify and Zassenhaus factoring are genuinely
    algorithmic (fine as code); their elementary-derivative table is
@@ -273,12 +273,12 @@ transparency here).
    `sympy_oracle.py` subprocess (same pattern as math-plus's
    `numpy_oracle.py`/`scipy_oracle.py`, skip-don't-fail) plus a
    property-based leg (generate random `Expr` trees, compare evaluation and
-   derivatives) would close the loop. → `johnhenry/mallory#14`; the code
+   derivatives) would close the loop. → `johnhenry/math#14`; the code
    scan added the fuzzer mechanics (spec-table generation, batching +
    sentinels + bisection, size-monotone shrinking, exception discipline) as
    a design comment there.
 2. **Declarative rewrite-rule table for `Symbolic`** (someday, above). →
-   `johnhenry/mallory#15`; the code scan added the empirical confirmation
+   `johnhenry/math#15`; the code scan added the empirical confirmation
    (D/Simplify/Integrate as opaque code, definitions as positional tuples)
    and the rules-as-first-class-values-indexed-by-head recommendation as a
    comment there.
@@ -288,8 +288,8 @@ transparency here).
    72,254-problem, MIT-licensed, Maxima-syntax test suite, whose cheapest
    tier (differentiate Rubi's own antiderivative, numerically compare to
    the integrand) exercises parse/differentiate/evaluate with no external
-   tool at test time. → `johnhenry/mallory#16`.
-4. **MCP server exposing Mallory evaluation to agents.** An HN commenter
+   tool at test time. → `johnhenry/math#16`.
+4. **MCP server exposing @johnhenry/math evaluation to agents.** An HN commenter
    (alex7o) wrapped Woxi as an MCP server for agents and called it "an
    amazing experience" — and this family is unusually well-positioned for
    that idea (johnhenry/mcp-query, @johnhenry/mcp-gate already exist).
@@ -299,11 +299,11 @@ transparency here).
 5. **Trap poisoning for tensor-wasm** (the WASM-panic finding above) →
    `johnhenry/math-plus#46`, **shipped** same day.
 6. **Docs-as-tests** (the scrut pattern): executable COOKBOOK.md/readme
-   examples so documented output can't rot → `johnhenry/mallory#17`.
+   examples so documented output can't rot → `johnhenry/math#17`.
 7. **Zero-install browser playground for @johnhenry/math** (Woxi's
    distribution-surface lesson; mallory (formerly mallory-graph) is the rich Studio analogue,
    the minimal link-shareable REPL is what's missing; someday) →
-   `johnhenry/mallory#18`.
+   `johnhenry/math#18`.
 8. **Workspace manifest drift guards** (the functions.csv-rot lesson
    applied to our own three hand-maintained lists: root build/test `-w`
    flags, `sync-jsr-configs.mjs` `PACKAGE_DIRS`) →
@@ -325,7 +325,7 @@ transparency here).
 
 - **`ExprList` hybrid Vec→persistent-vector upgrade** — trigger: a
   profiled O(N²) prepend pain in family code (none known today) →
-  `johnhenry/mallory#19`.
+  `johnhenry/math#19`.
 - **Rust crate splitting for compile time** (their hardest-won lesson —
   "the one structural fix we never made") — trigger: tensor-wasm-kernels
   reaching ~5k lines or a second kernel family → `johnhenry/math-plus#51`.

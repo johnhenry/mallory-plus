@@ -1,7 +1,7 @@
 {
   "name": "@johnhenry/math-plus-tensor-webgpu",
   "version": "0.0.0",
-  "description": "WebGPU-accelerated GEMM, attention-adjacent primitives, and #11-IR elementwise fusion for Mallory Plus tensors (issue #12) — Chromium-family browsers only in v1",
+  "description": "WebGPU-accelerated GEMM, attention-adjacent primitives, and #11-IR elementwise fusion for Math Plus tensors (issue #12) \u2014 Chromium-family browsers only in v1",
   "type": "module",
   "exports": {
     ".": {

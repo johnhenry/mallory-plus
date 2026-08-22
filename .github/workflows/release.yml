@@ -1,6 +1,6 @@
 name: Release
 
-# Multi-package sibling of johnhenry/mallory's single-package publish.yml.
+# Multi-package sibling of johnhenry/math's single-package publish.yml.
 # Same deployment substrate (GitHub Actions + the NPM_TOKEN secret), but
 # driven by Changesets because this repo publishes ~11 independently
 # versioned packages instead of one:

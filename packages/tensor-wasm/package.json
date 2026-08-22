@@ -1,7 +1,7 @@
 {
   "name": "@johnhenry/math-plus-tensor-wasm",
   "version": "0.0.0",
-  "description": "Rust→WASM CPU kernels for Mallory Plus tensors — flat-numeric extern-C ABI, no wasm-bindgen marshalling on hot paths",
+  "description": "Rust\u2192WASM CPU kernels for Math Plus tensors \u2014 flat-numeric extern-C ABI, no wasm-bindgen marshalling on hot paths",
   "type": "module",
   "exports": {
     ".": {
