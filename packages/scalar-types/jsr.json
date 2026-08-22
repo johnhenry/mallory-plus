@@ -1,9 +1,9 @@
 {
   "name": "@johnhenry/math-plus-scalar-types",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "license": "MIT",
   "exports": "./src/index.ts",
   "imports": {
-    "@johnhenry/math": "jsr:@johnhenry/math@^0.15.0"
+    "@johnhenry/math": "jsr:@johnhenry/math@^0.0.0"
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@johnhenry/math-plus-scalar-types",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "description": "Thin re-export of @johnhenry/math scalar types (ComplexNumber, Rational, Decimal) plus tensor-boundary converters — the single import point for @johnhenry/math types in Math Plus",
   "type": "module",
   "exports": {
@@ -18,7 +18,7 @@
     "test": "npm run typecheck && node --test test/*.test.ts"
   },
   "dependencies": {
-    "@johnhenry/math": "^0.15.0"
+    "@johnhenry/math": "^0.0.0"
   },
   "repository": {
     "type": "git",

@@ -1,6 +1,6 @@
 {
   "name": "@johnhenry/math-plus-frame-arrow",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "description": "Immutable, expression-oriented Frame/Series dataframe library on top of apache-arrow — part of Mallory Plus",
   "type": "module",
   "exports": {
@@ -21,7 +21,7 @@
     "apache-arrow": "21.2.0"
   },
   "peerDependencies": {
-    "@johnhenry/math-plus-tensor-core": "^0.2.0"
+    "@johnhenry/math-plus-tensor-core": "^0.0.0"
   },
   "peerDependenciesMeta": {
     "@johnhenry/math-plus-tensor-core": {

@@ -1,11 +1,11 @@
 {
   "name": "@johnhenry/math-plus-frame-parquet",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "license": "MIT",
   "exports": "./src/index.ts",
   "imports": {
     "apache-arrow": "npm:apache-arrow@21.2.0",
-    "@johnhenry/math-plus-frame-arrow": "jsr:@johnhenry/math-plus-frame-arrow@^0.0.1",
+    "@johnhenry/math-plus-frame-arrow": "jsr:@johnhenry/math-plus-frame-arrow@^0.0.0",
     "hyparquet": "npm:hyparquet@1.28.1",
     "hyparquet-writer": "npm:hyparquet-writer@0.16.6",
     "hyparquet-compressors": "npm:hyparquet-compressors@1.1.1",

@@ -1,11 +1,11 @@
 {
   "name": "@johnhenry/math-plus-adapter-math",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "license": "MIT",
   "exports": "./src/index.ts",
   "imports": {
-    "@johnhenry/math": "jsr:@johnhenry/math@^0.15.0",
-    "@johnhenry/math-plus-tensor-core": "jsr:@johnhenry/math-plus-tensor-core@^0.0.1",
-    "@johnhenry/math-plus-tensor-compile": "jsr:@johnhenry/math-plus-tensor-compile@^0.0.1"
+    "@johnhenry/math": "jsr:@johnhenry/math@^0.0.0",
+    "@johnhenry/math-plus-tensor-core": "jsr:@johnhenry/math-plus-tensor-core@^0.0.0",
+    "@johnhenry/math-plus-tensor-compile": "jsr:@johnhenry/math-plus-tensor-compile@^0.0.0"
   }
 }

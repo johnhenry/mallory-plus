@@ -1,6 +1,6 @@
 {
   "name": "@johnhenry/math-plus-image",
-  "version": "0.0.3",
+  "version": "0.0.0",
   "description": "resize/normalize tensor ops for math-plus (issue #41) — v2 practical ML/media compute bundle",
   "type": "module",
   "exports": {
@@ -18,7 +18,7 @@
     "test": "npm run typecheck && node --test test/*.test.ts"
   },
   "dependencies": {
-    "@johnhenry/math-plus-tensor-core": "0.2.0"
+    "@johnhenry/math-plus-tensor-core": "^0.0.0"
   },
   "repository": {
     "type": "git",

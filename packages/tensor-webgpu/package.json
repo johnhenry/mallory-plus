@@ -1,6 +1,6 @@
 {
   "name": "@johnhenry/math-plus-tensor-webgpu",
-  "version": "0.0.5",
+  "version": "0.0.0",
   "description": "WebGPU-accelerated GEMM, attention-adjacent primitives, and #11-IR elementwise fusion for Mallory Plus tensors (issue #12) — Chromium-family browsers only in v1",
   "type": "module",
   "exports": {
@@ -18,14 +18,14 @@
     "test": "npm run typecheck && node --test --test-concurrency=1 test/*.test.ts"
   },
   "dependencies": {
-    "@johnhenry/math-plus-tensor-core": "0.2.0",
-    "@johnhenry/math-plus-tensor-compile": "0.0.5"
+    "@johnhenry/math-plus-tensor-core": "^0.0.0",
+    "@johnhenry/math-plus-tensor-compile": "^0.0.0"
   },
   "devDependencies": {
     "@webgpu/types": "^0.1.71",
     "typescript": "^5.7.0",
-    "@johnhenry/math-plus-scalar-types": "0.0.1",
-    "@johnhenry/math-plus-tensor-wasm": "0.1.0"
+    "@johnhenry/math-plus-scalar-types": "^0.0.0",
+    "@johnhenry/math-plus-tensor-wasm": "^0.0.0"
   },
   "repository": {
     "type": "git",

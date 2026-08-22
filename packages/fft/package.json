@@ -1,6 +1,6 @@
 {
   "name": "@johnhenry/math-plus-fft",
-  "version": "0.2.0",
+  "version": "0.0.0",
   "description": "ComplexTensor + fft/ifft/rfft/irfft for math-plus (issue #40) — v2 practical ML/media compute bundle",
   "type": "module",
   "exports": {
@@ -18,12 +18,12 @@
     "test": "npm run typecheck && node --test test/*.test.ts"
   },
   "dependencies": {
-    "@johnhenry/math-plus-scalar-types": "0.0.1",
-    "@johnhenry/math-plus-tensor-core": "0.2.0"
+    "@johnhenry/math-plus-scalar-types": "^0.0.0",
+    "@johnhenry/math-plus-tensor-core": "^0.0.0"
   },
   "devDependencies": {
-    "@johnhenry/math-plus-adapter-math": "0.2.0",
-    "@johnhenry/math": "^0.15.0"
+    "@johnhenry/math-plus-adapter-math": "^0.0.0",
+    "@johnhenry/math": "^0.0.0"
   },
   "repository": {
     "type": "git",

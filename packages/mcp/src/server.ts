@@ -119,7 +119,7 @@ function tensorToJson(t: Tensor): unknown {
 // ---- server ------------------------------------------------------------------
 
 export function buildServer(): McpServer {
-  const server = new McpServer({ name: "@johnhenry/math-plus-mcp", version: "0.0.1" });
+  const server = new McpServer({ name: "@johnhenry/math-plus-mcp", version: "0.0.0" });
 
   server.registerTool(
     "symbolic_parse",

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "johnhenry-math-plus-interop"
-version = "0.0.1"
+version = "0.0.0"
 description = "Python-side interop helpers for math-plus: Arrow IPC / Parquet / .npy-.npz round-trips with pandas/NumPy (issue #21)"
 readme = "README.md"
 license = { text = "MIT" }
