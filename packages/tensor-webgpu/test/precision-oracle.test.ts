@@ -1,5 +1,5 @@
 /**
- * Demonstrates `mallory-scalar-types`' `Interval` (bridged from mallory-math
+ * Demonstrates `@johnhenry/math-plus-scalar-types`' `Interval` (bridged from @johnhenry/math
  * in issue #36) as an f32-vs-f64 rounding-error BOUND oracle -- a stronger
  * claim than the tolerance-based comparisons `fusion.test.ts` already does
  * ("these two numbers happen to be close"): propagate a per-step f32
@@ -18,8 +18,8 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 import test, { after } from "node:test";
-import { Interval } from "mallory-scalar-types";
-import { Traced } from "mallory-tensor-compile";
+import { Interval } from "@johnhenry/math-plus-scalar-types";
+import { Traced } from "@johnhenry/math-plus-tensor-compile";
 import { bundleForBrowser, closeHarness, getHarness, SRC } from "./helpers.ts";
 
 after(closeHarness);

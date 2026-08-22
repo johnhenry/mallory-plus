@@ -6,7 +6,7 @@
  * half-pixel-center coordinate mapping, the same convention TensorFlow/
  * PyTorch's `align_corners=false` resize uses.
  */
-import { Tensor, type DType } from "mallory-tensor-core";
+import { Tensor, type DType } from "@johnhenry/math-plus-tensor-core";
 import { assertFloatDtype, flattenToFloat64, toDtypeArray } from "./util.ts";
 
 export type ResizeMethod = "nearest" | "bilinear";

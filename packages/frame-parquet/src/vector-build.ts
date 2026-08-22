@@ -2,7 +2,7 @@
  * Plain-JS-array -> Arrow Vector construction for the read path.
  *
  * Same two rules as frame-arrow's own src/vector-build.ts (not reusable
- * directly — it isn't exported from mallory-frame-arrow's public surface,
+ * directly — it isn't exported from @johnhenry/math-plus-frame-arrow's public surface,
  * see schema.ts's doc comment), ported here because they apply equally to
  * data hyparquet hands back:
  * - Always pass an EXPLICIT Arrow type — never `vectorFromArray(values)`

@@ -8,13 +8,13 @@
  * `"full"`), `"valid"` (length `max(n,m)-min(n,m)+1`, only fully-overlapping
  * output).
  *
- * Direct (not FFT-based) -- `mallory-fft`'s own `convolve` note in
+ * Direct (not FFT-based) -- `@johnhenry/math-plus-fft`'s own `convolve` note in
  * adapter-math's fft.ts already covers the FFT-based route for large
- * kernels via `mallory-math`; this one is for typical signal-processing
+ * kernels via `@johnhenry/math`; this one is for typical signal-processing
  * kernel sizes where O(n*m) is fine and no complex-tensor round-trip is
  * needed for a purely real operation.
  */
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 
 export type ConvolveMode = "full" | "same" | "valid";
 

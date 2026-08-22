@@ -1,9 +1,9 @@
 # WebGPU pipeline baseline (2026-08-12)
 
-Status check on the headless-WebGPU seam for `mallory-tensor-webgpu` (issue #12). **Headless
+Status check on the headless-WebGPU seam for `@johnhenry/math-plus-tensor-webgpu` (issue #12). **Headless
 WebGPU is real and working on this machine — genuinely hardware-accelerated, not
 SwiftShader-only as expected going in. The naive v1 GEMM kernel, however, never beats
-`mallory-tensor-wasm`'s `matmulInto` at any size tested.** Numbers below are the baseline a
+`@johnhenry/math-plus-tensor-wasm`'s `matmulInto` at any size tested.** Numbers below are the baseline a
 future tiled kernel (or a real discrete-GPU runner) must beat.
 
 ## What's working: headless WebGPU itself
@@ -39,7 +39,7 @@ future tiled kernel (or a real discrete-GPU runner) must beat.
 A third, lower-stakes finding: `node --test`'s default file-level concurrency runs each test
 file's own headless Chrome instance in parallel, and multiple Chrome processes contending for
 the same physical GPU render node intermittently starved one file's `requestAdapter()` to
-`null`. `mallory-tensor-webgpu`'s `test` script now passes `--test-concurrency=1` to serialize
+`null`. `@johnhenry/math-plus-tensor-webgpu`'s `test` script now passes `--test-concurrency=1` to serialize
 its own test files against each other (see `test/helpers.ts`'s module doc for the full
 reasoning, including why a filesystem lock alone wouldn't fix this specific case).
 

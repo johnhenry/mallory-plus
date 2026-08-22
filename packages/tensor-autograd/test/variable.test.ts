@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DualNumber } from "mallory-math";
-import { Tensor } from "mallory-tensor-core";
+import { DualNumber } from "@johnhenry/math";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { Variable, constant, enableGrad, grad, noGrad, variable } from "../src/index.ts";
 import { assertGradientMatches, randomTensor } from "./gradcheck.ts";
 
@@ -141,7 +141,7 @@ test("gradcheck: a composed multi-op graph (small MLP-shaped function)", () => {
 
 // ---- DualNumber cross-check (independent oracle, issue #8's second leg) -----
 
-test("gradient of a scalar chain matches mallory-math's DualNumber forward-mode", () => {
+test("gradient of a scalar chain matches @johnhenry/math's DualNumber forward-mode", () => {
   // f(x) = sigmoid(x)*x + x^2 — an arbitrary composition exercising several ops at once.
   const fn = (v: Variable) => v.sigmoid().mul(v).add(v.mul(v)).sum();
 

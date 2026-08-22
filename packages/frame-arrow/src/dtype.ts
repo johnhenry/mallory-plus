@@ -66,7 +66,7 @@ export interface FieldDescriptor {
 export class UnsupportedTypeError extends TypeError {
   constructor(columnName: string, arrowType: DataType) {
     super(
-      `column "${columnName}" has Arrow type ${arrowType.toString()} which mallory-frame-arrow v1 does not support ` +
+      `column "${columnName}" has Arrow type ${arrowType.toString()} which @johnhenry/math-plus-frame-arrow v1 does not support ` +
         `(deferred: timestamp[ns], date32/64, time32/64, duration, decimal128, deeply nested types, ` +
         `delta dictionaries, large_utf8/large_list — see docs/spikes/arrow-parity.md). ` +
         `Cast or drop this column in Arrow/pyarrow before loading it into a Frame.`,

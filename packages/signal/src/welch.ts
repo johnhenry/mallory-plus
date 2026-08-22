@@ -15,8 +15,8 @@
  * (SciPy's own default), not exposed as an option, matching this issue's
  * scoped `{window?, nperseg?, noverlap?}` signature.
  */
-import { ComplexTensor, fft } from "mallory-fft";
-import { Tensor } from "mallory-tensor-core";
+import { ComplexTensor, fft } from "@johnhenry/math-plus-fft";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { hannWindow } from "./window.ts";
 
 export interface WelchOptions {

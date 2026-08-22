@@ -4,8 +4,8 @@
  * per-parameter state keyed by `Parameter.id`, updating `param.value` in
  * place between steps (see the doc comment on `Variable.value`).
  */
-import { Tensor } from "mallory-tensor-core";
-import { hasSink, metric } from "mallory-telemetry";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
+import { hasSink, metric } from "@johnhenry/math-plus-telemetry";
 import type { Parameter } from "./nn.ts";
 
 /** Opt-in telemetry (issue #10) shared by every optimizer's step(). */
@@ -33,7 +33,7 @@ interface SGDState {
 }
 
 /**
- * Momentum + Nesterov (issue #89, unblocks mallory-graph#33's momentum
+ * Momentum + Nesterov (issue #89, unblocks mallory#33's momentum
  * slider): `momentum`/`nesterov` both default to off (`0`/`false`), so
  * `new SGD(params, { lr })` is byte-identical to the pre-#89 plain-SGD
  * update — no existing caller's behavior changes. The momentum buffer is

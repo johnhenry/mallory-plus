@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mallory-interop"
+name = "johnhenry-math-plus-interop"
 version = "0.0.1"
-description = "Python-side interop helpers for mallory-plus: Arrow IPC / Parquet / .npy-.npz round-trips with pandas/NumPy (issue #21)"
+description = "Python-side interop helpers for math-plus: Arrow IPC / Parquet / .npy-.npz round-trips with pandas/NumPy (issue #21)"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
@@ -25,8 +25,8 @@ dependencies = [
 test = ["pytest>=8.0.0"]
 
 [project.urls]
-Repository = "https://github.com/johnhenry/mallory-plus"
-Homepage = "https://github.com/johnhenry/mallory-plus/tree/main/packages/interop-python"
+Repository = "https://github.com/johnhenry/math-plus"
+Homepage = "https://github.com/johnhenry/math-plus/tree/main/packages/interop-python"
 
 [tool.setuptools.packages.find]
 where = ["src"]

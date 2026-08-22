@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Graph } from "mallory-math";
+import { Graph } from "@johnhenry/math";
 import { toCSR, toDense } from "../src/index.ts";
 
 function rowSlice(csr: ReturnType<typeof toCSR>, row: number): Array<[number, number]> {

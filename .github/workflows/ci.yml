@@ -39,7 +39,7 @@ jobs:
           key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
 
       # NumPy oracle for tensor-core's differential tests, and pyarrow/pandas
-      # for frame-arrow/frame-parquet's pyarrow-round-trip tests (MALLORY_ORACLE_PYTHON,
+      # for frame-arrow/frame-parquet's pyarrow-round-trip tests (MATH_PLUS_ORACLE_PYTHON,
       # docs/TESTING.md) — every one of these tests SKIPs rather than fails
       # when its oracle is unavailable, so the import check below is the
       # guard that keeps CI honest about actually running them, not
@@ -54,7 +54,7 @@ jobs:
       - name: Verify the oracles are importable (differential/round-trip tests must not skip)
         run: python3 -c "import numpy, pyarrow, pandas; print('numpy', numpy.__version__, 'pyarrow', pyarrow.__version__, 'pandas', pandas.__version__)"
 
-      # Headless-WebGPU oracle for mallory-tensor-webgpu's GPU-correctness
+      # Headless-WebGPU oracle for @johnhenry/math-plus-tensor-webgpu's GPU-correctness
       # tests (docs/TESTING.md "Headless WebGPU oracle"). Chrome-for-Testing
       # (not the runner image's preinstalled browser) for a pinned, reliable
       # version; Xvfb because headless WebGPU needs a real (virtual) display,
@@ -67,7 +67,7 @@ jobs:
       # GitHub Actions runner. If these tests skip here instead of running,
       # check the first CI run's log for the actual `requestAdapter()`
       # failure reason before assuming the package itself is broken.
-      - name: Set up Chrome for headless WebGPU tests (mallory-tensor-webgpu)
+      - name: Set up Chrome for headless WebGPU tests (@johnhenry/math-plus-tensor-webgpu)
         uses: browser-actions/setup-chrome@v1
         with:
           chrome-version: stable
@@ -89,7 +89,7 @@ jobs:
       # packages/interop-python is a PyPI package outside the npm/Cargo
       # workspaces (docs/RELEASING.md) — its own pytest suite needs
       # installing separately.
-      - name: Install mallory-interop + test deps
+      - name: Install johnhenry-math-plus-interop + test deps
         run: pip install pytest -e packages/interop-python
 
       - name: interop-python conformance tests

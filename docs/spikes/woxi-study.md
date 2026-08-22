@@ -35,9 +35,9 @@ what's actionable, record what was considered and NOT adopted.
    credibility rests on the wolframscript differential suite; the HN advice
    (samwillis, foobarqux) generalizes it: with a black-box reference plus
    auto-generated inputs you get a "closed-loop" pass/fail without hand-writing
-   expectations. mallory-plus already lives this: NumPy oracle (tensor-core),
+   expectations. math-plus already lives this: NumPy oracle (tensor-core),
    pyarrow/pandas (frame-*), scipy.signal (signal), DualNumber (autograd),
-   mallory-math's own scalar functions (fft, erf). **Gap found: mallory-math's
+   @johnhenry/math's own scalar functions (fft, erf). **Gap found: @johnhenry/math's
    `Symbolic` itself has no external oracle** — see "Actionable" below.
 2. **The reference isn't gospel.** Woxi's author found cases "where Mathematica
    itself didn't quite do things correctly"; HN noted even Wolfram
@@ -77,7 +77,7 @@ real Mathematica core is essentially "parametrized PROLOG rules with a large
 library." The counterpoint (nextaccountic, sfpotter): rules-all-the-way-down
 is slow without a JIT; hand-written host-language kernels are "pre-jitted."
 
-**Mallory mapping:** mallory-math's `Symbolic` is the Woxi shape today — its
+**Mallory mapping:** @johnhenry/math's `Symbolic` is the Woxi shape today — its
 simplify/differentiate rules are TS code over the `Expr` tagged union. The
 adapted middle path (NOT rules-all-the-way-down): since `Expr` is already a
 plain, serializable discriminated union, a **data-driven rewrite-rule table**
@@ -134,7 +134,7 @@ also settled (Rubi, not WL notebooks) is tracked as `johnhenry/mallory#16`.
 3. **Docs are tests.** Their published documentation pages ARE the scrut
    test files (markdown with fenced `scrut` blocks + MkDocs frontmatter) —
    every example in the docs is verified against both implementations on
-   every run. Genuinely attractive pattern for mallory-math's COOKBOOK.md
+   every run. Genuinely attractive pattern for @johnhenry/math's COOKBOOK.md
    someday: examples that can't rot.
 4. **Differential fuzzer design** (`src/bin/diff_fuzz.rs`, ~1,450 lines) —
    the mechanics now folded into `johnhenry/mallory#14`:
@@ -190,7 +190,7 @@ also settled (Rubi, not WL notebooks) is tracked as `johnhenry/mallory#16`.
    `Rule`, …) alongside `FunctionCall` — so `Plus` exists in three forms
    and every consumer needs canonicalisation shims. There is no `PartialEq`;
    61 call sites compare expressions by *rendering them to strings*.
-   mallory-math's `Expr` is far smaller but shares the mild form of this
+   @johnhenry/math's `Expr` is far smaller but shares the mild form of this
    (binary `add`/`mul` nodes rather than canonical n-ary), worth
    remembering if #15's rule table ever lands: desugar in the parser, keep
    ONE application node.
@@ -220,7 +220,7 @@ also settled (Rubi, not WL notebooks) is tracked as `johnhenry/mallory#16`.
    table, plus functions.csv, plus the impl: **four places to touch per
    function**, kept in sync only by agent discipline. The obvious fix they
    never made: one registry record per function (name, arity, attributes,
-   impl together). mallory-math's namespace-object convention already is
+   impl together). @johnhenry/math's namespace-object convention already is
    that; keep it.
 6. **Numerics choices worth knowing**: rationals have no variant (they're
    `FunctionCall("Rational", …)`, string-checked at ~200 sites — ouch);
@@ -232,7 +232,7 @@ also settled (Rubi, not WL notebooks) is tracked as `johnhenry/mallory#16`.
    engine-dependence and our differential tolerances (not exact snapshots)
    are the right defense; release builds keep `overflow-checks = true`
    ("for a CAS, numeric correctness matters more than the small runtime
-   cost") — mallory-plus's Rust kernels currently follow Rust's default
+   cost") — math-plus's Rust kernels currently follow Rust's default
    (checks off in release); for f32 kernels overflow isn't the live risk,
    but worth remembering if integer kernels ever land.
 7. **One genuinely portable data-structure idea**: their `ExprList` starts
@@ -253,7 +253,7 @@ Woxi ships wasm-bindgen + wasm-pack with a hand-written npm wrapper
 extern for `Import[url]`, and **panic recovery by re-importing the module
 with a cache-busted URL** (a trapped Rust panic permanently corrupts wasm
 globals; a fresh instantiation is the only cure — their playground's worker
-does exactly this). mallory-plus's flat extern-C ABI (no wasm-bindgen) is
+does exactly this). math-plus's flat extern-C ABI (no wasm-bindgen) is
 the opposite trade, chosen for zero-marshalling hot paths — both are
 correct for their use ("rich API surface" vs "hot kernels"). The trapped-
 instance failure mode turned out to already apply to tensor-wasm (its
@@ -267,10 +267,10 @@ transparency here).
 
 ## Actionable items (filed)
 
-1. **SymPy differential oracle for mallory-math's `Symbolic`** — the one
+1. **SymPy differential oracle for @johnhenry/math's `Symbolic`** — the one
    genuine testing gap this study surfaced. differentiate/simplify/
    integrate/solve currently have only hand-written expectations; a
-   `sympy_oracle.py` subprocess (same pattern as mallory-plus's
+   `sympy_oracle.py` subprocess (same pattern as math-plus's
    `numpy_oracle.py`/`scipy_oracle.py`, skip-don't-fail) plus a
    property-based leg (generate random `Expr` trees, compare evaluation and
    derivatives) would close the loop. → `johnhenry/mallory#14`; the code
@@ -293,33 +293,33 @@ transparency here).
    (alex7o) wrapped Woxi as an MCP server for agents and called it "an
    amazing experience" — and this family is unusually well-positioned for
    that idea (johnhenry/mcp-query, @johnhenry/mcp-gate already exist).
-   A `mallory-mcp` package exposing Symbolic evaluation + tensor compute as
+   A `@johnhenry/math-plus-mcp` package exposing Symbolic evaluation + tensor compute as
    MCP tools is a real, differentiated opportunity. → filed on
-   `johnhenry/mallory-plus` (#45).
+   `johnhenry/math-plus` (#45).
 5. **Trap poisoning for tensor-wasm** (the WASM-panic finding above) →
-   `johnhenry/mallory-plus#46`, **shipped** same day.
+   `johnhenry/math-plus#46`, **shipped** same day.
 6. **Docs-as-tests** (the scrut pattern): executable COOKBOOK.md/readme
    examples so documented output can't rot → `johnhenry/mallory#17`.
-7. **Zero-install browser playground for mallory-math** (Woxi's
-   distribution-surface lesson; mallory-graph is the rich Studio analogue,
+7. **Zero-install browser playground for @johnhenry/math** (Woxi's
+   distribution-surface lesson; mallory (formerly mallory-graph) is the rich Studio analogue,
    the minimal link-shareable REPL is what's missing; someday) →
    `johnhenry/mallory#18`.
 8. **Workspace manifest drift guards** (the functions.csv-rot lesson
    applied to our own three hand-maintained lists: root build/test `-w`
    flags, `sync-jsr-configs.mjs` `PACKAGE_DIRS`) →
-   `johnhenry/mallory-plus#47`.
+   `johnhenry/math-plus#47`.
 9. **Randomized cross-backend differential fuzzer** (Woxi's diff-fuzz
    shape, but with our own CPU interpreter as the oracle against
    CompiledFn/WGSL/WASM — random IR graphs, seeded replay, monotone
-   shrinking, self-check mode) → `johnhenry/mallory-plus#48`.
+   shrinking, self-check mode) → `johnhenry/math-plus#48`.
 10. **Contention-flake stabilization** (SIMD benchmark + WebGPU cold-start
     `NO_NAVIGATOR_GPU`, both hit repeatedly; Woxi prior art: isolation over
     tolerance, bounded diagnostic retries, warm-up outside the timed path)
-    → `johnhenry/mallory-plus#49`.
+    → `johnhenry/math-plus#49`.
 11. **Repo-level AGENTS.md** distilling the scattered conventions (Woxi's
     agent playbook — including their "never implement a construct twice"
     rule — demonstrably held 8k agent-written commits together) →
-    `johnhenry/mallory-plus#50`.
+    `johnhenry/math-plus#50`.
 
 ## Trigger-filed (dormant until their trigger fires; close as not-needed if it never does)
 
@@ -328,10 +328,10 @@ transparency here).
   `johnhenry/mallory#19`.
 - **Rust crate splitting for compile time** (their hardest-won lesson —
   "the one structural fix we never made") — trigger: tensor-wasm-kernels
-  reaching ~5k lines or a second kernel family → `johnhenry/mallory-plus#51`.
+  reaching ~5k lines or a second kernel family → `johnhenry/math-plus#51`.
 - **`overflow-checks = true` in release** — trigger: the first
   integer-dtype kernel (f32-only kernels can't overflow-wrap; pairs with
-  #46's trap poisoning once enabled) → `johnhenry/mallory-plus#52`.
+  #46's trap poisoning once enabled) → `johnhenry/math-plus#52`.
 
 ## Findings deliberately NOT filed as issues (permanent rejections, not deferrals)
 

@@ -22,7 +22,7 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { compile, evalWithGrad, Traced } from "../src/index.ts";
 
 const MAX_ROUNDS = 3;

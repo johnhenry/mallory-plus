@@ -1,9 +1,9 @@
 {
-  "name": "@johnhenry/mallory-tensor-wasm",
+  "name": "@johnhenry/math-plus-tensor-wasm",
   "version": "0.0.1",
   "license": "MIT",
   "exports": "./src/index.ts",
   "imports": {
-    "mallory-telemetry": "jsr:@johnhenry/mallory-telemetry@^0.0.1"
+    "@johnhenry/math-plus-telemetry": "jsr:@johnhenry/math-plus-telemetry@^0.0.1"
   }
 }

@@ -3,7 +3,7 @@
  * `(x - mean[c]) / std[c]` on a `[H, W, C]` or `[N, H, W, C]` tensor
  * (channel-last, `C` the fastest-varying/last axis).
  */
-import { Tensor, type DType } from "mallory-tensor-core";
+import { Tensor, type DType } from "@johnhenry/math-plus-tensor-core";
 import { assertFloatDtype, flattenToFloat64, toDtypeArray } from "./util.ts";
 
 export interface NormalizeOptions {

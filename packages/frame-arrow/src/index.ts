@@ -1,5 +1,5 @@
 /**
- * mallory-frame-arrow — an immutable, expression-oriented Frame/Series
+ * @johnhenry/math-plus-frame-arrow — an immutable, expression-oriented Frame/Series
  * dataframe library on top of apache-arrow (pinned exactly 21.2.0).
  *
  * See docs/spikes/arrow-parity.md for the v1 type claims and the JS-API

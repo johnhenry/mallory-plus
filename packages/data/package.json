@@ -1,7 +1,7 @@
 {
-  "name": "mallory-data",
+  "name": "@johnhenry/math-plus-data",
   "version": "0.0.3",
-  "description": "Async dataset pipelines for mallory-plus (issue #22) — the v2 `data` namespace: a curated Dataset facade over mallory-iteration (chunk/batch/shuffle/epochs/mapConcurrent/prefetch/fold, AbortSignal cancellation) producing Tensor batches for tensor-autograd's trainer",
+  "description": "Async dataset pipelines for math-plus (issue #22) — the v2 `data` namespace: a curated Dataset facade over @johnhenry/iteration (chunk/batch/shuffle/epochs/mapConcurrent/prefetch/fold, AbortSignal cancellation) producing Tensor batches for tensor-autograd's trainer",
   "type": "module",
   "exports": {
     ".": {
@@ -18,20 +18,23 @@
     "test": "npm run typecheck && node --test test/*.test.ts"
   },
   "dependencies": {
-    "mallory-iteration": "^0.0.0",
-    "mallory-tensor-core": "0.2.0"
+    "@johnhenry/iteration": "^0.0.0",
+    "@johnhenry/math-plus-tensor-core": "0.2.0"
   },
   "devDependencies": {
-    "mallory-tensor-autograd": "0.2.2"
+    "@johnhenry/math-plus-tensor-autograd": "0.2.2"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/johnhenry/mallory-plus.git",
+    "url": "git+https://github.com/johnhenry/math-plus.git",
     "directory": "packages/data"
   },
   "license": "MIT",
   "sideEffects": false,
   "engines": {
     "node": ">=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

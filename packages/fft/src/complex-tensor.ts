@@ -2,7 +2,7 @@
  * ComplexTensor (issue #40) — the boundary contract decided in
  * docs/PLAN.md §6.3's "Complex-number dependency for fft" note: storage
  * stays split TypedArrays (a `real` Tensor and an `imag` Tensor, same
- * shape/dtype), `at()`/`item()` return a mallory-math `ComplexNumber`, and
+ * shape/dtype), `at()`/`item()` return a @johnhenry/math `ComplexNumber`, and
  * constructors accept `ComplexNumber[]` at the edges. Boxed at edges, flat
  * in kernels — consistent with non-goals 3 and 9.
  *
@@ -11,8 +11,8 @@
  * output type and to round-trip against `ComplexNumber[]` at the edges.
  * Real arithmetic on complex tensors is separate, unscoped future work.
  */
-import { ComplexNumber } from "mallory-scalar-types";
-import { Tensor, type DType, type Shape } from "mallory-tensor-core";
+import { ComplexNumber } from "@johnhenry/math-plus-scalar-types";
+import { Tensor, type DType, type Shape } from "@johnhenry/math-plus-tensor-core";
 
 export class ComplexTensor {
   readonly real: Tensor;

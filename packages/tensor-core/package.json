@@ -1,5 +1,5 @@
 {
-  "name": "mallory-tensor-core",
+  "name": "@johnhenry/math-plus-tensor-core",
   "version": "0.2.0",
   "description": "Typed n-dimensional arrays for JS/TS: dtypes, strides/views, broadcasting, .npy I/O — part of Mallory Plus",
   "type": "module",
@@ -19,12 +19,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/johnhenry/mallory-plus.git",
+    "url": "git+https://github.com/johnhenry/math-plus.git",
     "directory": "packages/tensor-core"
   },
   "license": "MIT",
   "sideEffects": false,
   "engines": {
     "node": ">=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

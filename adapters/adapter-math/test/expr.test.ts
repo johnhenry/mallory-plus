@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Tensor } from "mallory-tensor-core";
-import { Symbolic } from "mallory-math";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
+import { Symbolic } from "@johnhenry/math";
 import { compileExpr, UnsupportedExprError } from "../src/index.ts";
 
 function num(t: unknown): number {
@@ -102,7 +102,7 @@ test("compileExpr: throws UnsupportedExprError on gcd/lcm (integer-domain, no el
   assert.throws(() => compileExpr(gcdExpr, { variables: ["x", "y"] }), UnsupportedExprError);
 });
 
-test("compileExpr: throws mallory-math's UndeclaredVariableError (not a silent NaN) when the declared variable list omits a referenced variable", () => {
+test("compileExpr: throws @johnhenry/math's UndeclaredVariableError (not a silent NaN) when the declared variable list omits a referenced variable", () => {
   const expr = Symbolic.parse("x + y");
   assert.throws(() => compileExpr(expr, { variables: ["x"] }));
 });

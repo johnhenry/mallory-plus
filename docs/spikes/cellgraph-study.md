@@ -1,4 +1,4 @@
-# Spike: CellGraph (mallory-graph) as prior art for frame-arrow's lazy planner
+# Spike: CellGraph (mallory, formerly mallory-graph) as prior art for frame-arrow's lazy planner
 
 Studied: `~/Projects/mallory-graph/src/lib/cell-graph.ts` (331 lines) + call sites
 (`use-cell.ts`, `GraphCanvas.tsx:72-150`, `ExpressionRow.tsx:42-140`). Target:
@@ -53,7 +53,7 @@ edge on a cell that may be created later.
 |---|---|---|
 | Pull-based laziness (`get()` recomputes on demand) | **Yes, conceptually** | `.collect()` *is* frame-arrow's `get()`: nothing executes until demanded. This is the strongest carry-over, and it's an idea, not code. |
 | Auto-recorded edges via evaluation stack | **No** | CellGraph needs runtime tracking because computes are opaque closures over dynamic string ids. A Frame plan DAG's edges are explicit by construction — each node holds its child node(s). Stack tracking solves a problem frame-arrow doesn't have. |
-| Eager dirty-marking + invalidation | **Mostly no; narrow yes later** | Frame plans are immutable expression DAGs — a node never "changes," so nothing dirties. The only invalidation frame-arrow could ever need is for *mutable external sources* (`scanParquet` on a file that changed between collects), and the right shape there is cache keys `(plan hash, source snapshot version/mtime)`, not push-dirty over a mutable id graph. v1 (§6.2) doesn't cache across `.collect()` calls at all, so this is N/A until a reactive/cached layer exists — which in mallory-graph is the *app* layer, not the graph. |
+| Eager dirty-marking + invalidation | **Mostly no; narrow yes later** | Frame plans are immutable expression DAGs — a node never "changes," so nothing dirties. The only invalidation frame-arrow could ever need is for *mutable external sources* (`scanParquet` on a file that changed between collects), and the right shape there is cache keys `(plan hash, source snapshot version/mtime)`, not push-dirty over a mutable id graph. v1 (§6.2) doesn't cache across `.collect()` calls at all, so this is N/A until a reactive/cached layer exists — which in mallory is the *app* layer, not the graph. |
 | structuralEqual suppression | **No — cost model inverts** | Deep-equality over an Arrow table is an O(n·cols) scan; doing it to *save* downstream work is exactly backwards at dataframe scale. The analog, if ever needed, is cheap fingerprints (schema + row count + column stats/hashes). The *reference-preservation* trick (keep old identity on no-op recompute) is worth remembering for any future reactive binding. |
 | Version counters for useSyncExternalStore | **Not for the planner** | Belongs to a hypothetical future React-binding package (a notebook UI re-collecting frames), which would sit *above* frame-arrow — same layering as `use-cell.ts` sitting above CellGraph. |
 | Free/dependent/auxiliary roles | **Loose echo only** | Leaf scan nodes ≈ free, derived nodes ≈ dependent, optimizer-inserted nodes ≈ auxiliary. Cosmetic; falls out of node types for free. |
@@ -93,7 +93,7 @@ planner needs none of that code; what carries over — pull-until-demanded,
 memoize shared subresults, preserve identity on no-op recompute — is three
 ideas totaling zero reusable lines. Extraction would freeze a private app's
 internal API into a shared package for negative benefit. **Revisit trigger:**
-if mallory-plus later grows a reactive notebook layer ("auto re-collect when
+if math-plus later grows a reactive notebook layer ("auto re-collect when
 the Parquet file changes, don't re-render unchanged panes"), *that layer* is
 shaped exactly like CellGraph and extraction becomes worth re-asking — but it
 would depend on frame-arrow, not live inside it.

@@ -3,7 +3,7 @@
  * the same tape as `Variable.backward()`. `fn` must return a scalar
  * (size-1) Variable.
  */
-import type { Tensor } from "mallory-tensor-core";
+import type { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { Variable, enableGrad, noGrad } from "./variable.ts";
 
 function runAndDiff(fn: (x: Variable) => Variable, x: Tensor): { value: Tensor; grad: Tensor } {

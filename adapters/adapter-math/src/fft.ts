@@ -1,17 +1,17 @@
 /**
- * FFT bridge (issue #33). mallory-math's `FFT` class operates on plain
+ * FFT bridge (issue #33). @johnhenry/math's `FFT` class operates on plain
  * `(ComplexNumber | number)[]` arrays; this wraps it in the split-storage
- * `{real, imag}` Float64Array convention `mallory-scalar-types`'s
+ * `{real, imag}` Float64Array convention `@johnhenry/math-plus-scalar-types`'s
  * `complexToParts`/`partsToComplex` already established for tensor edges,
  * so the same shape works for a real-only signal (`imag` omitted) or a
  * full complex one.
  *
  * v1 is a thin, reference-speed wrapper -- no native WASM FFT kernel yet,
  * same "reference-speed now, native kernels later" framing as this
- * package's own `linalg.ts`. No batching/2-D FFT (mallory-math's own `FFT`
+ * package's own `linalg.ts`. No batching/2-D FFT (@johnhenry/math's own `FFT`
  * doesn't have it either).
  */
-import { ComplexNumber, FFT } from "mallory-math";
+import { ComplexNumber, FFT } from "@johnhenry/math";
 
 export interface ComplexSignal {
   readonly real: Float64Array;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Distributions, SpecialFunctions, Statistics, Vector } from "mallory-math";
+import { Distributions, SpecialFunctions, Statistics, Vector } from "@johnhenry/math";
 import {
   correlation,
   Distributions as BridgedDistributions,
@@ -34,7 +34,7 @@ test("beta(a, b) = gamma(a)*gamma(b)/gamma(a+b), self-consistency check", () => 
   assert.ok(Math.abs(SpecialFunctions.beta(a, b) - expected) < 1e-6);
 });
 
-test("mean/variance/standardDeviation accept a plain Float64Array (bridged from mallory-math's Vector-only Statistics.ts)", () => {
+test("mean/variance/standardDeviation accept a plain Float64Array (bridged from @johnhenry/math's Vector-only Statistics.ts)", () => {
   const data = new Float64Array([2, 4, 4, 4, 5, 5, 7, 9]);
   assert.ok(Math.abs(mean(data) - 5) < 1e-9);
   // Population variance for this classic example is 4, sample variance is 4 * 8/7.
@@ -51,7 +51,7 @@ test("mean correctly handles a single-element input (the Vector single-number co
   assert.equal(mean(new Float64Array([42])), 42);
 });
 
-test("median/percentile match mallory-math's own values directly (percentile is a 0-1 fraction, matching its convention exactly)", () => {
+test("median/percentile match @johnhenry/math's own values directly (percentile is a 0-1 fraction, matching its convention exactly)", () => {
   const data = [1, 2, 3, 4, 5];
   const reference = Vector.fromArray(data);
   assert.equal(median(data), Statistics.median(reference));

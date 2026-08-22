@@ -2,7 +2,7 @@
 
 `columns`/`filters` are pyarrow's OWN option shapes (a plain column-name
 list; pyarrow's tuple/list filter expressions -- see pyarrow.parquet's own
-docs), not a translation of mallory-frame-parquet's mongo-style `filter`
+docs), not a translation of @johnhenry/math-plus-frame-parquet's mongo-style `filter`
 option ($gt/$lt/etc.) -- the two ecosystems' pushdown APIs are different by
 design (hyparquet vs. Arrow's own C++ Parquet reader) and translating
 between them isn't part of this package's v1 scope. Both independently
@@ -38,7 +38,7 @@ def write_parquet(df: pd.DataFrame, path: str, compression: str = "snappy") -> N
     ("snappy", "zstd", "gzip", "brotli", "lz4", "none", ...) -- pyarrow ships
     a real zstd ENCODER natively (unlike the JS side's hyparquet-writer,
     which needed a bring-your-own WASM compressor -- see
-    mallory-frame-parquet's src/zstd.ts), so there's no analogous footgun
+    @johnhenry/math-plus-frame-parquet's src/zstd.ts), so there's no analogous footgun
     to guard against here.
 
     Uses ``dataframe_to_table`` (not a bare ``pa.Table.from_pandas``) so

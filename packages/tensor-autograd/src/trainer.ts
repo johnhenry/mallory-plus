@@ -6,7 +6,7 @@
  *
  * `fit(dataLoader)` accepts any `AsyncIterable<{x: Tensor, y: Tensor}>` --
  * deliberately NOT a dependency on the `data` namespace (issue #22, itself
- * blocked on `mallory-iteration`'s npm publish). A hand-rolled async
+ * blocked on `@johnhenry/iteration`'s npm publish). A hand-rolled async
  * generator satisfies this interface just as well; `data`'s eventual output
  * would too, once it exists.
  *
@@ -19,7 +19,7 @@
  * wanting N epochs over a streaming loader should call `fit()` N times with
  * a fresh iterable each time, or use a loader that's genuinely re-iterable.
  */
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { constant, variable, type Variable } from "./variable.ts";
 import type { Module } from "./nn.ts";
 

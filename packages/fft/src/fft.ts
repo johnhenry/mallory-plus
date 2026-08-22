@@ -3,15 +3,15 @@
  * Cooley-Tukey implementation over flat Float64Array real/imag pairs, NOT
  * routing through adapter-math's existing boxed-ComplexNumber-based FFT
  * bridge (#33) at this hot path -- matches tensor-compile's own "stays
- * dependency-free of mallory-math" precedent for kernel-shaped code.
- * mallory-math's FFT class serves as the differential-test oracle instead
+ * dependency-free of @johnhenry/math" precedent for kernel-shaped code.
+ * @johnhenry/math's FFT class serves as the differential-test oracle instead
  * (devDependency only, same pattern as the erf cross-check test, #34).
  *
  * Reference-speed JS, no WASM kernel in v1 -- same framing as
  * adapter-math's linalg.ts and this repo's other "reference now, native
  * later" precedents.
  */
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { ComplexTensor } from "./complex-tensor.ts";
 
 function isPowerOfTwo(n: number): boolean {
@@ -125,7 +125,7 @@ export function fftPadded(input: ComplexTensor): ComplexTensor {
 
 // ---- fft2/ifft2 + fftshift/ifftshift (issue #69) ---------------------------
 //
-// The one bridge between mallory-fft and mallory-image that didn't exist:
+// The one bridge between @johnhenry/math-plus-fft and @johnhenry/math-plus-image that didn't exist:
 // no 2-D FFT, and critically no fftshift -- the function everyone pairs
 // with a 2-D FFT for spectral-image work (centering the zero-frequency
 // component).

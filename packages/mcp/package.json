@@ -1,7 +1,7 @@
 {
-  "name": "mallory-mcp",
+  "name": "@johnhenry/math-plus-mcp",
   "version": "0.0.5",
-  "description": "MCP server exposing mallory-math Symbolic evaluation + guarded tensor/linalg computation as agent-callable tools (issue #45) — no arbitrary code execution, structured inputs only",
+  "description": "MCP server exposing @johnhenry/math Symbolic evaluation + guarded tensor/linalg computation as agent-callable tools (issue #45) — no arbitrary code execution, structured inputs only",
   "type": "module",
   "exports": {
     ".": {
@@ -10,7 +10,7 @@
     }
   },
   "bin": {
-    "mallory-mcp": "./dist/cli.js"
+    "math-plus-mcp": "./dist/cli.js"
   },
   "files": [
     "dist"
@@ -22,19 +22,22 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "mallory-adapter-math": "0.2.0",
-    "mallory-math": "^0.8.0",
-    "mallory-tensor-core": "0.2.0",
-    "zod": "^3.25.0"
+    "zod": "^3.25.0",
+    "@johnhenry/math-plus-adapter-math": "0.2.0",
+    "@johnhenry/math": "^0.8.0",
+    "@johnhenry/math-plus-tensor-core": "0.2.0"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/johnhenry/mallory-plus.git",
+    "url": "git+https://github.com/johnhenry/math-plus.git",
     "directory": "packages/mcp"
   },
   "license": "MIT",
   "sideEffects": false,
   "engines": {
     "node": ">=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

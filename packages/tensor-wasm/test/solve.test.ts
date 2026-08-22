@@ -2,13 +2,13 @@
  * solveInto (issue #39, the first native-kernel candidate named in
  * docs/PLAN.md §9 item 1). Differential-tested against adapter-math's
  * existing reference-speed `linalg.solve` (itself already verified against
- * mallory-math's MatrixMath.solve) -- see linalg.ts's own doc comment: this
+ * @johnhenry/math's MatrixMath.solve) -- see linalg.ts's own doc comment: this
  * native kernel sits ALONGSIDE that reference path, not replacing it.
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { linalg } from "mallory-adapter-math";
-import { Tensor } from "mallory-tensor-core";
+import { linalg } from "@johnhenry/math-plus-adapter-math";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { Kernels } from "../src/index.ts";
 
 function closeArrays(a: ArrayLike<number>, b: ArrayLike<number>, tol: number): void {

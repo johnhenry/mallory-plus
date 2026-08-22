@@ -9,7 +9,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Traced, type BinaryOp, type CmpOp, type UnaryOp } from "mallory-tensor-compile";
+import { Traced, type BinaryOp, type CmpOp, type UnaryOp } from "@johnhenry/math-plus-tensor-compile";
 import { compileIRToWGSL } from "../src/fusion-wgsl.ts";
 
 const ALL_UNARY: readonly UnaryOp[] = [
@@ -75,10 +75,10 @@ test("compileIRToWGSL: select node lowers using WGSL select() with the cond comp
 
 test("compileIRToWGSL: emits the erf helper function only when erf is used", () => {
   const withErf = compileIRToWGSL({ kind: "unary", op: "erf", arg: { kind: "input", index: 0 } }, 1);
-  assert.match(withErf.code, /fn mallory_erf/);
+  assert.match(withErf.code, /fn math_plus_erf/);
 
   const withoutErf = compileIRToWGSL({ kind: "unary", op: "neg", arg: { kind: "input", index: 0 } }, 1);
-  assert.doesNotMatch(withoutErf.code, /fn mallory_erf/);
+  assert.doesNotMatch(withoutErf.code, /fn math_plus_erf/);
 });
 
 test("compileIRToWGSL: traced expression built via Traced (the same API CompiledFn uses) lowers without throwing", () => {

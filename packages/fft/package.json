@@ -1,7 +1,7 @@
 {
-  "name": "mallory-fft",
+  "name": "@johnhenry/math-plus-fft",
   "version": "0.2.0",
-  "description": "ComplexTensor + fft/ifft/rfft/irfft for mallory-plus (issue #40) — v2 practical ML/media compute bundle",
+  "description": "ComplexTensor + fft/ifft/rfft/irfft for math-plus (issue #40) — v2 practical ML/media compute bundle",
   "type": "module",
   "exports": {
     ".": {
@@ -18,21 +18,24 @@
     "test": "npm run typecheck && node --test test/*.test.ts"
   },
   "dependencies": {
-    "mallory-scalar-types": "0.0.1",
-    "mallory-tensor-core": "0.2.0"
+    "@johnhenry/math-plus-scalar-types": "0.0.1",
+    "@johnhenry/math-plus-tensor-core": "0.2.0"
   },
   "devDependencies": {
-    "mallory-adapter-math": "0.2.0",
-    "mallory-math": "^0.8.0"
+    "@johnhenry/math-plus-adapter-math": "0.2.0",
+    "@johnhenry/math": "^0.8.0"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/johnhenry/mallory-plus.git",
+    "url": "git+https://github.com/johnhenry/math-plus.git",
     "directory": "packages/fft"
   },
   "license": "MIT",
   "sideEffects": false,
   "engines": {
     "node": ">=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

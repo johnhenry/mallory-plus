@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NumPy oracle for mallory-fft's fft2/ifft2/fftshift/ifftshift (issue #69)
+"""NumPy oracle for @johnhenry/math-plus-fft's fft2/ifft2/fftshift/ifftshift (issue #69)
 and fftn/ifftn (issue #84).
 
 Reads {"op": "fft2"|"ifft2"|"fftshift"|"ifftshift"|"fftn"|"ifftn", "real":

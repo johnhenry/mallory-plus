@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { convolve, convolve1D } from "../src/index.ts";
 
 function close(a: ArrayLike<number>, b: ArrayLike<number>, tol = 1e-9): void {

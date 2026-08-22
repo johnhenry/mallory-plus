@@ -2,18 +2,18 @@
  * Special functions / distributions / descriptive statistics bridge (issue
  * #35) for the future SciPy-equivalent tier (docs/PLAN.md §6.3). Same
  * "reference-speed now, native kernels later" framing as this package's own
- * `linalg.ts` -- these are direct delegations to mallory-math, not
+ * `linalg.ts` -- these are direct delegations to @johnhenry/math, not
  * reimplementations, and there is no native WASM kernel in v1.
  *
  * `SpecialFunctions` (gamma/lnGamma/beta/erf/erfc/regularizedGammaP,Q/
  * regularizedIncompleteBeta) and `Distributions`/`HypothesisTests` are pure
  * scalar functions with no tensor-shape aspect at all -- they're re-exported
  * verbatim below, the same "no wrapping needed" pattern
- * `mallory-scalar-types` already uses for `ComplexNumber`/`Rational`/
+ * `@johnhenry/math-plus-scalar-types` already uses for `ComplexNumber`/`Rational`/
  * `Decimal`.
  *
  * `Statistics.ts`'s array-in descriptive-stats functions DO need a shape
- * adapter: they require mallory-math's own `Vector<number>` (an `Array`
+ * adapter: they require @johnhenry/math's own `Vector<number>` (an `Array`
  * subclass with `x`/`y`/`z`/`t` getters a plain array literal doesn't
  * structurally satisfy -- `Vector.fromArray` is used below rather than
  * spreading into `new Vector(...)`, which (per `Vector`'s own doc comment)
@@ -26,10 +26,10 @@
  * functions is wrapped (this is a v1 subset, not an exhaustive port) -- add
  * more the same way if a concrete need shows up.
  */
-export { Distributions, HypothesisTests, SpecialFunctions } from "mallory-math";
-export type { ContinuousDistribution, DiscreteDistribution } from "mallory-math";
+export { Distributions, HypothesisTests, SpecialFunctions } from "@johnhenry/math";
+export type { ContinuousDistribution, DiscreteDistribution } from "@johnhenry/math";
 
-import { Statistics, Vector } from "mallory-math";
+import { Statistics, Vector } from "@johnhenry/math";
 
 export interface LinearFit {
   readonly slope: number;
@@ -69,7 +69,7 @@ export function median(data: Float64Array | readonly number[]): number {
   return Statistics.median(toVec(data));
 }
 
-/** The n-th percentile, as a FRACTION in [0, 1] (matching mallory-math's own `Statistics.percentile` convention exactly -- e.g. `0.5` for the median, not `50`). */
+/** The n-th percentile, as a FRACTION in [0, 1] (matching @johnhenry/math's own `Statistics.percentile` convention exactly -- e.g. `0.5` for the median, not `50`). */
 export function percentile(data: Float64Array | readonly number[], n: number): number {
   return Statistics.percentile(toVec(data), n);
 }

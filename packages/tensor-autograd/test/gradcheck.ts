@@ -6,7 +6,7 @@
  * wrapped in `.sum()` by the caller, same as PyTorch's `gradcheck` convention.
  */
 import assert from "node:assert/strict";
-import { Tensor, type DType } from "mallory-tensor-core";
+import { Tensor, type DType } from "@johnhenry/math-plus-tensor-core";
 import { Variable } from "../src/index.ts";
 
 function flattenNested(value: unknown): number[] {

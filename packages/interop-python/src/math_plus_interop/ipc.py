@@ -1,7 +1,7 @@
 """Arrow IPC convenience wrappers (issue #21).
 
 Thin wrappers around pyarrow's IPC reader/writer, matching the file-format
-side of what mallory-frame-arrow's ``Frame.fromIPC``/``.toIPC()`` produce
+side of what @johnhenry/math-plus-frame-arrow's ``Frame.fromIPC``/``.toIPC()`` produce
 and consume on the JS side (Arrow IPC **file** format, not stream format --
 matches docs/spikes/arrow-parity.md's methodology, which verified both
 formats round-trip but frame-arrow's own toIPC()/fromIPC() use file format).
@@ -20,7 +20,7 @@ def read_ipc(path: str) -> pd.DataFrame:
     """Read an Arrow IPC file into a pandas DataFrame.
 
     Uses ``types_mapper=pd.ArrowDtype`` so nullable extension dtypes (e.g. a
-    nullable ``int32``/``bool`` column written by mallory-frame-arrow) round-trip
+    nullable ``int32``/``bool`` column written by @johnhenry/math-plus-frame-arrow) round-trip
     exactly instead of pandas' classic NumPy-backed dtypes silently coercing
     nullable ints to float64 (docs/spikes/arrow-parity.md's own recorded gotcha).
     """

@@ -1,10 +1,10 @@
 {
-  "name": "@johnhenry/mallory-data",
+  "name": "@johnhenry/math-plus-data",
   "version": "0.0.1",
   "license": "MIT",
   "exports": "./src/index.ts",
   "imports": {
-    "mallory-iteration": "jsr:@johnhenry/mallory-iteration@^0.0.0",
-    "mallory-tensor-core": "jsr:@johnhenry/mallory-tensor-core@^0.0.1"
+    "@johnhenry/iteration": "jsr:@johnhenry/iteration@^0.0.0",
+    "@johnhenry/math-plus-tensor-core": "jsr:@johnhenry/math-plus-tensor-core@^0.0.1"
   }
 }

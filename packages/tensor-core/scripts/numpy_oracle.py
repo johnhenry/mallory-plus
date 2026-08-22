@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NumPy oracle for mallory-tensor-core differential tests.
+"""NumPy oracle for @johnhenry/math-plus-tensor-core differential tests.
 
 Reads a JSON job file:
   {

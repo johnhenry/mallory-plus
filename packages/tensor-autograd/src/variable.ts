@@ -1,6 +1,6 @@
 /**
- * mallory-tensor-autograd — reverse-mode automatic differentiation over
- * mallory-tensor-core `Tensor`s (issue #8).
+ * @johnhenry/math-plus-tensor-autograd — reverse-mode automatic differentiation over
+ * @johnhenry/math-plus-tensor-core `Tensor`s (issue #8).
  *
  * Design: `Tensor` stays plain and immutable (tensor-core has no grad
  * bookkeeping fields, by design — it's the pure numeric core). `Variable`
@@ -23,8 +23,8 @@
  * immutable style — there's nothing to reject at runtime because the
  * mutating method doesn't exist.
  */
-import { Tensor, type Axis } from "mallory-tensor-core";
-import { timed } from "mallory-telemetry";
+import { Tensor, type Axis } from "@johnhenry/math-plus-tensor-core";
+import { timed } from "@johnhenry/math-plus-telemetry";
 import { sumToShape } from "./shape-utils.ts";
 
 let gradEnabled = true;

@@ -1,7 +1,7 @@
 {
-  "name": "mallory-signal",
+  "name": "@johnhenry/math-plus-signal",
   "version": "0.3.0",
-  "description": "convolve/stft/istft/findPeaks/sosFilter/butter/resamplePoly for mallory-plus (issue #44) — v2/v3 SciPy-equivalent bundle, the signal-processing slice",
+  "description": "convolve/stft/istft/findPeaks/sosFilter/butter/resamplePoly for math-plus (issue #44) — v2/v3 SciPy-equivalent bundle, the signal-processing slice",
   "type": "module",
   "exports": {
     ".": {
@@ -18,18 +18,21 @@
     "test": "npm run typecheck && node --test test/*.test.ts"
   },
   "dependencies": {
-    "mallory-fft": ">=0.2.0",
-    "mallory-scalar-types": "0.0.1",
-    "mallory-tensor-core": ">=0.2.0"
+    "@johnhenry/math-plus-fft": ">=0.2.0",
+    "@johnhenry/math-plus-scalar-types": "0.0.1",
+    "@johnhenry/math-plus-tensor-core": ">=0.2.0"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/johnhenry/mallory-plus.git",
+    "url": "git+https://github.com/johnhenry/math-plus.git",
     "directory": "packages/signal"
   },
   "license": "MIT",
   "sideEffects": false,
   "engines": {
     "node": ">=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

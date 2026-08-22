@@ -7,13 +7,13 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { test } from "node:test";
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { linalg } from "../src/index.ts";
 
 const ORACLE_SCRIPT = new URL("../scripts/eig_oracle.py", import.meta.url).pathname;
 
 function findOraclePython(): string | undefined {
-  for (const candidate of [process.env.MALLORY_ORACLE_PYTHON, "python3"].filter((c): c is string => Boolean(c))) {
+  for (const candidate of [process.env.MATH_PLUS_ORACLE_PYTHON, "python3"].filter((c): c is string => Boolean(c))) {
     try {
       execFileSync(candidate, ["-c", "import numpy"], { stdio: "ignore" });
       return candidate;
@@ -25,7 +25,7 @@ function findOraclePython(): string | undefined {
 }
 
 const PYTHON = findOraclePython();
-const skip = PYTHON ? false : "no python with numpy found (set MALLORY_ORACLE_PYTHON)";
+const skip = PYTHON ? false : "no python with numpy found (set MATH_PLUS_ORACLE_PYTHON)";
 
 function runOracle(matrix: number[][]): Array<[number, number]> {
   const out = execFileSync(PYTHON as string, [ORACLE_SCRIPT], { input: JSON.stringify({ matrix }), encoding: "utf8" });

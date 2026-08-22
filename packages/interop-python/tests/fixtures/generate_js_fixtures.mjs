@@ -4,7 +4,7 @@
  * bidirectional conformance suite (issue #21). Run from the repo root
  * (`node packages/interop-python/tests/fixtures/generate_js_fixtures.mjs`)
  * so Node's module resolution finds the workspace-hoisted `apache-arrow`/
- * `mallory-frame-arrow`/`mallory-frame-parquet` in the root `node_modules` —
+ * `@johnhenry/math-plus-frame-arrow`/`@johnhenry/math-plus-frame-parquet` in the root `node_modules` —
  * this script isn't part of the npm workspace itself (interop-python has no
  * package.json, deliberately: see docs/RELEASING.md, it's a PyPI package
  * outside the npm/Cargo workspaces), it just borrows from it to generate
@@ -25,8 +25,8 @@ import {
   Utf8,
   vectorFromArray,
 } from "apache-arrow";
-import { Frame } from "mallory-frame-arrow";
-import { writeParquet } from "mallory-frame-parquet";
+import { Frame } from "@johnhenry/math-plus-frame-arrow";
+import { writeParquet } from "@johnhenry/math-plus-frame-parquet";
 
 const DIR = fileURLToPath(new URL(".", import.meta.url));
 

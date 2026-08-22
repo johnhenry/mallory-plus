@@ -1,11 +1,11 @@
 name: Release interop-python
 
-# packages/interop-python is a PyPI package (`mallory-interop`) outside the
+# packages/interop-python is a PyPI package (`johnhenry-math-plus-interop`) outside the
 # npm/Cargo workspaces (docs/RELEASING.md), released separately from the
 # Changesets-driven npm/JSR releases in release.yml. Tag-triggered rather
 # than push-to-main-triggered, matching PyPI's own convention (and this
 # package's slower, independent release cadence) — push a tag
-# `mallory-interop-vX.Y.Z` (bump the version in pyproject.toml first) to
+# `johnhenry-math-plus-interop-vX.Y.Z` (bump the version in pyproject.toml first) to
 # publish.
 #
 # Uses PyPI's OIDC "Trusted Publishing" — no token/secret to store, but it
@@ -15,7 +15,7 @@ name: Release interop-python
 on:
   push:
     tags:
-      - "mallory-interop-v*"
+      - "johnhenry-math-plus-interop-v*"
   workflow_dispatch: {}
 
 permissions:

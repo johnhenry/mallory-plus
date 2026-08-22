@@ -1,10 +1,10 @@
-"""mallory-interop -- the Python-side half of mallory-plus's interop story
-(issue #21). Ships to PyPI as `mallory-interop`, installed alongside
+"""johnhenry-math-plus-interop -- the Python-side half of math-plus's interop story
+(issue #21). Ships to PyPI as `johnhenry-math-plus-interop`, installed alongside
 pyarrow/pandas.
 
 Explicitly NOT the Arrow C Data Interface / PyCapsule zero-copy bridge --
 deferred, since it only pays off with a native Node addon in the same
-process, which is downstream of mallory-plus's WASM work. Explicitly NOT
+process, which is downstream of math-plus's WASM work. Explicitly NOT
 built on Python's `__dataframe__()` DataFrame Interchange Protocol either --
 pandas deprecates it and drops the fallback entirely in pandas 4.0; Arrow
 IPC is the portable interop format for browser/Node/Deno/Python alike.

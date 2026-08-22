@@ -13,7 +13,7 @@ import { join } from "node:path";
 const ORACLE_SCRIPT = new URL("../scripts/scipy_oracle.py", import.meta.url).pathname;
 
 function findOraclePython(): string | undefined {
-  const candidates = [process.env.MALLORY_SCIPY_ORACLE_PYTHON, process.env.MALLORY_ORACLE_PYTHON, "python3"].filter(
+  const candidates = [process.env.MATH_PLUS_SCIPY_ORACLE_PYTHON, process.env.MATH_PLUS_ORACLE_PYTHON, "python3"].filter(
     (c): c is string => Boolean(c),
   );
   for (const candidate of candidates) {
@@ -28,11 +28,11 @@ function findOraclePython(): string | undefined {
 }
 
 export const SCIPY_PYTHON = findOraclePython();
-export const SCIPY_SKIP_REASON = SCIPY_PYTHON ? undefined : "no python with scipy found (set MALLORY_SCIPY_ORACLE_PYTHON)";
+export const SCIPY_SKIP_REASON = SCIPY_PYTHON ? undefined : "no python with scipy found (set MATH_PLUS_SCIPY_ORACLE_PYTHON)";
 
 export function runScipyOracle<T>(job: Record<string, unknown>): T {
   if (!SCIPY_PYTHON) throw new Error("runScipyOracle called without a resolved python (check SCIPY_SKIP_REASON first)");
-  const dir = mkdtempSync(join(tmpdir(), "mallory-signal-oracle-"));
+  const dir = mkdtempSync(join(tmpdir(), "math-plus-signal-oracle-"));
   try {
     const jobPath = join(dir, "job.json");
     writeFileSync(jobPath, JSON.stringify(job));

@@ -1,6 +1,6 @@
 /**
  * DType <-> ONNX Runtime Web Tensor.Type mapping (issue #18). Every mapping
- * here is a DIRECT TypedArray passthrough — mallory-tensor-core and
+ * here is a DIRECT TypedArray passthrough — @johnhenry/math-plus-tensor-core and
  * onnxruntime-web happen to back every shared dtype with the exact same
  * TypedArray class (verified against onnxruntime-common's
  * `Tensor.DataTypeMap`), so marshalling never needs to copy/convert
@@ -13,12 +13,12 @@
  * clear `UnsupportedDTypeError` rather than silently mis-mapping to
  * `float16` (the two aren't the same bit layout).
  */
-import type { DType } from "mallory-tensor-core";
+import type { DType } from "@johnhenry/math-plus-tensor-core";
 import type { Tensor as OrtTensor } from "onnxruntime-web";
 
 export class UnsupportedDTypeError extends Error {
   constructor(dtype: string, context: string) {
-    super(`mallory-adapter-onnx: dtype "${dtype}" has no ONNX Runtime Web equivalent (${context})`);
+    super(`@johnhenry/math-plus-adapter-onnx: dtype "${dtype}" has no ONNX Runtime Web equivalent (${context})`);
     this.name = "UnsupportedDTypeError";
   }
 }

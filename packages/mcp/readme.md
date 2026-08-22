@@ -1,17 +1,17 @@
-# mallory-mcp
+# @johnhenry/math-plus-mcp
 
-An [MCP](https://modelcontextprotocol.io) server exposing the Mallory family's
+An [MCP](https://modelcontextprotocol.io) server exposing the math family's
 math engines as agent-callable tools: exact symbolic computation
-(mallory-math's `Symbolic` CAS) plus guarded numeric tensor/linalg/stats
+(@johnhenry/math's `Symbolic` CAS) plus guarded numeric tensor/linalg/stats
 conveniences. Fast-starting, pure JS, no kernel, no license check — run it
 anywhere Node runs.
 
 ```bash
 # stdio transport — works with any MCP host
-npx mallory-mcp
+npx math-plus-mcp
 
 # e.g. with Claude Code:
-claude mcp add mallory -- npx mallory-mcp
+claude mcp add math-plus -- npx math-plus-mcp
 ```
 
 ## Tools (v1)
@@ -46,6 +46,6 @@ claude mcp add mallory -- npx mallory-mcp
 - No matrix arguments *between* pipeline steps (e.g. matmul with a second
   operand) — the pipeline is unary-chain only.
 - No ODE solving, Taylor series, or step-by-step derivations, though
-  mallory-math supports them — kept out of v1 to hold the tool list small
+  @johnhenry/math supports them — kept out of v1 to hold the tool list small
   and legible for agents; file an issue if you want one promoted.
 - No HTTP/SSE transport — stdio only.

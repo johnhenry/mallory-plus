@@ -1,7 +1,7 @@
 {
-  "name": "mallory-adapter-math",
+  "name": "@johnhenry/math-plus-adapter-math",
   "version": "0.2.0",
-  "description": "Bridge between mallory-math (Vector/Matrix, science/CAS side) and mallory-tensor-core (Tensor, engineering side) — Matrix/Vector <-> Tensor conversion (issue #14); Symbolic->tensor-compile IR (issue #15) and Symbolic->frame-arrow Expr (issue #38) compile targets, plus the DualNumber oracle, land here too",
+  "description": "Bridge between @johnhenry/math (Vector/Matrix, science/CAS side) and @johnhenry/math-plus-tensor-core (Tensor, engineering side) — Matrix/Vector <-> Tensor conversion (issue #14); Symbolic->tensor-compile IR (issue #15) and Symbolic->frame-arrow Expr (issue #38) compile targets, plus the DualNumber oracle, land here too",
   "type": "module",
   "exports": {
     ".": {
@@ -22,22 +22,25 @@
     "test": "npm run typecheck && node --test test/*.test.ts"
   },
   "dependencies": {
-    "mallory-math": ">=0.8.0 <1.0.0",
-    "mallory-tensor-core": ">=0.2.0",
-    "mallory-tensor-compile": ">=0.0.5",
-    "mallory-frame-arrow": "1.0.0"
+    "@johnhenry/math": ">=0.8.0 <1.0.0",
+    "@johnhenry/math-plus-tensor-core": ">=0.2.0",
+    "@johnhenry/math-plus-tensor-compile": ">=0.0.5",
+    "@johnhenry/math-plus-frame-arrow": "1.0.0"
   },
   "devDependencies": {
-    "mallory-tensor-autograd": "0.2.2"
+    "@johnhenry/math-plus-tensor-autograd": "0.2.2"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/johnhenry/mallory-plus.git",
+    "url": "git+https://github.com/johnhenry/math-plus.git",
     "directory": "adapters/adapter-math"
   },
   "license": "MIT",
   "sideEffects": false,
   "engines": {
     "node": ">=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

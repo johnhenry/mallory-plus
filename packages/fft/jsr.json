@@ -1,10 +1,10 @@
 {
-  "name": "@johnhenry/mallory-fft",
+  "name": "@johnhenry/math-plus-fft",
   "version": "0.0.1",
   "license": "MIT",
   "exports": "./src/index.ts",
   "imports": {
-    "mallory-scalar-types": "jsr:@johnhenry/mallory-scalar-types@^0.0.1",
-    "mallory-tensor-core": "jsr:@johnhenry/mallory-tensor-core@^0.0.1"
+    "@johnhenry/math-plus-scalar-types": "jsr:@johnhenry/math-plus-scalar-types@^0.0.1",
+    "@johnhenry/math-plus-tensor-core": "jsr:@johnhenry/math-plus-tensor-core@^0.0.1"
   }
 }

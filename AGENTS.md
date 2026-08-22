@@ -29,7 +29,7 @@ Full detail, exact oracle env vars, and NixOS provisioning commands:
 ## Oracle discipline
 
 Every new numeric feature gets a differential oracle (NumPy for tensor
-ops, scipy.signal for `mallory-signal`, pyarrow/pandas for frame
+ops, scipy.signal for `@johnhenry/math-plus-signal`, pyarrow/pandas for frame
 packages) — never hand-typed expected values for anything with a
 reference implementation. Oracles resolve via an env var with a
 `python3` PATH fallback, and follow a **skip-don't-fail** contract: no
@@ -71,12 +71,12 @@ of the following, not just `npm init`:
   script strings.
 - The package directory added to `scripts/sync-jsr-configs.mjs`'s
   `PACKAGE_DIRS`.
-- Once [#47](https://github.com/johnhenry/mallory-plus/issues/47) lands: run its manifest-drift check — it verifies the two
+- Once [#47](https://github.com/johnhenry/math-plus/issues/47) lands: run its manifest-drift check — it verifies the two
   points above for you and fails loudly if either is missed.
 
 ## GPU / WebGPU work
 
-Any `mallory-tensor-webgpu` test run drives a real headless Chrome+Xvfb
+Any `@johnhenry/math-plus-tensor-webgpu` test run drives a real headless Chrome+Xvfb
 instance sharing this machine's one GPU. Follow the `~/gpu.lock`
 convention (see the user-level `~/CLAUDE.md`) before running those tests:
 check for an existing lock, acquire your own, always release it

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Tensor } from "mallory-tensor-core";
-import { Variable } from "mallory-tensor-autograd";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
+import { Variable } from "@johnhenry/math-plus-tensor-autograd";
 import { compile } from "../src/index.ts";
 
 function flat(t: Tensor): number[] {

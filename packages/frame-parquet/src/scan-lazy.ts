@@ -1,7 +1,7 @@
 /**
  * `scanParquetLazy("/events/*.parquet")` — genuinely lazy glob/partitioned
  * Parquet scans (issue #32, part 2/2 — the frame-parquet half; see
- * mallory-frame-arrow's plan.ts module doc, "Lazy sources (issue #32)", for
+ * @johnhenry/math-plus-frame-arrow's plan.ts module doc, "Lazy sources (issue #32)", for
  * the `"lazySource"` PlanNode/`Frame.fromLazySource()`/`collectAsync()`
  * machinery this builds on).
  *
@@ -51,7 +51,7 @@
  */
 import { Field, Schema } from "apache-arrow";
 import { asyncBufferFromFile, parquetMetadataAsync, parquetSchema, type AsyncBuffer } from "hyparquet";
-import { Frame, type Wanted } from "mallory-frame-arrow";
+import { Frame, type Wanted } from "@johnhenry/math-plus-frame-arrow";
 import { READ_PARSERS, readParquetFile, type ReadParquetOptions } from "./read.ts";
 import { globSortedParquetPaths } from "./scan.ts";
 import { arrowTypeFor, mapNamedColumns, topLevelColumnNames } from "./schema.ts";

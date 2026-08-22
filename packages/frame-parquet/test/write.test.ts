@@ -38,7 +38,7 @@ import {
   Vector,
   vectorFromArray,
 } from "apache-arrow";
-import { Frame } from "mallory-frame-arrow";
+import { Frame } from "@johnhenry/math-plus-frame-arrow";
 import { readParquet, writeParquet, type WriteCodec } from "../src/index.ts";
 import { PYARROW_SKIP_REASON, PYTHON, runPyarrowJson } from "./helpers.ts";
 

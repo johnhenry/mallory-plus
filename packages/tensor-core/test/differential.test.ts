@@ -3,7 +3,7 @@
  * (docs/PLAN.md §6.1). Exchange format is .npy in BOTH directions, so every
  * run also exercises tensor-core's .npy reader and writer against NumPy's.
  *
- * Python resolution: $MALLORY_ORACLE_PYTHON, else `python3` on PATH. If no
+ * Python resolution: $MATH_PLUS_ORACLE_PYTHON, else `python3` on PATH. If no
  * interpreter with numpy is found the suite SKIPS (it does not fail) — CI
  * environments that guarantee the oracle should also `grep -c "skipped 0"`.
  * On trycooy: nix-shell -p "python3.withPackages(ps: [ps.numpy])" provides
@@ -22,7 +22,7 @@ const ORACLE_SCRIPT = new URL("../scripts/numpy_oracle.py", import.meta.url)
 
 function findOraclePython(): string | undefined {
   const candidates = [
-    process.env.MALLORY_ORACLE_PYTHON,
+    process.env.MATH_PLUS_ORACLE_PYTHON,
     "python3",
   ].filter((c): c is string => Boolean(c));
   for (const candidate of candidates) {
@@ -39,7 +39,7 @@ function findOraclePython(): string | undefined {
 const PYTHON = findOraclePython();
 const skip = PYTHON
   ? false
-  : "no python with numpy found (set MALLORY_ORACLE_PYTHON)";
+  : "no python with numpy found (set MATH_PLUS_ORACLE_PYTHON)";
 
 interface OracleJob {
   op: string;
@@ -155,7 +155,7 @@ function randomTensor(shape: number[], dtype: DType): Tensor {
 }
 
 test("differential vs NumPy", { skip }, async (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "mallory-diff-"));
+  const dir = mkdtempSync(join(tmpdir(), "math-plus-diff-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
   await t.test("binary ops, f32 + f64, incl. broadcasting", () => {

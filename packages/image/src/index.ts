@@ -1,5 +1,5 @@
 /**
- * mallory-image — resize/normalize tensor ops (issue #41), the v2
+ * @johnhenry/math-plus-image — resize/normalize tensor ops (issue #41), the v2
  * "practical ML/media compute" bundle's image slice. Scoped tightly: not a
  * general image-processing library.
  */

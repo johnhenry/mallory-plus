@@ -1,5 +1,5 @@
 /**
- * mallory-telemetry (issue #10) — a stable event stream any UI can consume
+ * @johnhenry/math-plus-telemetry (issue #10) — a stable event stream any UI can consume
  * later, designed inline alongside autograd/optim rather than bolted on
  * afterward. No UI exists yet; this is purely the emission contract.
  *

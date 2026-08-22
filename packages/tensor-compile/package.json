@@ -1,7 +1,7 @@
 {
-  "name": "mallory-tensor-compile",
+  "name": "@johnhenry/math-plus-tensor-compile",
   "version": "0.0.5",
-  "description": "Elementwise expression IR + fusion for mallory-plus (issue #11) — trace once, execute fused; the shared IR target for the future WebGPU kernel DSL and the Symbolic bridge",
+  "description": "Elementwise expression IR + fusion for math-plus (issue #11) — trace once, execute fused; the shared IR target for the future WebGPU kernel DSL and the Symbolic bridge",
   "type": "module",
   "exports": {
     ".": {
@@ -19,20 +19,23 @@
     "test:bench": "node --test test/*.bench-test.ts"
   },
   "dependencies": {
-    "mallory-tensor-core": "0.2.0",
-    "mallory-tensor-autograd": "0.2.2"
+    "@johnhenry/math-plus-tensor-core": "0.2.0",
+    "@johnhenry/math-plus-tensor-autograd": "0.2.2"
   },
   "devDependencies": {
-    "mallory-math": "^0.8.0"
+    "@johnhenry/math": "^0.8.0"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/johnhenry/mallory-plus.git",
+    "url": "git+https://github.com/johnhenry/math-plus.git",
     "directory": "packages/tensor-compile"
   },
   "license": "MIT",
   "sideEffects": false,
   "engines": {
     "node": ">=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

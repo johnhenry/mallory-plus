@@ -1,8 +1,8 @@
 /**
  * Symbolic Expr -> tensor-compile IR bridge (issue #15) — the high-leverage
- * bridge. mallory-math's tagged-union `Expr` AST maps almost 1:1 onto
+ * bridge. @johnhenry/math's tagged-union `Expr` AST maps almost 1:1 onto
  * tensor-compile's IR, which makes vectorized symbolic expressions nearly
- * free: differentiate symbolically in mallory-math (`Symbolic.differentiate`),
+ * free: differentiate symbolically in @johnhenry/math (`Symbolic.differentiate`),
  * then evaluate the result over million-element tensors here.
  *
  * This replaces the originally-planned bespoke string-expression parser:
@@ -11,8 +11,8 @@
  * emitter (this file, `evalWithGrad` in tensor-compile) stay under our
  * control end to end.
  */
-import { Symbolic, type Expr } from "mallory-math";
-import { CompiledFn, type BinaryOp, type CmpOp, type IRNode, type UnaryOp } from "mallory-tensor-compile";
+import { Symbolic, type Expr } from "@johnhenry/math";
+import { CompiledFn, type BinaryOp, type CmpOp, type IRNode, type UnaryOp } from "@johnhenry/math-plus-tensor-compile";
 
 /**
  * Thrown for `Expr` node shapes tensor-compile's elementwise IR structurally
@@ -33,14 +33,14 @@ export interface CompileExprOptions {
    * input index `i`. Defaults to `Symbolic.freeVariables(expr)` (every
    * variable referenced anywhere in `expr`, alphabetical) when omitted.
    * Always validated against `expr` via `Symbolic.assertVariables` — an
-   * undeclared variable throws `UndeclaredVariableError` (from mallory-math)
+   * undeclared variable throws `UndeclaredVariableError` (from @johnhenry/math)
    * rather than silently evaluating to `NaN`.
    */
   variables?: readonly string[];
 }
 
 // FuncName -> UnaryOp is the identity map except "ln" -> "log" (tensor-compile's
-// existing name, predating this bridge). Every other mallory-math FuncName
+// existing name, predating this bridge). Every other @johnhenry/math FuncName
 // spells identically to a tensor-compile UnaryOp by construction.
 const UNARY_FUNC_MAP: Record<string, UnaryOp> = {
   sin: "sin",
@@ -162,13 +162,13 @@ function translate(e: Expr, index: ReadonlyMap<string, number>): IRNode {
     case "sum":
     case "product":
       throw new UnsupportedExprError(
-        `compileExpr: "${e.type}" is a reduction over a bound range — outside tensor-compile's elementwise-only IR (issue #11's v1 scope). No silent fallback; evaluate it in mallory-math first if it can be resolved to a closed form.`,
+        `compileExpr: "${e.type}" is a reduction over a bound range — outside tensor-compile's elementwise-only IR (issue #11's v1 scope). No silent fallback; evaluate it in @johnhenry/math first if it can be resolved to a closed form.`,
       );
   }
 }
 
 /**
- * Compile a mallory-math `Expr` (or an already-parsed one — pass a string
+ * Compile a @johnhenry/math `Expr` (or an already-parsed one — pass a string
  * through `Symbolic.parse` yourself, or let `Symbolic` do it for you
  * elsewhere) into a `CompiledFn` that evaluates over tensors.
  */

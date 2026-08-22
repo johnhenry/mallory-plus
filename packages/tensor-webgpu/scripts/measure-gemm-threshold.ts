@@ -10,7 +10,7 @@
  * Both backends are timed END-TO-END per call — allocate, copy CPU data in,
  * compute, copy result out, free — because that's the realistic cost a
  * `Tensor.matmul()` call pays today: neither backend has a "keep this
- * operand resident across multiple calls" API yet (mallory-tensor-wasm's
+ * operand resident across multiple calls" API yet (@johnhenry/math-plus-tensor-wasm's
  * `WasmTensor` and this package's `GPUTensor` both exist, but v1 has no
  * "matmul two already-resident tensors" entry point wired up at the
  * `Tensor` level) — a resident-buffers benchmark would understate WebGPU's
@@ -23,7 +23,7 @@
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Kernels, WasmTensor } from "mallory-tensor-wasm";
+import { Kernels, WasmTensor } from "@johnhenry/math-plus-tensor-wasm";
 import { bundleForBrowser, getHarness, SRC } from "../test/helpers.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

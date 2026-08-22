@@ -63,7 +63,7 @@ import { writeFile } from "node:fs/promises";
 import type { Field, List } from "apache-arrow";
 import { parquetWriteBuffer, schemaFromColumnData } from "hyparquet-writer";
 import type { ColumnSource, SchemaElement } from "hyparquet-writer";
-import type { DType, FieldDescriptor, Frame, Series } from "mallory-frame-arrow";
+import type { DType, FieldDescriptor, Frame, Series } from "@johnhenry/math-plus-frame-arrow";
 import { type Compressor, zstdCompressor } from "./zstd.ts";
 
 /** Write-side compressor map — see zstd.ts's doc comment for why this is
@@ -139,7 +139,7 @@ function scalarSchemaElement(name: string, dtype: DType, nullable: boolean): Sch
       // even returns such a field — this is defense-in-depth, not a real path.
       throw new Error(
         `writeParquet: a list item or struct field cannot itself have dtype "${dtype}" — deeply nested Parquet ` +
-          `types (list<struct>, list<list>, struct<...list/struct...>) are not supported by mallory-frame-parquet ` +
+          `types (list<struct>, list<list>, struct<...list/struct...>) are not supported by @johnhenry/math-plus-frame-parquet ` +
           `v1's write path (frame-arrow itself only supports single-level list/struct, see its dtype.ts).`,
       );
     default: {

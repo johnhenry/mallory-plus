@@ -9,7 +9,7 @@
  * `fs=2*pi`) exactly: `w[i] = i * pi / worN` for `i` in `[0, worN)` —
  * verified numerically against scipy before writing this, not assumed.
  */
-import { ComplexNumber } from "mallory-scalar-types";
+import { ComplexNumber } from "@johnhenry/math-plus-scalar-types";
 import type { Sos } from "./sos-filter.ts";
 
 export interface FreqzResult {

@@ -1,6 +1,6 @@
 # Releasing
 
-Same deployment substrate as [`johnhenry/mallory`](https://github.com/johnhenry/mallory)
+Same deployment substrate as [`johnhenry/math`](https://github.com/johnhenry/math)
 (GitHub Actions + an `NPM_TOKEN` repository secret), driven by
 [Changesets](https://github.com/changesets/changesets) because this repo publishes many
 independently versioned packages instead of one.
@@ -10,17 +10,18 @@ independently versioned packages instead of one.
 The release workflow is inert until the secret exists:
 
 ```bash
-gh secret set NPM_TOKEN --repo johnhenry/mallory-plus   # prompts; paste a granular automation token
-gh secret list --repo johnhenry/mallory-plus            # verify
+gh secret set NPM_TOKEN --repo johnhenry/math-plus   # prompts; paste a granular automation token
+gh secret list --repo johnhenry/math-plus            # verify
 ```
 
 Mint the token at npmjs.com → Access Tokens → **Granular access token**, with *Read and write*
-permission for the `mallory-*` packages (or all packages, since none exist yet). Automation-type
-tokens bypass 2FA, which CI requires.
+permission for the `@johnhenry/math-plus-*` packages (or all packages under the `@johnhenry` scope).
+Automation-type tokens bypass 2FA, which CI requires.
 
 > **⚠️ Adding the secret arms the workflow.** The next push to `main` with no pending changesets
 > publishes every non-private workspace package at its current version — today that means
-> `mallory-tensor-core`, `mallory-tensor-wasm`, and `mallory-scalar-types` at `0.0.1`. That is
+> `@johnhenry/math-plus-tensor-core`, `@johnhenry/math-plus-tensor-wasm`, and
+> `@johnhenry/math-plus-scalar-types` at `0.0.1`. That is
 > either a useful way to reserve the names on npm or premature, depending on your intent. To hold
 > off, add `"private": true` to a package's `package.json` until it's ready to ship.
 
@@ -47,25 +48,28 @@ so those tests can't silently skip; see [TESTING.md](./TESTING.md)).
 
 ## Package-name notes
 
-Packages are unscoped `mallory-*` names (the `@mallory` npm scope belongs to another user). The
+Packages are scoped `@johnhenry/math-plus-*` names. Originally this repo shipped unscoped
+`mallory-*` names, but the `@mallory` npm scope belongs to another user — the move to `@johnhenry`
+(alongside the sibling `math` and `mallory` repos, see `docs/FAMILY.md`) put every package in this
+family under one scope the project actually controls, with room for future family members. The
 root package is `private: true` and never publishes. `packages/interop-python` is a PyPI package
 outside both the npm and Cargo workspaces, released separately.
 
 ## PyPI (`interop-python`, issue #21)
 
-`packages/interop-python` ships to PyPI as **`mallory-interop`**, on its own tag-triggered release
-cadence (`.github/workflows/release-interop-python.yml`) — independent of the npm/JSR Changesets
-flow above, since it's a different package manager, versioning scheme, and release cadence
-entirely.
+`packages/interop-python` ships to PyPI as **`johnhenry-math-plus-interop`**, on its own
+tag-triggered release cadence (`.github/workflows/release-interop-python.yml`) — independent of the
+npm/JSR Changesets flow above, since it's a different package manager, versioning scheme, and
+release cadence entirely.
 
 ### Prerequisite: PyPI Trusted Publishing
 
 Like the JSR job below, this uses OIDC — no token to store — but needs a one-time manual step:
 
-1. Create the `mallory-interop` project on [pypi.org](https://pypi.org) (or publish it manually
-   once first via `twine` to reserve the name, if pypi.org requires the project to already exist
-   before configuring trusted publishing for it — check current PyPI UI).
-2. In that project's **Settings → Publishing**, add a trusted publisher: repo `johnhenry/mallory-plus`,
+1. Create the `johnhenry-math-plus-interop` project on [pypi.org](https://pypi.org) (or publish it
+   manually once first via `twine` to reserve the name, if pypi.org requires the project to already
+   exist before configuring trusted publishing for it — check current PyPI UI).
+2. In that project's **Settings → Publishing**, add a trusted publisher: repo `johnhenry/math-plus`,
    workflow `release-interop-python.yml`, environment (leave blank unless you've configured one).
 
 Until that's done, `release-interop-python.yml` fails at the publish step (no token, no configured
@@ -76,8 +80,8 @@ release should be visibly red, not silently swallowed.
 
 ```bash
 # bump the version in packages/interop-python/pyproject.toml first
-git tag mallory-interop-v0.0.1
-git push origin mallory-interop-v0.0.1
+git tag johnhenry-math-plus-interop-v0.0.1
+git push origin johnhenry-math-plus-interop-v0.0.1
 ```
 
 `workflow_dispatch` re-runs the publish without a new tag (e.g. after fixing a Trusted Publishing
@@ -86,7 +90,7 @@ misconfiguration).
 ## JSR (dual publish, issue #25)
 
 npm is the baseline distribution channel; every publishable package is **also** published to
-[JSR](https://jsr.io) under the `@johnhenry` scope (`@johnhenry/mallory-tensor-core`, etc.) — decided
+[JSR](https://jsr.io) under the `@johnhenry` scope (`@johnhenry/math-plus-tensor-core`, etc.) — decided
 in favor of dual publishing over npm-only, for first-class Deno reach (Deno consumes npm packages
 fine already, so this is about ergonomics/discoverability, not capability).
 
@@ -98,7 +102,7 @@ one-time manual setup on jsr.io before the `jsr-release` workflow job does anyth
 1. Sign in at [jsr.io](https://jsr.io) and claim the `@johnhenry` scope, if not already claimed.
 2. For **each** package (see the loop in `.github/workflows/release.yml`'s `jsr-release` job, or
    `scripts/sync-jsr-configs.mjs`'s `PACKAGE_DIRS` list), create the package on jsr.io under that
-   scope and link `johnhenry/mallory-plus` as a trusted GitHub Actions publisher (jsr.io's package
+   scope and link `johnhenry/math-plus` as a trusted GitHub Actions publisher (jsr.io's package
    settings → "Publishing" → add a trusted publisher, workflow file `release.yml`).
 
 Until every package is linked, `jsr-release` fails harmlessly (`continue-on-error: true`) — it's
@@ -121,13 +125,16 @@ touches `package.json`) is picked up automatically.
 
 - JSR publishes and type-checks the **TypeScript source** directly (`./src/index.ts`), not the
   compiled `dist/` npm ships — there's no separate JSR build step.
-- Workspace-sibling dependencies (`mallory-tensor-core`, etc.) are mapped to `jsr:@johnhenry/...`
-  specifiers in each package's `imports` map; external npm dependencies map to `npm:...` specifiers.
-  Both are generated by `scripts/sync-jsr-configs.mjs` from the package's own `dependencies`/
-  `peerDependencies`.
-- `mallory-scalar-types` and `mallory-adapter-math` depend on `mallory-math`, which lives in the
-  **sibling** [`johnhenry/mallory`](https://github.com/johnhenry/mallory) repo. Their JSR `imports`
-  map points at `jsr:@johnhenry/mallory-math`, which only resolves once that repo *also* publishes to
+- Workspace-sibling dependencies (`@johnhenry/math-plus-tensor-core`, etc.) are mapped to
+  `jsr:@johnhenry/...` specifiers in each package's `imports` map; external npm dependencies map to
+  `npm:...` specifiers. Both are generated by `scripts/sync-jsr-configs.mjs` from the package's own
+  `dependencies`/`peerDependencies` — see that script's own doc comment for how it tells this
+  repo's own `@johnhenry/math-plus-*` family apart from the sibling `@johnhenry/math`/
+  `@johnhenry/iteration` packages (both still map to `jsr:`, just not treated as "internal").
+- `@johnhenry/math-plus-scalar-types` and `@johnhenry/math-plus-adapter-math` depend on
+  `@johnhenry/math`, which lives in the **sibling**
+  [`johnhenry/math`](https://github.com/johnhenry/math) repo. Their JSR `imports`
+  map points at `jsr:@johnhenry/math`, which only resolves once that repo *also* publishes to
   JSR under the same scope — tracked as a follow-up there, not something this repo can complete
   alone.
 - `--allow-slow-types` is passed to every `jsr publish` call — JSR's fast type-checker is stricter

@@ -8,9 +8,9 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DualNumber } from "mallory-math";
-import { Tensor } from "mallory-tensor-core";
-import { grad, Variable } from "mallory-tensor-autograd";
+import { DualNumber } from "@johnhenry/math";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
+import { grad, Variable } from "@johnhenry/math-plus-tensor-autograd";
 import { dualGrad, dualGradN, type ScalarDualFn } from "../src/test-utils.ts";
 
 function finiteDifference(fn: (x: number) => number, x: number, h = 1e-6): number {
@@ -55,7 +55,7 @@ for (const { name, dual, plain, points } of CASES) {
   });
 }
 
-test("dualGradN: multivariate gradient via mallory-math's gradient driver", () => {
+test("dualGradN: multivariate gradient via @johnhenry/math's gradient driver", () => {
   // f(x, y) = x^2*y + y^3 ; df/dx = 2xy ; df/dy = x^2 + 3y^2
   const g = dualGradN((xs) => {
     const [x, y] = xs as [DualNumber, DualNumber];

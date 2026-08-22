@@ -1,5 +1,5 @@
 /**
- * End-to-end proof of the issue's design intent: a mallory-data pipeline
+ * End-to-end proof of the issue's design intent: a @johnhenry/math-plus-data pipeline
  * (shuffle -> epochs -> batch+collate) plugs straight into
  * tensor-autograd's `trainer.fit(dataLoader)` because `collate.xy()`
  * produces exactly its `Batch` shape — the `data` namespace and the
@@ -7,10 +7,10 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { nn, optim, trainer, Variable } from "mallory-tensor-autograd";
+import { nn, optim, trainer, Variable } from "@johnhenry/math-plus-tensor-autograd";
 import { collate, fromAsync } from "../src/index.ts";
 
-test("trainer.fit consumes a mallory-data pipeline: linear regression converges from shuffled, batched epochs", async () => {
+test("trainer.fit consumes a @johnhenry/math-plus-data pipeline: linear regression converges from shuffled, batched epochs", async () => {
   // y = 3x - 1, with x normalized to keep SGD well-behaved.
   const samples = Array.from({ length: 64 }, (_, i) => {
     const x = (i / 32) - 1;

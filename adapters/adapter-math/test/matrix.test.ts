@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Tensor } from "mallory-tensor-core";
-import { Vector, VectorUtils } from "mallory-math";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
+import { Vector, VectorUtils } from "@johnhenry/math";
 import { fromMatrix, fromVector, toMatrix, toVector } from "../src/index.ts";
 
 test("fromMatrix accepts a plain number[][] and produces a 2-D f32 Tensor", () => {
@@ -17,7 +17,7 @@ test("fromMatrix accepts a plain number[][] and produces a 2-D f32 Tensor", () =
   ]);
 });
 
-test("fromMatrix accepts mallory-math's Matrix<number> (Vector<Vector<number>>)", () => {
+test("fromMatrix accepts @johnhenry/math's Matrix<number> (Vector<Vector<number>>)", () => {
   const rows = Vector.fromArray([Vector.fromArray([1, 2]), Vector.fromArray([3, 4])]);
   const t = fromMatrix(rows);
   assert.deepEqual([...t.shape], [2, 2]);
@@ -36,7 +36,7 @@ test("fromMatrix respects an explicit dtype", () => {
   assert.equal(t.dtype, "f64");
 });
 
-test("fromVector accepts a plain number[] and a mallory-math Vector<number>", () => {
+test("fromVector accepts a plain number[] and a @johnhenry/math Vector<number>", () => {
   const t1 = fromVector([1, 2, 3]);
   assert.deepEqual([...t1.shape], [3]);
   assert.deepEqual(t1.toArray(), [1, 2, 3]);
@@ -82,7 +82,7 @@ test("toMatrix/toVector throw a clear error on bigint dtypes rather than silentl
   assert.throws(() => toVector(v), TypeError);
 });
 
-test("round-trips through mallory-math's own matrix machinery (VectorUtils.transpose) via toMatrix/fromMatrix", () => {
+test("round-trips through @johnhenry/math's own matrix machinery (VectorUtils.transpose) via toMatrix/fromMatrix", () => {
   const original = VectorUtils.constantMatrix(2, 3, 0);
   original[0][0] = 1;
   original[0][1] = 2;

@@ -1,5 +1,5 @@
 /**
- * mallory-tensor-wasm — persistent WASM-resident tensor storage + the
+ * @johnhenry/math-plus-tensor-wasm — persistent WASM-resident tensor storage + the
  * `...Into` performance interface (issue #3, the M2 gate).
  *
  * docs/spikes/wasm-baseline.md measured the actual problem this solves: a
@@ -12,7 +12,7 @@
  *
  * v1 scope: f32 only, matching the current kernel set in
  * crates/tensor-wasm-kernels. `WasmTensor` is NOT yet wired into
- * mallory-tensor-core's `Tensor` (that storage-model merge is bigger scope,
+ * @johnhenry/math-plus-tensor-core's `Tensor` (that storage-model merge is bigger scope,
  * tracked separately) — this package proves the seam and its performance
  * in isolation first.
  *
@@ -31,7 +31,7 @@
  * it'll actually instantiate.
  */
 import { readFile } from "node:fs/promises";
-import { hasSink, metric } from "mallory-telemetry";
+import { hasSink, metric } from "@johnhenry/math-plus-telemetry";
 
 interface KernelExports {
   memory: WebAssembly.Memory;
@@ -140,7 +140,7 @@ export class WasmTensor {
   readonly bufferPtr: number;
   readonly byteLength: number;
   readonly shape: readonly number[];
-  /** Strides in ELEMENTS (not bytes), matching mallory-tensor-core's convention. */
+  /** Strides in ELEMENTS (not bytes), matching @johnhenry/math-plus-tensor-core's convention. */
   readonly strides: readonly number[];
   /** Element offset from `bufferPtr` — always 0 for tensors created here; view() can differ. */
   readonly elementOffset: number;
@@ -177,7 +177,7 @@ export class WasmTensor {
     return t;
   }
 
-  /** A strided 1-D VIEW into this tensor's own buffer — zero copy. `elementOffset`/`stride` are relative to THIS tensor's own element 0 (composes with an existing view's own offset). Mainly for tests exercising the non-contiguous fallback path (issue #13's SIMD fast path only applies to `stride === 1`); real strided access normally comes from `mallory-tensor-core`. */
+  /** A strided 1-D VIEW into this tensor's own buffer — zero copy. `elementOffset`/`stride` are relative to THIS tensor's own element 0 (composes with an existing view's own offset). Mainly for tests exercising the non-contiguous fallback path (issue #13's SIMD fast path only applies to `stride === 1`); real strided access normally comes from `@johnhenry/math-plus-tensor-core`. */
   view1D(elementOffset: number, length: number, stride: number): WasmTensor {
     if (this.shape.length !== 1) {
       throw new RangeError("view1D is only defined on an already-1-D tensor in v1");

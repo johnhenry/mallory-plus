@@ -2,7 +2,7 @@
 NumPy-native on the Python side already (``numpy.load``/``numpy.save`` ARE
 the interop point; there is no pandas/Arrow layer to bridge here the way
 ``ipc.py``/``parquet.py`` bridge pyarrow<->pandas). These wrappers exist for
-API-surface discoverability and symmetry with mallory-tensor-core's own
+API-surface discoverability and symmetry with @johnhenry/math-plus-tensor-core's own
 ``.npy`` read/write (packages/tensor-core/src/npy.ts) -- not because
 ``numpy.load``/``numpy.save`` need wrapping for correctness.
 """
@@ -27,7 +27,7 @@ def save_npy(path: str, array: np.ndarray) -> None:
 def load_npz(path: str) -> dict[str, np.ndarray]:
     """Load every array from a `.npz` archive into a plain dict (eagerly, unlike
     `numpy.load`'s lazy `NpzFile`, since the ORIGINAL AS3-era Mallory /
-    mallory-tensor-core naming convention this bridges to expects named
+    @johnhenry/math-plus-tensor-core naming convention this bridges to expects named
     tensors as a plain mapping, not a file handle)."""
     with np.load(path) as archive:
         return {name: archive[name] for name in archive.files}

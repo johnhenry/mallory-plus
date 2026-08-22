@@ -4,8 +4,8 @@
  * set is fixed, so both the forward evaluator and its derivative are total
  * functions over a closed enum. This is the shared lowering target the
  * future WebGPU kernel DSL (#12) reuses, and the target the Symbolic bridge
- * (#15, `mallory-adapter-math`'s `compileExpr`) compiles mallory-math's
- * `Expr` AST down into — hence the unary op set matching mallory-math's
+ * (#15, `@johnhenry/math-plus-adapter-math`'s `compileExpr`) compiles @johnhenry/math's
+ * `Expr` AST down into — hence the unary op set matching @johnhenry/math's
  * `FuncName` 1:1 (`ln` -> `log` is the one rename).
  */
 
@@ -56,7 +56,7 @@ export type UnaryOp =
 
 export type BinaryOp = "add" | "sub" | "mul" | "div" | "pow" | "atan2" | "hypot" | "min" | "max";
 
-/** Mirrors mallory-math's `CmpOp` structurally (not imported — tensor-compile stays dependency-free of mallory-math; adapter-math's `compileExpr` maps one onto the other by matching literal names). */
+/** Mirrors @johnhenry/math's `CmpOp` structurally (not imported — tensor-compile stays dependency-free of @johnhenry/math; adapter-math's `compileExpr` maps one onto the other by matching literal names). */
 export type CmpOp = "lt" | "le" | "gt" | "ge" | "eq" | "ne";
 
 export type IRNode =
@@ -83,9 +83,9 @@ function zeros(n: number): number[] {
 }
 
 /**
- * `erf` via Abramowitz & Stegun 7.1.26 (|error| <= 1.5e-7) — mallory-math has
+ * `erf` via Abramowitz & Stegun 7.1.26 (|error| <= 1.5e-7) — @johnhenry/math has
  * an exact-enough `SpecialFunctions.erf`, but tensor-compile stays
- * dependency-free of mallory-math (one-way: adapters -> core, never back),
+ * dependency-free of @johnhenry/math (one-way: adapters -> core, never back),
  * so this is a small self-contained approximation instead.
  */
 function erf(x: number): number {
@@ -102,7 +102,7 @@ function erf(x: number): number {
   return sign * y;
 }
 
-/** value/derivative pairs for every UnaryOp — d(value)/d(a.value), evaluated at a.value. Derivatives cross-checked against mallory-math's Symbolic.differentiate's "func" case (same formulas, written numerically instead of symbolically). */
+/** value/derivative pairs for every UnaryOp — d(value)/d(a.value), evaluated at a.value. Derivatives cross-checked against @johnhenry/math's Symbolic.differentiate's "func" case (same formulas, written numerically instead of symbolically). */
 function unaryValueAndDeriv(op: UnaryOp, x: number): { value: number; deriv: number } {
   switch (op) {
     case "neg":
@@ -290,7 +290,7 @@ export function evalWithGrad(node: IRNode, inputs: readonly number[], numInputs:
           break;
         }
         case "atan2": {
-          // call2("atan2", left, right) matches mallory-math's convention: Math.atan2(left, right).
+          // call2("atan2", left, right) matches @johnhenry/math's convention: Math.atan2(left, right).
           value = Math.atan2(l.value, r.value);
           const denom = l.value * l.value + r.value * r.value;
           const dl = r.value / denom;

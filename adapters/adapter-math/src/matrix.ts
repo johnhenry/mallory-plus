@@ -1,16 +1,16 @@
 /**
  * Matrix/Vector <-> Tensor conversion (issue #14) — the first and cheapest
- * mallory-math bridge deliverable; validates the adapter-isolation pattern
- * (mallory-plus -> mallory-math, never the reverse; core packages carry no
+ * @johnhenry/math bridge deliverable; validates the adapter-isolation pattern
+ * (math-plus -> @johnhenry/math, never the reverse; core packages carry no
  * dependency on this adapter).
  *
- * Always copies at the edge: mallory-math's `Vector<T> extends Array<T>`
+ * Always copies at the edge: @johnhenry/math's `Vector<T> extends Array<T>`
  * nested representation (a `Matrix<T>` is a `Vector<Vector<T>>`) cannot
  * alias a Tensor's flat TypedArray storage, so there is no view path here —
  * unlike Tensor's own slice/permute/etc., which are views by design.
  */
-import { isBigIntDType, Tensor, type DType } from "mallory-tensor-core";
-import type { Matrix, Vector } from "mallory-math";
+import { isBigIntDType, Tensor, type DType } from "@johnhenry/math-plus-tensor-core";
+import type { Matrix, Vector } from "@johnhenry/math";
 
 export interface ConvertOptions {
   dtype?: DType;

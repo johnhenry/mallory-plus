@@ -4,7 +4,7 @@
  * dominates at small sizes"). The crossover was MEASURED, not guessed — see
  * docs/spikes/webgpu-baseline.md for the full methodology and raw numbers —
  * and the honest result on THIS machine is: no crossover exists within a
- * practical size range. `mallory-tensor-wasm`'s `matmulInto` was faster than
+ * practical size range. `@johnhenry/math-plus-tensor-wasm`'s `matmulInto` was faster than
  * this package's `runGemmWGSL` at every measured size from 8x8 up to
  * 768x768 (589,824 output elements), by a factor that stayed in the 5-10x
  * range rather than narrowing toward 1x as size grew — i.e. this isn't

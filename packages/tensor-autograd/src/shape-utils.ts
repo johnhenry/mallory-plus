@@ -1,4 +1,4 @@
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 
 /**
  * Reduce `grad` down to `targetShape` by summing over exactly the axes that

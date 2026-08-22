@@ -1,7 +1,7 @@
 /** Module.namedParameters()/stateDict()/loadStateDict() + io.writeCheckpoint/loadCheckpoint (issue #42). */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { random, Tensor } from "mallory-tensor-core";
+import { random, Tensor } from "@johnhenry/math-plus-tensor-core";
 import { io, nn, Variable, variable } from "../src/index.ts";
 
 test("namedParameters(): dotted-path names for a nested module", () => {
@@ -82,7 +82,7 @@ test("writeCheckpoint/loadCheckpoint round-trips end-to-end with a real Module v
 });
 
 test("loadCheckpoint throws a clear error on malformed bytes (bad magic)", () => {
-  assert.throws(() => io.loadCheckpoint(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9])), /not a mallory-plus checkpoint/);
+  assert.throws(() => io.loadCheckpoint(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9])), /not a math-plus checkpoint/);
 });
 
 test("loadCheckpoint throws a clear error on truncated bytes", () => {

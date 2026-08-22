@@ -6,7 +6,7 @@
  * "walk outward to the nearest higher point on each side" prominence
  * definition).
  */
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 
 export interface FindPeaksOptions {
   /** Minimum peak height. A peak below this is discarded. */

@@ -1,7 +1,7 @@
 /**
  * fn.* elementary math functions (issue #38: growing fn.* beyond fn.month —
  * see expr.ts's SCALAR_MATH_FUNCS doc comment for why the names are spelled
- * to match mallory-math's Symbolic FuncName 1:1).
+ * to match @johnhenry/math's Symbolic FuncName 1:1).
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -53,7 +53,7 @@ test("fn.* elementary functions compute per-row and agree with Math.* / textbook
   }
 });
 
-test("fn.ln matches Math.log (spelled 'ln' to match mallory-math's Symbolic FuncName, not tensor-compile's 'log')", () => {
+test("fn.ln matches Math.log (spelled 'ln' to match @johnhenry/math's Symbolic FuncName, not tensor-compile's 'log')", () => {
   const frame = Frame.fromArrow(new Table({ x: vectorFromArray([1, Math.E, 10], new Float64()) }));
   const result = frame.withColumns({ y: fn.ln(col("x")) }).toRows().map((r) => r.y);
   assert.deepEqual(result, [0, 1, Math.log(10)]);
@@ -86,7 +86,7 @@ test("fn.* on a non-numeric column throws instead of silently writing NaN (mirro
   assert.throws(() => frame.withColumns({ bad: fn.sin(col("name")) }).toRows(), /requires a numeric operand/);
 });
 
-test("SCALAR_MATH_FUNCS lists exactly 41 names, matching mallory-math's Symbolic FuncName count 1:1", () => {
+test("SCALAR_MATH_FUNCS lists exactly 41 names, matching @johnhenry/math's Symbolic FuncName count 1:1", () => {
   assert.equal(SCALAR_MATH_FUNCS.length, 41);
   assert.equal(new Set(SCALAR_MATH_FUNCS).size, 41); // no duplicates
   for (const name of SCALAR_MATH_FUNCS) {

@@ -25,7 +25,7 @@
  *    a real performance gap, not a correctness one, disclosed here rather
  *    than silently claimed as fast.
  */
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { hammingWindow } from "./window.ts";
 
 function gcdInt(a: number, b: number): number {

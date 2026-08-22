@@ -11,7 +11,7 @@ import {
   partsToComplex,
 } from "../src/index.ts";
 
-test("re-exports mallory-math scalar types", () => {
+test("re-exports @johnhenry/math scalar types", () => {
   const z = new ComplexNumber(3, 4);
   assert.equal(z.magnitude(), 5);
   const r = new Rational(2n, 4n);

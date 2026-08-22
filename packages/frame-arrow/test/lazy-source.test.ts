@@ -1,6 +1,6 @@
 /**
  * Frame.fromLazySource()/.collectAsync() (issue #32) — tested in isolation
- * with a hand-rolled mock reader, independent of mallory-frame-parquet's
+ * with a hand-rolled mock reader, independent of @johnhenry/math-plus-frame-parquet's
  * real scanParquetLazy (which builds on this once it's shipped). See
  * plan.ts's module doc comment for the design (why collect() stays
  * synchronous, why schema/columns never need collectAsync()).

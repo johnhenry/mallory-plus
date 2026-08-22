@@ -1,10 +1,10 @@
 {
-  "name": "@johnhenry/mallory-adapter-onnx",
+  "name": "@johnhenry/math-plus-adapter-onnx",
   "version": "0.0.1",
   "license": "MIT",
   "exports": "./src/index.ts",
   "imports": {
-    "mallory-tensor-core": "jsr:@johnhenry/mallory-tensor-core@^0.0.1",
+    "@johnhenry/math-plus-tensor-core": "jsr:@johnhenry/math-plus-tensor-core@^0.0.1",
     "onnxruntime-web": "npm:onnxruntime-web@^1.27.0"
   }
 }

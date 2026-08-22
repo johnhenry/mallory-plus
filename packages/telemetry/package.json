@@ -1,7 +1,7 @@
 {
-  "name": "mallory-telemetry",
+  "name": "@johnhenry/math-plus-telemetry",
   "version": "0.0.1",
-  "description": "Shared event schema + sink registry for mallory-plus (issue #10) — a stable stream any UI can consume later, with a zero-cost no-op default",
+  "description": "Shared event schema + sink registry for math-plus (issue #10) — a stable stream any UI can consume later, with a zero-cost no-op default",
   "type": "module",
   "exports": {
     ".": {
@@ -19,12 +19,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/johnhenry/mallory-plus.git",
+    "url": "git+https://github.com/johnhenry/math-plus.git",
     "directory": "packages/telemetry"
   },
   "license": "MIT",
   "sideEffects": false,
   "engines": {
     "node": ">=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
