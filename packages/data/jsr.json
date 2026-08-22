@@ -4,7 +4,7 @@
   "license": "MIT",
   "exports": "./src/index.ts",
   "imports": {
-    "@johnhenry/iteration": "jsr:@johnhenry/iteration@^0.0.0",
+    "@johnhenry/iteration": "jsr:@johnhenry/iteration@^2.0.0",
     "@johnhenry/math-plus-tensor-core": "jsr:@johnhenry/math-plus-tensor-core@^0.0.1"
   }
 }
