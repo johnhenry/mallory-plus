@@ -100,20 +100,20 @@ test("addInto: SIMD is a real, measured speedup over the scalar fallback at N=1e
 
   // docs/spikes/wasm-simd.md measured a stable ~2.6-3x SIMD-only speedup
   // (apples-to-apples, contiguous-scalar baseline) on the dev machine.
+  // Same conservative >1.15x threshold as the benchmark above, which the
+  // best-of-rounds retry (issue #49) keeps stable under local CPU load.
   //
-  // The threshold is 1.05x, NOT the 1.15x used by the pure-JS benchmark
-  // above, because GitHub's virtualized runners narrow this particular
-  // margin. Measured 2026-08-22 on the same commit:
-  //   GitHub runner : 1.12x, 1.14x, 1.12x  (variance +/-0.01)
-  //   dev machine   : 2.28x, 1.31x, 1.66x  (variance +/-0.5, machine busy)
-  // The runner numbers are consistent, not noisy, so this is real hardware
-  // difference rather than the CPU contention the best-of-rounds retry
-  // (issue #49) exists to absorb -- 1.15x simply sits above what that
-  // hardware can deliver, so the retry could never rescue it.
-  //
-  // 1.05x still fails if the SIMD path regresses toward parity (~1.0x),
-  // which is this test's actual purpose, with ~7x the runner's observed
-  // round-to-round noise as margin.
+  // NOT RUN IN CI -- see the `test:bench` note in this package's
+  // package.json. Measured 2026-08-22, same commit, two GitHub runners:
+  //   runner A : 1.12x, 1.14x, 1.12x   (variance +/-0.01)
+  //   runner B : 1.01x, 1.01x, 1.01x   (variance +/-0.00)
+  //   dev box  : 2.28x, 1.31x, 1.66x
+  // Runner B shows no SIMD advantage whatsoever, and does so with zero
+  // variance -- that is a property of the hardware, not contention the
+  // retry could absorb. Since a threshold low enough to pass runner B
+  // (<1.01x) would also pass a genuine regression to parity, the
+  // measurement is simply not meaningful on GitHub's mixed runner fleet.
+  // It stays a real assertion where the hardware supports it.
   assertSpeedupEventually(
     () => {
       const scalarTime = benchMs(scalarOp, 20);
@@ -123,7 +123,7 @@ test("addInto: SIMD is a real, measured speedup over the scalar fallback at N=1e
         detail: `scalar=${scalarTime.toFixed(3)}ms, simd=${simdTime.toFixed(3)}ms`,
       };
     },
-    1.05,
+    1.15,
     "SIMD addInto vs scalar fallback at N=1e6",
   );
 });
