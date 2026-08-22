@@ -1,16 +1,16 @@
 /**
- * mallory-scalar-types — the single import point for mallory-math scalar
- * types inside Mallory Plus (docs/PLAN.md §B.1 of the integration plan).
+ * @johnhenry/math-plus-scalar-types — the single import point for @johnhenry/math scalar
+ * types inside Math Plus (docs/PLAN.md §B.1 of the integration plan).
  *
  * Boxed scalars appear only at tensor API edges (at()/item()/constructors),
  * never in tensor storage or kernels (non-goals 3 and 9). If the scalar
  * layer ever changes (e.g. accelerated scalars), only this package moves.
  */
-export { ComplexNumber, Rational, Decimal } from "mallory-math";
+export { ComplexNumber, Rational, Decimal } from "@johnhenry/math";
 
 // "Fraction" is math.js vocabulary; the Mallory implementation is Rational.
 // Alias provided for adapter-mathjs familiarity only.
-export { Rational as Fraction } from "mallory-math";
+export { Rational as Fraction } from "@johnhenry/math";
 
 /**
  * `Interval` (issue #36): rigorous interval arithmetic `[lo, hi]` -- no
@@ -22,7 +22,7 @@ export { Rational as Fraction } from "mallory-math";
  * than just a bit-for-bit/tolerance comparison -- see
  * packages/tensor-webgpu/test/fusion.test.ts for that usage.
  */
-export { Interval } from "mallory-math";
+export { Interval } from "@johnhenry/math";
 
 /**
  * `Quaternion` (issue #37): rotation/3D-transform value type -- ready-made
@@ -31,9 +31,9 @@ export { Interval } from "mallory-math";
  * above, not a Tensor-boundary converter (nothing to convert to/from until
  * a batched-quaternion tensor use case actually exists).
  */
-export { Quaternion } from "mallory-math";
+export { Quaternion } from "@johnhenry/math";
 
-import { ComplexNumber } from "mallory-math";
+import { ComplexNumber } from "@johnhenry/math";
 
 /** Split-storage parts of a complex vector — the ComplexTensor edge format. */
 export interface ComplexParts {

@@ -1,6 +1,6 @@
 /**
- * mallory-tensor-webgpu (issue #12) — WebGPU-accelerated GEMM and
- * attention-adjacent primitives for Mallory Plus tensors. Chromium-family
+ * @johnhenry/math-plus-tensor-webgpu (issue #12) — WebGPU-accelerated GEMM and
+ * attention-adjacent primitives for Math Plus tensors. Chromium-family
  * browsers only in v1 (see README.md); Node needs a documented WebGPU
  * polyfill (a `webgpu` npm package wrapping Dawn) that this package does not
  * bundle or require.

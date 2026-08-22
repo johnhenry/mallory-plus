@@ -1,7 +1,7 @@
 # Spike: apache-arrow JS ↔ PyArrow IPC round-trip parity
 
 **Date:** 2026-08-10
-**Purpose:** Validate whether `frame-arrow` can rely on Arrow IPC as the interchange format between mallory-plus Frames (JS) and pandas (Python), and which types v1 can safely claim.
+**Purpose:** Validate whether `frame-arrow` can rely on Arrow IPC as the interchange format between math-plus Frames (JS) and pandas (Python), and which types v1 can safely claim.
 
 **Versions tested (pinned, exact):**
 

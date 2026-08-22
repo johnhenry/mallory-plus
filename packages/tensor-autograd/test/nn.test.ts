@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Tensor, random } from "mallory-tensor-core";
+import { Tensor, random } from "@johnhenry/math-plus-tensor-core";
 import { Variable, constant, nn, optim, variable } from "../src/index.ts";
 import type { Parameter } from "../src/nn.ts";
 import { assertGradientMatches, randomTensor } from "./gradcheck.ts";
@@ -517,7 +517,7 @@ test("StepLR composes with any optimizer that has a mutable lr (structural typin
 // ---- telemetry hooks (issue #10) --------------------------------------------
 
 test("backward() emits a trace span when a sink is installed, nothing by default", async () => {
-  const { setSink } = await import("mallory-telemetry");
+  const { setSink } = await import("@johnhenry/math-plus-telemetry");
   const events: unknown[] = [];
   setSink((e) => events.push(e));
   try {
@@ -540,7 +540,7 @@ test("backward() emits a trace span when a sink is installed, nothing by default
 });
 
 test("optim.step() emits an optim/gradNorm metric when a sink is installed", async () => {
-  const { setSink } = await import("mallory-telemetry");
+  const { setSink } = await import("@johnhenry/math-plus-telemetry");
   const events: unknown[] = [];
   setSink((e) => events.push(e));
   try {

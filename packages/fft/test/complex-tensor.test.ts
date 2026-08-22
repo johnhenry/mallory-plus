@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ComplexNumber } from "mallory-scalar-types";
-import { Tensor } from "mallory-tensor-core";
+import { ComplexNumber } from "@johnhenry/math-plus-scalar-types";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { ComplexTensor } from "../src/index.ts";
 
 test("fromComplexArray -> toComplexArray round-trips exactly", () => {

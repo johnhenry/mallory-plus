@@ -62,7 +62,7 @@ import {
   type ParquetQueryFilter,
 } from "hyparquet";
 import { compressors } from "hyparquet-compressors";
-import { Frame } from "mallory-frame-arrow";
+import { Frame } from "@johnhenry/math-plus-frame-arrow";
 import { arrowTypeFor, mapNamedColumns, topLevelColumnNames } from "./schema.ts";
 import { buildVector } from "./vector-build.ts";
 
@@ -71,7 +71,7 @@ const utf8Decoder = new TextDecoder();
 
 function unreachableParser(kind: string): () => never {
   return () => {
-    throw new Error(`mallory-frame-parquet: ${kind} columns are not supported in v1 (should have thrown earlier, at schema mapping)`);
+    throw new Error(`@johnhenry/math-plus-frame-parquet: ${kind} columns are not supported in v1 (should have thrown earlier, at schema mapping)`);
   };
 }
 

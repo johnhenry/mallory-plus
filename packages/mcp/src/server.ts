@@ -1,5 +1,5 @@
 /**
- * mallory-mcp (issue #45): agent-callable math tools over the Model Context
+ * @johnhenry/math-plus-mcp (issue #45): agent-callable math tools over the Model Context
  * Protocol. The design constraints, from the issue and this family's own
  * precedents (llmtm's security-gating rule, PLAN.md non-goal 2's no-eval
  * stance):
@@ -19,9 +19,9 @@
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { Symbolic } from "mallory-math";
-import { Tensor } from "mallory-tensor-core";
-import { linalg } from "mallory-adapter-math";
+import { Symbolic } from "@johnhenry/math";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
+import { linalg } from "@johnhenry/math-plus-adapter-math";
 
 /** Upper bound on total elements accepted by the numeric tools -- an agent
  * typo ("make a 1e9-element tensor") should error fast, not OOM the host. */
@@ -119,7 +119,7 @@ function tensorToJson(t: Tensor): unknown {
 // ---- server ------------------------------------------------------------------
 
 export function buildServer(): McpServer {
-  const server = new McpServer({ name: "mallory-mcp", version: "0.0.1" });
+  const server = new McpServer({ name: "@johnhenry/math-plus-mcp", version: "0.0.0" });
 
   server.registerTool(
     "symbolic_parse",

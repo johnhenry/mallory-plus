@@ -1,7 +1,7 @@
 /**
- * mallory-unit — the only net-new scalar package in mallory-plus
- * (mallory-math supplies ComplexNumber/Rational/Decimal, re-exported via
- * mallory-scalar-types, but has no Unit type). See docs/PLAN.md's
+ * @johnhenry/math-plus-unit — the only net-new scalar package in math-plus
+ * (@johnhenry/math supplies ComplexNumber/Rational/Decimal, re-exported via
+ * @johnhenry/math-plus-scalar-types, but has no Unit type). See docs/PLAN.md's
  * "scalars/unit" entry and issue #23.
  */
 export { Unit } from "./unit.ts";

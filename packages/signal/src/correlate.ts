@@ -6,7 +6,7 @@
  * before writing this, not assumed. Built entirely on the existing
  * `convolve1D`, not a second O(n*m) loop.
  */
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { applyTimeDomainOp, convolve1D, type ConvolveMode, type ConvolveOptions } from "./convolve.ts";
 
 /** Cross-correlation of two plain `Float64Array`s: `correlate(a, b) === convolve(a, reverse(b))`. */

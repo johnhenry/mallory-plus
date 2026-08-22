@@ -1,5 +1,5 @@
 /**
- * mallory-signal — the signal-processing slice of the v2/v3 SciPy-
+ * @johnhenry/math-plus-signal — the signal-processing slice of the v2/v3 SciPy-
  * equivalent bundle (issue #44): `convolve`, `stft`/`istft`, `findPeaks`,
  * `sosFilter`, `butter`, `resamplePoly`. See each module's own doc comment
  * for algorithm sources and v1 scope decisions.

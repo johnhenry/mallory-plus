@@ -1,21 +1,21 @@
 /**
  * stft/istft (issue #44). Standard windowed short-time Fourier transform:
  * each frame is `window * signal[start:start+nperseg]`, transformed via
- * mallory-fft's `fft`; `istft` reconstructs via weighted overlap-add (WOLA)
+ * @johnhenry/math-plus-fft's `fft`; `istft` reconstructs via weighted overlap-add (WOLA)
  * with window-power normalization -- the standard COLA (constant
  * overlap-add) reconstruction, exact (to floating-point precision) for the
  * default Hann-window-at-50%-overlap configuration, which is COLA-compliant
  * by construction.
  *
- * v1 scope: `nperseg` must be a power of two (mallory-fft's `fft`/`ifft`
+ * v1 scope: `nperseg` must be a power of two (@johnhenry/math-plus-fft's `fft`/`ifft`
  * requirement -- no per-frame zero-padding to a larger FFT size, to avoid
  * reconciling that with windowing/overlap-add). Covers the overwhelming
  * majority of practical STFT use (256/512/1024-sample windows); a
  * non-power-of-two `nperseg` throws a clear error rather than silently
  * rounding or padding.
  */
-import { ComplexTensor, fft, ifft } from "mallory-fft";
-import { Tensor } from "mallory-tensor-core";
+import { ComplexTensor, fft, ifft } from "@johnhenry/math-plus-fft";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { hannWindow } from "./window.ts";
 
 export interface StftOptions {

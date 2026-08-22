@@ -19,7 +19,7 @@ function referenceGemm(a: Float32Array, b: Float32Array, m: number, k: number, n
 }
 
 function randomMatrix(size: number, seed: number): Float32Array {
-  // Small deterministic LCG — no dependency on mallory-tensor-core's Rng needed for this.
+  // Small deterministic LCG — no dependency on @johnhenry/math-plus-tensor-core's Rng needed for this.
   let s = seed >>> 0;
   const out = new Float32Array(size);
   for (let i = 0; i < size; i++) {

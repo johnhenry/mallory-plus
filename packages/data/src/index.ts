@@ -1,6 +1,6 @@
 /**
- * mallory-data (issue #22): the v2 `data` namespace — async dataset
- * pipelines built on mallory-iteration, surfaced through a CURATED facade
+ * @johnhenry/math-plus-data (issue #22): the v2 `data` namespace — async dataset
+ * pipelines built on @johnhenry/iteration, surfaced through a CURATED facade
  * rather than passing that library through raw. The curation decisions,
  * from the issue:
  *
@@ -18,7 +18,7 @@
  *   `mapConcurrentAsync` / `prefetchAsync` (never reimplemented), and
  *   cancellation is plain `AbortSignal` end to end.
  *
- * Power users can always `import ... from "mallory-iteration"` directly —
+ * Power users can always `import ... from "@johnhenry/iteration"` directly —
  * this facade is the supported surface, not a wall.
  */
 import {
@@ -28,8 +28,8 @@ import {
   prefetchAsync,
   transducers,
   type ReducerStep,
-} from "mallory-iteration";
-import { Tensor } from "mallory-tensor-core";
+} from "@johnhenry/iteration";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 
 type AnySource<T> = Iterable<T> | AsyncIterable<T>;
 /** A dataset source: a (re-)iterable, or a factory producing a fresh

@@ -1,13 +1,13 @@
 /**
  * Coverage for the IR extension added alongside issue #15 (Symbolic bridge):
- * the full unary function set (matching mallory-math's FuncName), pow, the
+ * the full unary function set (matching @johnhenry/math's FuncName), pow, the
  * atan2/hypot/min/max call2 ops, comparisons, and select (piecewise).
  * Every derivative is checked against central finite differences — the same
  * oracle style used throughout tensor-autograd's gradcheck suite.
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { compile, type Traced } from "../src/index.ts";
 
 function evalAt(fn: (v: Traced) => Traced, x: number): number {
@@ -162,7 +162,7 @@ test("select: routes to the correct branch and short-circuits (the untaken branc
   assert.equal((negGrads[0] as Tensor).toArray()[0], 0);
 });
 
-test("piecewise-style nested select mirrors mallory-math's piecewise semantics: first true branch wins", () => {
+test("piecewise-style nested select mirrors @johnhenry/math's piecewise semantics: first true branch wins", () => {
   // sign-like: x < 0 -> -1, x > 0 -> 1, else 0
   const signish = compile(1, (v) => v.lt(0).select(-1, v.gt(0).select(1, 0)));
   assert.equal(signish.forward(Tensor.from([-5])).toArray()[0], -1);

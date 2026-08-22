@@ -5,7 +5,7 @@
  * same structure `scipy.signal.sosfilt` uses) -- each section's output
  * feeds the next section's input.
  */
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 
 /** One second-order section: `[b0, b1, b2, a0, a1, a2]` (numerator then denominator coefficients; `a0` need not be pre-normalized to 1 -- this function normalizes internally). */
 export type SosSection = readonly [number, number, number, number, number, number];

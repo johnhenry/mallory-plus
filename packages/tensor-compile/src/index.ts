@@ -1,5 +1,5 @@
 /**
- * mallory-tensor-compile (issue #11) — trace once via {@link compile}, execute
+ * @johnhenry/math-plus-tensor-compile (issue #11) — trace once via {@link compile}, execute
  * fused: one pass over the output with zero intermediate Tensor allocations,
  * instead of one allocation per op in the chain.
  *
@@ -8,8 +8,8 @@
  * lowering target for the future WebGPU kernel DSL (#12) and the Symbolic
  * bridge (#15), so it stays small and closed rather than growing ad hoc.
  */
-import { broadcastShapes, Tensor, type DType, type Shape } from "mallory-tensor-core";
-import { sumToShape, Variable } from "mallory-tensor-autograd";
+import { broadcastShapes, Tensor, type DType, type Shape } from "@johnhenry/math-plus-tensor-core";
+import { sumToShape, Variable } from "@johnhenry/math-plus-tensor-autograd";
 import { evalValue, evalWithGrad, Traced, type IRNode } from "./ir.ts";
 
 export {
@@ -74,13 +74,13 @@ export class CompiledFn {
     const dtype = first.dtype;
     if (!FLOAT_DTYPES.includes(dtype)) {
       throw new TypeError(
-        `mallory-tensor-compile v1 supports floating dtypes only (f32/f64); got ${dtype}`,
+        `@johnhenry/math-plus-tensor-compile v1 supports floating dtypes only (f32/f64); got ${dtype}`,
       );
     }
     for (const t of tensors) {
       if (t.dtype !== dtype) {
         throw new TypeError(
-          `mallory-tensor-compile: all inputs must share one dtype (M1 has no implicit promotion); got ${tensors.map((x) => x.dtype).join(", ")}`,
+          `@johnhenry/math-plus-tensor-compile: all inputs must share one dtype (M1 has no implicit promotion); got ${tensors.map((x) => x.dtype).join(", ")}`,
         );
       }
     }

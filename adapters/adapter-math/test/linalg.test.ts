@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { linalg } from "../src/index.ts";
 
 function close(a: number, b: number, eps = 1e-6): void {

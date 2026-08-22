@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { normalize } from "../src/index.ts";
 
 test("normalize: known input/mean/std produces exact expected output", () => {

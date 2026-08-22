@@ -1,29 +1,29 @@
-# mallory-tensor-webgpu
+# @johnhenry/math-plus-tensor-webgpu
 
 ## 0.0.5
 
 ### Patch Changes
 
 - Updated dependencies [262a154]
-  - mallory-tensor-core@0.2.0
-  - mallory-tensor-compile@0.0.5
+  - @johnhenry/math-plus-tensor-core@0.2.0
+  - @johnhenry/math-plus-tensor-compile@0.0.5
 
 ## 0.0.4
 
 ### Patch Changes
 
-- mallory-tensor-compile@0.0.4
+- @johnhenry/math-plus-tensor-compile@0.0.4
 
 ## 0.0.3
 
 ### Patch Changes
 
-- mallory-tensor-compile@0.0.3
+- @johnhenry/math-plus-tensor-compile@0.0.3
 
 ## 0.0.2
 
 ### Patch Changes
 
 - Updated dependencies [aeeeb35]
-  - mallory-tensor-core@0.1.0
-  - mallory-tensor-compile@0.0.2
+  - @johnhenry/math-plus-tensor-core@0.1.0
+  - @johnhenry/math-plus-tensor-compile@0.0.2

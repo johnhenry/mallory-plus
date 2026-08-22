@@ -11,7 +11,7 @@ import {
   partsToComplex,
 } from "../src/index.ts";
 
-test("re-exports mallory-math scalar types", () => {
+test("re-exports @johnhenry/math scalar types", () => {
   const z = new ComplexNumber(3, 4);
   assert.equal(z.magnitude(), 5);
   const r = new Rational(2n, 4n);
@@ -24,15 +24,22 @@ test("Fraction is an alias of Rational", () => {
   assert.equal(Fraction, Rational);
 });
 
+// @johnhenry/math's Interval outward-rounds every non-exact op by ~1 ULP per
+// side (johnhenry/math#57) to preserve interval arithmetic's containment
+// guarantee -- so even an exact integer result like 1*3=3 comes back a hair
+// WIDER than [3, 10], not equal to it. Assert containment of the
+// mathematically exact bounds, not exact equality.
+function containsExactly(interval: Interval, lo: number, hi: number): boolean {
+  return interval.lo <= lo && interval.hi >= hi;
+}
+
 test("Interval is re-exported and does real rigorous interval arithmetic", () => {
   const a = new Interval(1, 2);
   const b = new Interval(3, 5);
   const sum = a.add(b);
-  assert.equal(sum.lo, 4);
-  assert.equal(sum.hi, 7);
+  assert.ok(containsExactly(sum, 4, 7));
   const product = a.multiply(b);
-  assert.equal(product.lo, 3); // 1*3
-  assert.equal(product.hi, 10); // 2*5
+  assert.ok(containsExactly(product, 3, 10)); // 1*3 .. 2*5
   assert.ok(a.contains(1.5));
   assert.ok(!a.contains(2.5));
 });

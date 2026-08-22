@@ -3,7 +3,7 @@
  * scope items 4 & 5: "`await x.to('webgpu')` stays explicit and async").
  *
  * Design decision (documented per the issue's "you decide the exact shape"):
- * this package does NOT monkey-patch `mallory-tensor-core`'s `Tensor` class
+ * this package does NOT monkey-patch `@johnhenry/math-plus-tensor-core`'s `Tensor` class
  * with a `.to()` method. `Tensor` has no device-transfer hook today, and
  * adding one from a downstream package would mean either (a) mutating
  * `Tensor.prototype` from outside its own module — fragile, and invisible to
@@ -13,17 +13,17 @@
  * tensor-core, never the reverse, matching every other adapter/accelerator
  * package in this repo). Instead, the explicit-and-async transfer the issue
  * asks for is a free function: `toWebGPU(tensor)` returns a `Promise<GPUTensor>`,
- * mirroring `mallory-frame-arrow`'s `Series.toTensor()` / `Frame.toTensor()`
+ * mirroring `@johnhenry/math-plus-frame-arrow`'s `Series.toTensor()` / `Frame.toTensor()`
  * pattern of "device/format transfer is always an awaited call, never a
  * property access" — same spirit as `x.to("webgpu")`, different spelling.
  * `GPUTensor.toTensor()` is the inverse (GPU -> CPU), completing the pair.
  *
- * v1 dtype scope: f32 only, matching `mallory-tensor-wasm`'s `WasmTensor`
+ * v1 dtype scope: f32 only, matching `@johnhenry/math-plus-tensor-wasm`'s `WasmTensor`
  * (WGSL's only convenient float type is `f32`; f64 has no WebGPU
  * representation, and integer dtypes aren't part of v1's GEMM/attention/
  * fusion surface).
  */
-import { Tensor, type Shape } from "mallory-tensor-core";
+import { Tensor, type Shape } from "@johnhenry/math-plus-tensor-core";
 
 export interface WebGPUCapability {
   available: boolean;
@@ -75,7 +75,7 @@ function shapeSize(shape: Shape): number {
  * A tensor whose f32 data lives in a `GPUBuffer` (STORAGE | COPY_SRC |
  * COPY_DST usage) rather than a JS `TypedArray`. Created via {@link toWebGPU};
  * `.free()` releases the underlying `GPUBuffer` — WebGPU buffers are NOT
- * garbage collected on a predictable schedule, so (like `mallory-tensor-wasm`'s
+ * garbage collected on a predictable schedule, so (like `@johnhenry/math-plus-tensor-wasm`'s
  * `WasmTensor`) this is manual memory management, not GC'd JS storage.
  */
 export class GPUTensor {
@@ -164,7 +164,7 @@ export class GPUTensor {
  * CPU -> GPU: the explicit, awaited device transfer the issue calls for
  * (v1 non-goal 5 — no implicit copying). Requires `tensor.dtype === "f32"`
  * and a contiguous tensor (call `.contiguous()` first on a view/transposed
- * tensor — matches `mallory-tensor-wasm`'s `WasmTensor.fromArray` contract).
+ * tensor — matches `@johnhenry/math-plus-tensor-wasm`'s `WasmTensor.fromArray` contract).
  */
 export async function toWebGPU(tensor: Tensor, device: GPUDevice): Promise<GPUTensor> {
   if (tensor.dtype !== "f32") {

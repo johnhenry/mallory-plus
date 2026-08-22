@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate the committed .parquet fixtures under test/fixtures/ using real
-pyarrow (not hand-rolled buffers — see docs/TESTING.md's MALLORY_ORACLE_PYTHON
+pyarrow (not hand-rolled buffers — see docs/TESTING.md's MATH_PLUS_ORACLE_PYTHON
 convention and docs/spikes/parquet-bakeoff.md's own methodology, which this
 mirrors).
 

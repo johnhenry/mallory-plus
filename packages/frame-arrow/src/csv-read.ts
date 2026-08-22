@@ -1,8 +1,8 @@
 /**
  * Frame.fromCSV() — the reader counterpart to csv.ts's tableToCSV() writer.
- * mallory-frame-arrow had a CSV writer since v1 but no reader at all (an
- * asymmetry consumers hit directly -- see johnhenry/mallory-plus#86, filed
- * by mallory-graph after having to hand-roll its own app-side CSV parser
+ * @johnhenry/math-plus-frame-arrow had a CSV writer since v1 but no reader at all (an
+ * asymmetry consumers hit directly -- see johnhenry/math-plus#86, filed
+ * by mallory after having to hand-roll its own app-side CSV parser
  * for exactly this gap).
  *
  * Two stages: `tokenizeCsv` (RFC-4180 tokenizing -- quoted fields, doubled-
@@ -112,7 +112,7 @@ const INT_PATTERN = /^-?\d+$/;
  * "false" (case-insensitive), int64 only if every one matches a strict
  * integer pattern (parsed via `BigInt`, not `Number`, so large integers
  * outside `Number.MAX_SAFE_INTEGER` stay exact -- a real precision
- * advantage over the `Number()`-based inference mallory-graph's own
+ * advantage over the `Number()`-based inference mallory's own
  * app-side parser used), float64 if every one parses as a finite JS
  * number (a mix of integer- and decimal-looking cells widens to float64,
  * the same int64-only-if-BOTH-operands-int64 promotion rule schema-infer.ts

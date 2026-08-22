@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 import numpy as np
 import pandas as pd
 
-from mallory_interop import save_npy, save_npz, write_ipc, write_parquet
+from math_plus_interop import save_npy, save_npz, write_ipc, write_parquet
 
 HERE = Path(__file__).parent
 

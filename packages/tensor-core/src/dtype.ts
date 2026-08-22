@@ -1,5 +1,5 @@
 /**
- * Fixed-width dtypes for mallory-tensor-core.
+ * Fixed-width dtypes for @johnhenry/math-plus-tensor-core.
  *
  * Includes i64/u64 (BigInt64Array/BigUint64Array-backed) — resolving the
  * source design's own inconsistency where the DType union stopped at 32-bit

@@ -1,5 +1,5 @@
 /**
- * Parquet SchemaElement -> mallory-frame-arrow DType mapping.
+ * Parquet SchemaElement -> @johnhenry/math-plus-frame-arrow DType mapping.
  *
  * hyparquet decodes column *values* to plain JS (BigInt for i64, plain
  * strings for BYTE_ARRAY/UTF8 and — see the module doc in read.ts —
@@ -78,12 +78,12 @@ import {
   Utf8,
 } from "apache-arrow";
 import type { SchemaElement, SchemaTree } from "hyparquet";
-import type { DType } from "mallory-frame-arrow";
+import type { DType } from "@johnhenry/math-plus-frame-arrow";
 
 export class UnsupportedParquetTypeError extends TypeError {
   constructor(columnName: string, detail: string) {
     super(
-      `column "${columnName}" has a Parquet type mallory-frame-parquet v1 does not support: ${detail}. ` +
+      `column "${columnName}" has a Parquet type @johnhenry/math-plus-frame-parquet v1 does not support: ${detail}. ` +
         `Cast or drop this column (e.g. in pyarrow) before reading it, or select around it.`,
     );
     this.name = "UnsupportedParquetTypeError";
@@ -240,7 +240,7 @@ function mapGroupElement(child: SchemaTree): ParquetColumnType {
   if (isMapGroup(child)) {
     throw new UnsupportedParquetTypeError(
       child.element.name,
-      "a MAP group — Parquet MAP columns are not supported in mallory-frame-parquet v1 (LIST/STRUCT are; " +
+      "a MAP group — Parquet MAP columns are not supported in @johnhenry/math-plus-frame-parquet v1 (LIST/STRUCT are; " +
         "frame-arrow has no map DType to map a MAP column to)",
     );
   }

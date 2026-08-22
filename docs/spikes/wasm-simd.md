@@ -91,7 +91,7 @@ different (blocked/tiled) vectorization shape, and is explicitly out of scope fo
 
 Scratch benchmark script was `/tmp/simd_bench.mjs` (not committed — throwaway, superseded by the
 package's own committed tests, which cover the same ground with proper CI-safe thresholds). To
-re-measure by hand: build both artifacts (`npm run build:wasm -w mallory-tensor-wasm`), then
+re-measure by hand: build both artifacts (`npm run build:wasm -w @johnhenry/math-plus-tensor-wasm`), then
 compare `add_f32_strided`/`add_f32_contiguous_simd128` directly via `WebAssembly.instantiate()`
 on the two `.wasm` files in `packages/tensor-wasm/wasm/`, matching this doc's three-variant
 methodology.

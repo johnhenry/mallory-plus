@@ -8,7 +8,7 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { resamplePoly } from "../src/index.ts";
 
 test("resamplePoly: output length matches ceil(len(x) * up / down)", () => {

@@ -8,13 +8,13 @@
  * merits — computed columns like `withColumns({ y: fn.sin(col('x')) })`),
  * this bridge fell out largely for free, exactly as issue #38 predicted:
  * `frame-arrow`'s `fn.*` names were deliberately spelled to match
- * `mallory-math`'s `Symbolic` `FuncName` 1:1, so `compileFrameExpr`'s
+ * `@johnhenry/math`'s `Symbolic` `FuncName` 1:1, so `compileFrameExpr`'s
  * function-node translation is a plain identity lookup — no
  * `UNARY_FUNC_MAP`-style rename table needed here (unlike `expr.ts`'s
  * `ln` -> `log` rename for `tensor-compile`).
  *
  * The payoff described in the issue: differentiate a computed column's
- * formula symbolically in `mallory-math` (`Symbolic.differentiate`), then
+ * formula symbolically in `@johnhenry/math` (`Symbolic.differentiate`), then
  * compile the derivative into a second computed column with
  * `compileFrameExpr` —
  * ```ts
@@ -31,7 +31,7 @@
  * needed here, unlike `compileExpr`'s `Symbolic.assertVariables` — there is
  * no fixed positional input order to validate against).
  */
-import { type Expr as SymbolicExpr } from "mallory-math";
+import { type Expr as SymbolicExpr } from "@johnhenry/math";
 import {
   col,
   fn,
@@ -39,7 +39,7 @@ import {
   type Expr as FrameExpr,
   type ScalarMathFuncName,
   SCALAR_MATH_FUNCS,
-} from "mallory-frame-arrow";
+} from "@johnhenry/math-plus-frame-arrow";
 
 /**
  * Thrown for `Expr` node shapes `frame-arrow`'s `Expr` algebra structurally
@@ -87,7 +87,7 @@ function translate(e: SymbolicExpr): FrameExpr {
     case "func": {
       if (!isScalarMathFuncName(e.name)) {
         // Structurally unreachable today (frame-arrow's SCALAR_MATH_FUNCS covers every
-        // mallory-math FuncName 1:1), but guarded rather than assumed in case the two
+        // @johnhenry/math FuncName 1:1), but guarded rather than assumed in case the two
         // unions ever drift apart.
         throw new UnsupportedFrameExprError(`compileFrameExpr: unsupported function "${e.name}"`);
       }
@@ -125,14 +125,14 @@ function translate(e: SymbolicExpr): FrameExpr {
     case "product":
       throw new UnsupportedFrameExprError(
         `compileFrameExpr: "${e.type}" is a reduction over a bound range — outside frame-arrow's per-row ` +
-          `Expr algebra. No silent fallback; evaluate it in mallory-math first if it can be resolved to a closed form.`,
+          `Expr algebra. No silent fallback; evaluate it in @johnhenry/math first if it can be resolved to a closed form.`,
       );
   }
   throw new UnsupportedFrameExprError(`compileFrameExpr: unhandled Symbolic Expr node`);
 }
 
 /**
- * Compile a `mallory-math` `Symbolic` `Expr` into a `frame-arrow` `Expr`
+ * Compile a `@johnhenry/math` `Symbolic` `Expr` into a `frame-arrow` `Expr`
  * usable inside `withColumns`/`filter` — each free variable becomes a
  * `col()` reference of the same name. See this module's doc comment for the
  * symbolic-differentiate-then-compile-a-second-column workflow issue #38

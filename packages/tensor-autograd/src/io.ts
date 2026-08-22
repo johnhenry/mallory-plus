@@ -6,17 +6,17 @@
  * `Tensor`'s own `toNpy()`/`fromNpy()` per-tensor serialization -- NOT
  * numpy's real `.npz` format (which is a zip archive of `.npy` files).
  * Adding a zip dependency was out of scope for v1; this is a
- * mallory-plus-specific container, not numpy-`.npz`-compatible. A future
+ * math-plus-specific container, not numpy-`.npz`-compatible. A future
  * version could add real `.npz` I/O as a separate function if Python
  * interop for checkpoints becomes a concrete need (mirroring how
- * `mallory-interop`'s `read_ipc`/`read_parquet` already handle the
+ * `johnhenry-math-plus-interop`'s `read_ipc`/`read_parquet` already handle the
  * dataframe side of Python interop).
  *
  * Layout: `"MPCK"` magic (4 bytes) + version (1 byte, currently 1) + entry
  * count (u32 LE) + that many `[nameByteLen: u32 LE][npyByteLen: u32 LE]
  * [name utf8 bytes][npy bytes]` entries, back to back.
  */
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 
 const MAGIC = [0x4d, 0x50, 0x43, 0x4b]; // "MPCK"
 const VERSION = 1;
@@ -63,7 +63,7 @@ export function loadCheckpoint(bytes: Uint8Array): Record<string, Tensor> {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   for (let i = 0; i < MAGIC.length; i++) {
     if (view.getUint8(i) !== MAGIC[i]) {
-      throw new Error("loadCheckpoint: not a mallory-plus checkpoint (bad magic bytes)");
+      throw new Error("loadCheckpoint: not a math-plus checkpoint (bad magic bytes)");
     }
   }
   const version = view.getUint8(4);

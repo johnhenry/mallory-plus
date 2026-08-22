@@ -11,6 +11,13 @@ status: "in progress — v1 shipped in full, v2 underway. This document is the d
 
 **Naming (decided 2026-08-10):** the source conversation used a placeholder scope `@jh/runtime`. Final naming: **unscoped `mallory-*` npm packages**, joining the existing Mallory family (`mallory-math`) — the `@mallory` npm scope is already owned by another npm user, and unscoped matches `mallory-math`'s convention (all `mallory-*` names below verified available on npm 2026-08-10). Umbrella: `mallory-runtime`; core: `mallory-tensor-*` / `mallory-frame-*`; adapters: `mallory-adapter-<target>`; PyPI: `mallory-interop`.
 
+> **Addendum (later renamed):** this repo and its packages were subsequently renamed to the
+> `@johnhenry` npm scope — `mallory-plus` → `math-plus`, every `mallory-<x>` package →
+> `@johnhenry/math-plus-<x>`, and `mallory-interop` (PyPI) → `johnhenry-math-plus-interop`. The
+> sibling `mallory-math`/`mallory-iteration` packages became `@johnhenry/math`/`@johnhenry/iteration`,
+> and `mallory-graph` became `mallory` (see `docs/FAMILY.md` and `docs/RELEASING.md` for why and the
+> current names). This decision record is left as originally written below for historical accuracy.
+
 **Mallory family integration (decided 2026-08-10, see §0):** mallory-plus reuses `mallory-math`'s scalar types via a thin `scalar-types` package, adds a `mallory-adapter-math` bridge (Matrix↔Tensor, Symbolic→IR, Graph→CSR, DualNumber test oracle), builds the v2 `data` namespace on `async-itertools@^2` (after fixing its transduce memory leak and adding types/concurrency/cancellation upstream), and treats mallory-graph's `CellGraph` as design prior art for the frame lazy planner. `mallory-math` itself stays independent with zero dependencies.
 
 **Source material:** the full design conversation is at [`docs/perplexity-conversation.md`](./perplexity-conversation.md) (extracted from Perplexity, 6 turns, 268 cited sources). This plan synthesizes that conversation plus follow-up research into a concrete build order. Four independent passes mined the source conversation for: (1) the tensor/autograd core, (2) the Arrow dataframe + Python interop layer, (3) WebGPU + SciPy-equivalent scientific computing, and (4) repo structure, adapters, non-goals, and release strategy. Their findings are consolidated below.
@@ -87,7 +94,7 @@ Every TS package wrapping Rust output has a gitignored `wasm/` dir populated by 
 
 **External ecosystem dependencies** (both johnhenry libraries, both stay independent of this repo):
 - `mallory-math@^0.8` — scalar types (via `packages/scalar-types`) and the `adapter-math` bridge target; also supplies scalar reference oracles for differential tests. Zero-dep, education/CAS mission unchanged.
-- `mallory-iteration` — foundation of the v2 `data` namespace via a curated facade (see §5 v2). Formerly published as `async-itertools`; now lives at `packages/iteration` in the [mallory](https://github.com/johnhenry/mallory) pure-TS monorepo, **restarted at version 0.0.0** (2026-08-13 — the prior "starting at 2.0.0 to keep continuity" plan was reconsidered; the "what's new in 2.0" history inside that package's own readme still documents the real async-itertools-era rewrite, just not tied to the current npm version number). **Wired in 2026-08-13** (issue #22, `packages/data` / `mallory-data`) as a normal versioned npm dependency, once `mallory-iteration@0.0.0` was published — the earlier blocker (npm has no subdirectory git dependencies; a `github:owner/repo#sha&path:/packages/x` spec silently installs the monorepo *root*) is moot.
+- `mallory-iteration` — foundation of the v2 `data` namespace via a curated facade (see §5 v2). Formerly published as `async-itertools`; now lives at `packages/iteration` in the [johnhenry/math](https://github.com/johnhenry/math) pure-TS monorepo, **restarted at version 0.0.0** (2026-08-13 — the prior "starting at 2.0.0 to keep continuity" plan was reconsidered; the "what's new in 2.0" history inside that package's own readme still documents the real async-itertools-era rewrite, just not tied to the current npm version number). **Wired in 2026-08-13** (issue #22, `packages/data` / `mallory-data`) as a normal versioned npm dependency, once `mallory-iteration@0.0.0` was published — the earlier blocker (npm has no subdirectory git dependencies; a `github:owner/repo#sha&path:/packages/x` spec silently installs the monorepo *root*) is moot.
 
 ## 2. Non-Goals (v1, whole project)
 
@@ -131,7 +138,7 @@ Where Changesets doesn't reach:
 
 ## 5. Phased Roadmap
 
-**Live status (2026-08-11):** the tables below are the original design-time plan, kept as-written for historical context. For what's actually shipped vs. open, see [`ROADMAP.md`](../ROADMAP.md) and the [GitHub issue tracker](https://github.com/johnhenry/mallory-plus/issues) — those are the source of truth going forward, not this document. Short version: **v1 is fully shipped**, v2 is substantially shipped (compile/autograd/frame-arrow/adapter-math all done; frame-parquet in progress).
+**Live status (2026-08-11):** the tables below are the original design-time plan, kept as-written for historical context. For what's actually shipped vs. open, see [`ROADMAP.md`](../ROADMAP.md) and the [GitHub issue tracker](https://github.com/johnhenry/math-plus/issues) (repo later renamed from `mallory-plus`) — those are the source of truth going forward, not this document. Short version: **v1 is fully shipped**, v2 is substantially shipped (compile/autograd/frame-arrow/adapter-math all done; frame-parquet in progress).
 
 ### v1 — Tensor foundation + parallel dataframe start
 
@@ -355,12 +362,12 @@ Ranked by how early each risk becomes load-bearing:
 
 All five items below are **DONE** as of 2026-08-11 — kept for historical record, see [`ROADMAP.md`](../ROADMAP.md) for what's actually next.
 
-1. ~~Confirm package naming~~ **RESOLVED 2026-08-10:** Mallory family, unscoped `mallory-*` npm names (see naming note in the header; the `@mallory` scope is owned by another npm user; all needed `mallory-*` names verified available). The earlier Google-Malloy collision concern is closed by the rename.
+1. ~~Confirm package naming~~ **RESOLVED 2026-08-10:** Mallory family, unscoped `mallory-*` npm names (see naming note in the header; the `@mallory` scope is owned by another npm user; all needed `mallory-*` names verified available). The earlier Google-Malloy collision concern is closed by the rename. *(Addendum: this repo was later renamed again, to the `@johnhenry` npm scope — see the addendum note in the header above.)*
 1b. ~~Ops prerequisite: npm auth~~ **RESOLVED** — npm publish tooling and CI are wired up (`docs/RELEASING.md`); first real publish awaits the `NPM_TOKEN` secret being armed (a deliberate manual gate, not a blocker on any code work).
 1c. ~~async-itertools fix-and-publish workstream~~ **RESOLVED 2026-08-10, differently than planned:** rather than fix-in-place, `async-itertools` was consolidated into the `mallory` monorepo as `mallory-iteration` (full git history preserved) — the transduce leak fix and the rest of this checklist happened as part of that move. Its npm publish (which unblocks the v2 `data` namespace, #22) is still pending.
 2. ~~Scaffold the monorepo~~ **DONE** — npm workspaces, Cargo workspace, the `build:wasm → build` dependency, and every package/adapter/scalar listed in §5's v1 row are live.
 3. ~~Stand up the differential-testing harness~~ **DONE** — see `docs/TESTING.md`; every numeric package's test suite runs a NumPy (or pyarrow/pandas, for frame-arrow) differential oracle.
-4. ~~Spike the Parquet library decision and the `apache-arrow`/PyArrow parity check~~ **DONE 2026-08-10** — three spike docs in `docs/spikes/` (arrow-parity, parquet-bakeoff, cellgraph-study); Parquet = hyparquet, arrow parity confirmed, CellGraph = design reference only (its 5 sharp edges reported upstream as johnhenry/mallory-graph#12–#16, all fixed and closed).
+4. ~~Spike the Parquet library decision and the `apache-arrow`/PyArrow parity check~~ **DONE 2026-08-10** — three spike docs in `docs/spikes/` (arrow-parity, parquet-bakeoff, cellgraph-study); Parquet = hyparquet, arrow parity confirmed, CellGraph = design reference only (its 5 sharp edges reported upstream as johnhenry/mallory#12–#16 — that repo was `mallory-graph` at the time these issues were filed, later renamed to `mallory`; same issue numbers, all fixed and closed).
 5. ~~Set up the Xvfb + Dawn/SwiftShader headless WebGPU CI path~~ **DONE 2026-08-12 as part of issue #12** — `tensor-webgpu` shipped with a real headless GPUAdapter verified under Xvfb (Chrome-for-Testing + Xvfb steps in `.github/workflows/ci.yml`; not yet confirmed on an actual GitHub Actions runner, see `docs/spikes/webgpu-baseline.md`).
 
 ## 9. Open Questions
@@ -372,6 +379,6 @@ Carried directly from the source conversation's own unexplored follow-ups:
 
 Raised by this plan (not in the source):
 4. ~~`i64`/`u64` dtype decision~~ **RESOLVED** during `tensor-core` M1 (§5) — both are `BigInt64Array`/`BigUint64Array`-backed, documented in `packages/tensor-core/src/dtype.ts`.
-5. ~~Public naming~~ **RESOLVED 2026-08-10** — renamed to the Mallory family, unscoped `mallory-*` npm packages (§8 item 1).
+5. ~~Public naming~~ **RESOLVED 2026-08-10** — renamed to the Mallory family, unscoped `mallory-*` npm packages (§8 item 1). *(Addendum: later renamed again to the `@johnhenry` scoped names — see the header addendum.)*
 6. ~~npm-only vs. dual npm+JSR publishing~~ **RESOLVED 2026-08-11 as issue #25: dual, from the start.** Every publishable package has a generated `jsr.json` (`@johnhenry/<name>`) and a `jsr-release` CI job (OIDC Trusted Publishing); see `docs/RELEASING.md`'s JSR section for the one-time manual jsr.io setup that arms it.
 7. ~~Browser bundle-size budget~~ **CLOSED 2026-08-13 as issue #24: no numeric budget, final** (not "no budget for now" — the earlier revisit-with-data framing is retired). The lazy-loading POLICY remains in force and is the actual size control: dynamic `import()` at the exact call site (e.g. `frame-arrow`'s `toTensor()`), heavy capabilities in their own opt-in packages. With 17 independently-installable packages, per-package granularity IS the budget; a repo-wide number would mostly measure apache-arrow's external weight. The 150 KB-gzip-core recommendation stays on the issue thread as a reference if anyone later wants a size check. A concrete consumer-app size problem gets a new, data-attached issue, not this one reopened.

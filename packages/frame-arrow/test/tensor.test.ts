@@ -1,10 +1,10 @@
 /**
- * toTensor() exercises the lazy dynamic import of mallory-tensor-core.
+ * toTensor() exercises the lazy dynamic import of @johnhenry/math-plus-tensor-core.
  * tensor-core IS present in this monorepo (a sibling workspace package), so
  * these tests confirm the dynamic import succeeds and produces a correct
  * Tensor — they can't prove "tensor-core absent" from inside the repo (see
  * the issue's own note on this); that half of the constraint is instead
- * verified structurally: package.json lists mallory-tensor-core ONLY under
+ * verified structurally: package.json lists @johnhenry/math-plus-tensor-core ONLY under
  * peerDependencies + peerDependenciesMeta.optional, never dependencies.
  */
 import assert from "node:assert/strict";
@@ -55,7 +55,7 @@ test("Frame.toTensor(): all-numeric Frame -> 2D row-major float64 Tensor by defa
   assert.deepEqual(Array.from(tensor.data), [1, 10, 2, 20, 3, 30]);
 });
 
-test("mallory-frame-arrow's package.json lists mallory-tensor-core only as an optional peerDependency, as a caret RANGE covering that package's ACTUAL current version (not an exact pin)", async () => {
+test("@johnhenry/math-plus-frame-arrow's package.json lists @johnhenry/math-plus-tensor-core only as an optional peerDependency, as a caret RANGE covering that package's ACTUAL current version (not an exact pin)", async () => {
   const fs = await import("node:fs/promises");
   const url = await import("node:url");
   const pkgPath = url.fileURLToPath(new URL("../package.json", import.meta.url));
@@ -66,7 +66,7 @@ test("mallory-frame-arrow's package.json lists mallory-tensor-core only as an op
   //
   // v1 exact-pinned this peer, which sounded safer but wasn't: it made
   // `npm install` ERESOLVE for any consumer already on a newer compatible
-  // tensor-core (johnhenry/mallory-plus#86, filed by mallory-graph, which
+  // tensor-core (johnhenry/math-plus#86, filed by mallory, which
   // depends on tensor-core ^0.1.0). frame-arrow's actual coupling to
   // tensor-core is a small, stable structural surface (see tensor.ts's own
   // doc comment -- no static or type-level dependency at all, only a
@@ -77,7 +77,7 @@ test("mallory-frame-arrow's package.json lists mallory-tensor-core only as an op
     new URL("../../tensor-core/package.json", import.meta.url),
   );
   const tensorCorePkg = JSON.parse(await fs.readFile(tensorCorePkgPath, "utf8"));
-  assert.equal(pkg.dependencies?.["mallory-tensor-core"], undefined);
-  assert.equal(pkg.peerDependencies?.["mallory-tensor-core"], `^${tensorCorePkg.version}`);
-  assert.equal(pkg.peerDependenciesMeta?.["mallory-tensor-core"]?.optional, true);
+  assert.equal(pkg.dependencies?.["@johnhenry/math-plus-tensor-core"], undefined);
+  assert.equal(pkg.peerDependencies?.["@johnhenry/math-plus-tensor-core"], `^${tensorCorePkg.version}`);
+  assert.equal(pkg.peerDependenciesMeta?.["@johnhenry/math-plus-tensor-core"]?.optional, true);
 });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FFT } from "mallory-math";
+import { FFT } from "@johnhenry/math";
 import { convolve, fft, fftPadded, ifft, realSignal } from "../src/index.ts";
 
 function closeArrays(a: ArrayLike<number>, b: ArrayLike<number>, tol = 1e-9): void {
@@ -10,7 +10,7 @@ function closeArrays(a: ArrayLike<number>, b: ArrayLike<number>, tol = 1e-9): vo
   }
 }
 
-test("fft: matches mallory-math's own FFT.fft directly (bridge doesn't introduce its own numerical bug)", () => {
+test("fft: matches @johnhenry/math's own FFT.fft directly (bridge doesn't introduce its own numerical bug)", () => {
   const real = new Float64Array([1, 2, 3, 4, 5, 6, 7, 8]);
   const { real: outReal, imag: outImag } = fft(real);
 
@@ -41,7 +41,7 @@ test("fft -> ifft round-trips a complex signal", () => {
   closeArrays(back.imag, imag, 1e-9);
 });
 
-test("fft: cross-checked against mallory-math's own O(n^2) dft reference for a small input", () => {
+test("fft: cross-checked against @johnhenry/math's own O(n^2) dft reference for a small input", () => {
   const real = new Float64Array([0, 1, 2, 3]);
   const { real: fastReal, imag: fastImag } = fft(real);
   const reference = FFT.dft([...real]);
@@ -57,7 +57,7 @@ test("fft: cross-checked against mallory-math's own O(n^2) dft reference for a s
   );
 });
 
-test("fft: throws a clear error for a non-power-of-two length (matching mallory-math's own contract)", () => {
+test("fft: throws a clear error for a non-power-of-two length (matching @johnhenry/math's own contract)", () => {
   assert.throws(() => fft(new Float64Array([1, 2, 3])), /power of two/);
 });
 

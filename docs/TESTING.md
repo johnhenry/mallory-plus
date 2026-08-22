@@ -4,7 +4,7 @@
 
 ```bash
 npm test            # all workspaces
-npm test -w mallory-tensor-core
+npm test -w @johnhenry/math-plus-tensor-core
 ```
 
 Tests are TypeScript run directly by `node --test` (native type stripping, Node ≥22.12).
@@ -15,7 +15,7 @@ Tests are TypeScript run directly by `node --test` (native type stripping, Node 
 subprocess (`packages/tensor-core/scripts/numpy_oracle.py`), exchanging data as `.npy` in both
 directions — so every run also validates `.npy` I/O against NumPy's implementation.
 
-Python resolution: `$MALLORY_ORACLE_PYTHON`, else `python3` on PATH. **The suite skips (does not
+Python resolution: `$MATH_PLUS_ORACLE_PYTHON`, else `python3` on PATH. **The suite skips (does not
 fail) when no interpreter with numpy is found** — environments that guarantee the oracle should
 assert `skipped 0`.
 
@@ -25,12 +25,12 @@ pip wheels don't work (libstdc++/libz linkage). Use a nix-provided Python:
 
 ```bash
 ORACLE_PY=$(nix-shell -p "python3.withPackages(ps: with ps; [numpy pyarrow pandas])" --run "which python3")
-MALLORY_ORACLE_PYTHON=$ORACLE_PY npm test -w mallory-tensor-core
+MATH_PLUS_ORACLE_PYTHON=$ORACLE_PY npm test -w @johnhenry/math-plus-tensor-core
 ```
 
 The resolved store path stays valid until garbage-collected; re-run the `nix-shell` line to refresh.
-The same `$MALLORY_ORACLE_PYTHON` (or a bare `python3` on PATH) is what `mallory-frame-arrow`'s and
-`mallory-frame-parquet`'s pyarrow-round-trip tests look for too (see below) — one env var covers
+The same `$MATH_PLUS_ORACLE_PYTHON` (or a bare `python3` on PATH) is what `@johnhenry/math-plus-frame-arrow`'s and
+`@johnhenry/math-plus-frame-parquet`'s pyarrow-round-trip tests look for too (see below) — one env var covers
 every Python oracle in the repo.
 
 ### Tolerances
@@ -41,10 +41,10 @@ Integer dtypes (incl. `i64`) compare exactly.
 
 ## pyarrow/pandas round-trip tests (frame-arrow, frame-parquet)
 
-Some `mallory-frame-arrow`/`mallory-frame-parquet` tests verify a JS-written Arrow IPC/Parquet file
+Some `@johnhenry/math-plus-frame-arrow`/`@johnhenry/math-plus-frame-parquet` tests verify a JS-written Arrow IPC/Parquet file
 by reading it back with `pyarrow`/`pandas` directly (not just round-tripping through the package's
 own reader — self-consistency isn't proof of a valid file). Same resolution and skip-don't-fail
-behavior as the NumPy oracle above (`$MALLORY_ORACLE_PYTHON`, else `python3` on PATH,
+behavior as the NumPy oracle above (`$MATH_PLUS_ORACLE_PYTHON`, else `python3` on PATH,
 `packages/frame-parquet/test/helpers.ts`) — the NixOS nix-shell line above already includes
 `pyarrow`/`pandas` for exactly this reason.
 
@@ -53,18 +53,18 @@ are **pre-generated and committed**, not regenerated live on every test run — 
 verify THIS run's own freshly-written output (e.g. `writeParquet`'s pyarrow-round-trip tests) spawn
 a live Python subprocess.
 
-## scipy.signal oracle (mallory-signal)
+## scipy.signal oracle (@johnhenry/math-plus-signal)
 
-`packages/signal/test/helpers.ts` (`runScipyOracle`) compares `mallory-signal`'s `butter`/
+`packages/signal/test/helpers.ts` (`runScipyOracle`) compares `@johnhenry/math-plus-signal`'s `butter`/
 `sosFilter`/`findPeaks`/`stft` against `scipy.signal` via a subprocess
 (`packages/signal/scripts/scipy_oracle.py`). Same skip-don't-fail convention as the NumPy oracle,
-resolved via `$MALLORY_SCIPY_ORACLE_PYTHON`, else `$MALLORY_ORACLE_PYTHON`, else `python3` on PATH —
+resolved via `$MATH_PLUS_SCIPY_ORACLE_PYTHON`, else `$MATH_PLUS_ORACLE_PYTHON`, else `python3` on PATH —
 but scipy is NOT part of the NixOS nix-shell line above (numpy/pyarrow/pandas only), since it's a
 much heavier dependency (needs a Fortran/BLAS toolchain) only this one package's tests need:
 
 ```bash
 SCIPY_PY=$(nix-shell -p "python3.withPackages(ps: with ps; [scipy numpy])" --run "which python3")
-MALLORY_SCIPY_ORACLE_PYTHON=$SCIPY_PY npm test -w mallory-signal
+MATH_PLUS_SCIPY_ORACLE_PYTHON=$SCIPY_PY npm test -w @johnhenry/math-plus-signal
 ```
 
 `butter`'s own SOS section coefficients are NOT expected to match `scipy.signal.butter`'s
@@ -76,15 +76,15 @@ property that actually matters.
 
 ## Gradient oracles (autograd)
 
-`adapter-math`'s `mallory-adapter-math/test-utils` subpath (`dualGrad`/`dualGradN`) wraps
-mallory-math's `DualNumber` forward-mode autodiff — a third gradient oracle, algorithmically
+`adapter-math`'s `@johnhenry/math-plus-adapter-math/test-utils` subpath (`dualGrad`/`dualGradN`) wraps
+@johnhenry/math's `DualNumber` forward-mode autodiff — a third gradient oracle, algorithmically
 independent of both `tensor-autograd`'s reverse-mode tape and finite differences. Its own tests
 (`adapters/adapter-math/test/test-utils.test.ts`) validate it against finite differences AND
 against `tensor-autograd`'s `Variable`/`grad.of` on real scalar/multivariate functions.
 
 ## Python-side interop tests (`packages/interop-python`)
 
-`mallory-interop` is a PyPI package outside the npm/Cargo workspaces (see docs/RELEASING.md) — its
+`johnhenry-math-plus-interop` is a PyPI package outside the npm/Cargo workspaces (see docs/RELEASING.md) — its
 `pytest` suite runs separately from `npm test`. Bidirectional conformance (JS writes/Python reads,
 and the inverse) is proven with committed fixtures on both sides — see
 `packages/interop-python/README.md`'s "Bidirectional conformance fixtures" section for exactly
@@ -99,7 +99,7 @@ nix-shell -p "python3.withPackages(ps: [ps.pyarrow ps.pandas ps.numpy ps.pytest]
   --run "cd packages/interop-python && PYTHONPATH=src python3 -m pytest tests/ -v"
 ```
 
-## Headless WebGPU oracle (`mallory-tensor-webgpu`)
+## Headless WebGPU oracle (`@johnhenry/math-plus-tensor-webgpu`)
 
 Same "oracle unavailable -> skip, never fail" convention as the NumPy/pyarrow oracles above, but
 the oracle is a live `GPUAdapter` reached over the Chrome DevTools Protocol instead of a Python
@@ -108,7 +108,7 @@ subprocess — `packages/tensor-webgpu/test/helpers.ts` launches headless Chrome
 Playwright/Puppeteer) and probes `navigator.gpu.requestAdapter()` once per test file, caching the
 result. Individual tests call `getHarness()` and `t.skip(reason)` when unavailable.
 
-Resolution order for the Chrome binary: `$MALLORY_CHROME_PATH` (explicit override), else the usual
+Resolution order for the Chrome binary: `$MATH_PLUS_CHROME_PATH` (explicit override), else the usual
 PATH/well-known-path candidates (`google-chrome-stable`, `/opt/google/chrome/chrome`, `chromium`,
 etc. — see `CHROME_CANDIDATES` in `helpers.ts`). `Xvfb` must also be on `PATH` (or `$DISPLAY` set to
 an already-live display) — see `docs/spikes/webgpu-baseline.md` for the exact launch flags and two
@@ -120,7 +120,7 @@ Every test file that calls `getHarness()` MUST also call `test.after(closeHarnes
 `WebSocket` keeps Node's event loop alive on its own, so without it `node --test` hangs after the
 last test passes instead of exiting.
 
-`mallory-tensor-webgpu`'s own `test` script passes `node --test --test-concurrency=1` (not
+`@johnhenry/math-plus-tensor-webgpu`'s own `test` script passes `node --test --test-concurrency=1` (not
 `npm test`'s usual per-workspace default) because each test file launches its own private Chrome
 instance, and concurrent files' Chrome instances contend for the same physical GPU render node —
 observed directly during development as an intermittent `requestAdapter()` -> `null` in one file

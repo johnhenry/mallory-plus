@@ -1,5 +1,5 @@
 {
-  "name": "mallory-plus",
+  "name": "math-plus",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -8,10 +8,10 @@
     "scalars/*"
   ],
   "scripts": {
-    "build:wasm": "npm run build:wasm -w mallory-tensor-wasm",
-    "build": "npm run build:wasm && npm run build -w mallory-scalar-types -w mallory-tensor-core -w mallory-telemetry -w mallory-tensor-wasm -w mallory-tensor-autograd -w mallory-tensor-compile -w mallory-tensor-webgpu -w mallory-frame-arrow -w mallory-adapter-math -w mallory-unit -w mallory-adapter-onnx -w mallory-frame-parquet -w mallory-fft -w mallory-image -w mallory-signal -w mallory-mcp -w mallory-data",
+    "build:wasm": "npm run build:wasm -w @johnhenry/math-plus-tensor-wasm",
+    "build": "npm run build:wasm && npm run build -w @johnhenry/math-plus-scalar-types -w @johnhenry/math-plus-tensor-core -w @johnhenry/math-plus-telemetry -w @johnhenry/math-plus-tensor-wasm -w @johnhenry/math-plus-tensor-autograd -w @johnhenry/math-plus-tensor-compile -w @johnhenry/math-plus-tensor-webgpu -w @johnhenry/math-plus-frame-arrow -w @johnhenry/math-plus-adapter-math -w @johnhenry/math-plus-unit -w @johnhenry/math-plus-adapter-onnx -w @johnhenry/math-plus-frame-parquet -w @johnhenry/math-plus-fft -w @johnhenry/math-plus-image -w @johnhenry/math-plus-signal -w @johnhenry/math-plus-mcp -w @johnhenry/math-plus-data",
     "test:manifest": "node --test test/*.test.ts",
-    "test": "npm run test:manifest && npm run test -w mallory-scalar-types -w mallory-tensor-core -w mallory-telemetry -w mallory-tensor-wasm -w mallory-tensor-autograd -w mallory-tensor-compile -w mallory-tensor-webgpu -w mallory-adapter-math -w mallory-unit -w mallory-adapter-onnx -w mallory-frame-arrow -w mallory-frame-parquet -w mallory-fft -w mallory-image -w mallory-signal -w mallory-mcp -w mallory-data",
+    "test": "npm run test:manifest && npm run test -w @johnhenry/math-plus-scalar-types -w @johnhenry/math-plus-tensor-core -w @johnhenry/math-plus-telemetry -w @johnhenry/math-plus-tensor-wasm -w @johnhenry/math-plus-tensor-autograd -w @johnhenry/math-plus-tensor-compile -w @johnhenry/math-plus-tensor-webgpu -w @johnhenry/math-plus-adapter-math -w @johnhenry/math-plus-unit -w @johnhenry/math-plus-adapter-onnx -w @johnhenry/math-plus-frame-arrow -w @johnhenry/math-plus-frame-parquet -w @johnhenry/math-plus-fft -w @johnhenry/math-plus-image -w @johnhenry/math-plus-signal -w @johnhenry/math-plus-mcp -w @johnhenry/math-plus-data",
     "check": "npm run check --workspaces --if-present",
     "changeset": "changeset",
     "release": "npm run build && changeset publish"

@@ -92,7 +92,7 @@ binding + panic hardening" is the entire remaining work.
   host `Float32Array`s (addInto/mulInto/matmulInto/solveInto, strided
   `MatrixRef` operands), `load()` returning `undefined` (never throwing)
   outside Deno / without `--allow-ffi` / with no binary; resolution:
-  explicit path → `$MALLORY_NATIVE_KERNELS_PATH` → bundled
+  explicit path → `$MATH_PLUS_NATIVE_KERNELS_PATH` → bundled
   `native/<os>-<arch>/` → repo `target/release/`.
 - **Conditional exports**: `"deno"` → `native-entry` (default entry's
   surface + the native API; WASM stays the default path even on Deno —

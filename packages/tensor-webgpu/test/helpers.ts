@@ -71,13 +71,13 @@ function which(cmd: string): string | undefined {
 }
 
 /**
- * `$MALLORY_CHROME_PATH` (checked first, same override-env-var convention as
- * `$MALLORY_ORACLE_PYTHON` elsewhere in this repo — see docs/TESTING.md) lets
+ * `$MATH_PLUS_CHROME_PATH` (checked first, same override-env-var convention as
+ * `$MATH_PLUS_ORACLE_PYTHON` elsewhere in this repo — see docs/TESTING.md) lets
  * CI or a local override pin an exact binary; otherwise the usual PATH/
  * well-known-path candidates are probed in order.
  */
 function resolveChrome(): string | undefined {
-  if (process.env.MALLORY_CHROME_PATH) return process.env.MALLORY_CHROME_PATH;
+  if (process.env.MATH_PLUS_CHROME_PATH) return process.env.MATH_PLUS_CHROME_PATH;
   for (const c of CHROME_CANDIDATES) {
     const found = which(c);
     if (found) return found;
@@ -92,7 +92,7 @@ function hasXvfb(): boolean {
 // ---- tiny TS->JS browser bundler -------------------------------------------
 //
 // Concatenates a small closed set of this repo's dependency-free TS modules
-// (this package's own kernels + mallory-tensor-core + mallory-tensor-compile,
+// (this package's own kernels + @johnhenry/math-plus-tensor-core + @johnhenry/math-plus-tensor-compile,
 // none of which import any node: builtin — verified by inspection, see
 // docs/spikes/webgpu-baseline.md) into one flat, import/export-free script
 // injectable via CDP Runtime.evaluate. Not a general bundler: relative
@@ -102,8 +102,8 @@ function hasXvfb(): boolean {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_ENTRY: Record<string, string> = {
-  "mallory-tensor-core": path.resolve(HERE, "../../tensor-core/src/index.ts"),
-  "mallory-tensor-compile": path.resolve(HERE, "../../tensor-compile/src/index.ts"),
+  "@johnhenry/math-plus-tensor-core": path.resolve(HERE, "../../tensor-core/src/index.ts"),
+  "@johnhenry/math-plus-tensor-compile": path.resolve(HERE, "../../tensor-compile/src/index.ts"),
 };
 
 const IMPORT_FROM_RE = /^[ \t]*import\s[\s\S]*?from\s*["'][^"']+["'];?[ \t]*$/gm;
@@ -114,9 +114,9 @@ const EXPORT_KEYWORD_RE = /^([ \t]*)export\s+(function|const|class|async functio
  * Dependency specifiers to actually recurse into for bundling — deliberately
  * skips `import type { ... } from "spec"` lines (whole-line type-only
  * imports, which is the only form this package's source uses to import from
- * `mallory-tensor-compile`): those are fully erased by the transpiler and
+ * `@johnhenry/math-plus-tensor-compile`): those are fully erased by the transpiler and
  * never needed at runtime, so following them would pull in dependencies
- * (e.g. `mallory-tensor-compile`'s own `mallory-tensor-autograd` dependency,
+ * (e.g. `@johnhenry/math-plus-tensor-compile`'s own `@johnhenry/math-plus-tensor-autograd` dependency,
  * used only by its `asVariableOp`, which this bundler has no need to load)
  * that this "one shared IR, second backend" package's low-level kernels
  * genuinely don't need.
@@ -359,7 +359,7 @@ async function ensureStaticServer(): Promise<string> {
   if (staticServerUrl) return staticServerUrl;
   staticServer = createServer((_req, res) => {
     res.writeHead(200, { "content-type": "text/html" });
-    res.end("<!doctype html><title>mallory-tensor-webgpu test harness</title>");
+    res.end("<!doctype html><title>@johnhenry/math-plus-tensor-webgpu test harness</title>");
   });
   await new Promise<void>((resolve) => staticServer!.listen(0, "127.0.0.1", resolve));
   // Same reasoning as the Xvfb/Chrome child processes: an open listening
@@ -481,7 +481,7 @@ async function attemptHarness(chromePath: string): Promise<WebGPUHarness | { fai
   const port = 19222 + Math.floor(Math.random() * 1000);
   const userDataDir = path.join(
     process.env.TMPDIR ?? "/tmp",
-    `mallory-webgpu-test-profile-${process.pid}-${Date.now()}`,
+    `math-plus-webgpu-test-profile-${process.pid}-${Date.now()}`,
   );
   const chrome = launchChrome(chromePath, display, port, userDataDir);
 

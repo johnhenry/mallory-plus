@@ -1,15 +1,15 @@
 /**
  * Differential test (matching the erf cross-check's #34 precedent):
- * mallory-math is a devDependency ONLY here (mallory-fft's own shipped
+ * @johnhenry/math is a devDependency ONLY here (@johnhenry/math-plus-fft's own shipped
  * runtime dependency graph is unchanged) -- used purely to build confidence
  * that this fresh, tensor-shaped Cooley-Tukey implementation agrees with an
  * independently-sourced reference.
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FFT } from "mallory-math";
-import { ComplexNumber } from "mallory-scalar-types";
-import { Tensor } from "mallory-tensor-core";
+import { FFT } from "@johnhenry/math";
+import { ComplexNumber } from "@johnhenry/math-plus-scalar-types";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { ComplexTensor, fft, fftPadded, ifft, irfft, rfft } from "../src/index.ts";
 
 function closeArrays(a: readonly number[], b: readonly number[], tol: number): void {
@@ -19,7 +19,7 @@ function closeArrays(a: readonly number[], b: readonly number[], tol: number): v
   }
 }
 
-test("fft matches mallory-math's own FFT.fft directly (bridge doesn't introduce its own numerical bug)", () => {
+test("fft matches @johnhenry/math's own FFT.fft directly (bridge doesn't introduce its own numerical bug)", () => {
   const real = [1, 2, 3, 4, 5, 6, 7, 8];
   const input = ComplexTensor.fromComplexArray(real.map((r) => new ComplexNumber(r, 0)));
   const result = fft(input).toComplexArray();
@@ -52,7 +52,7 @@ test("fft -> ifft round-trips a complex signal", () => {
   }
 });
 
-test("fft: cross-checked against mallory-math's own O(n^2) dft reference for a small input", () => {
+test("fft: cross-checked against @johnhenry/math's own O(n^2) dft reference for a small input", () => {
   const real = [0, 1, 2, 3];
   const input = ComplexTensor.fromComplexArray(real.map((r) => new ComplexNumber(r, 0)));
   const fast = fft(input).toComplexArray();

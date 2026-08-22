@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { load, onnx, UnsupportedDTypeError } from "../src/index.ts";
 
 const FIXTURES = fileURLToPath(new URL("./fixtures/", import.meta.url));

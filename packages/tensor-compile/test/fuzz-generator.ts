@@ -1,7 +1,7 @@
 /**
  * Shared generator/shrinker machinery for the IR differential fuzzers
  * (issue #48's CPU legs in this package; issue #58's real-GPU WGSL leg in
- * mallory-tensor-webgpu imports THIS module rather than duplicating it --
+ * @johnhenry/math-plus-tensor-webgpu imports THIS module rather than duplicating it --
  * the canonical-implementation rule). Pure relocation from fuzz.test.ts;
  * no behavior change.
  */

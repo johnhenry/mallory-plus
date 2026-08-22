@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 import pyarrow.parquet as pq
 
-from mallory_interop import read_parquet, write_parquet
+from math_plus_interop import read_parquet, write_parquet
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

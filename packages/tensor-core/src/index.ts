@@ -1,8 +1,8 @@
 /**
- * mallory-tensor-core — typed n-dimensional arrays (M1 slice).
+ * @johnhenry/math-plus-tensor-core — typed n-dimensional arrays (M1 slice).
  *
  * Pure-JS/TypedArray execution path; WASM kernels swap in underneath via
- * mallory-tensor-wasm without changing this API. Architectural rules
+ * @johnhenry/math-plus-tensor-wasm without changing this API. Architectural rules
  * enforced from day one (docs/PLAN.md §2, §6.1): no Proxy-based indexing,
  * views vs. contiguous are semantically distinct (permute/transpose/reshape
  * never copy; contiguous() copies iff needed), no implicit copies, no
@@ -639,7 +639,7 @@ export class Tensor {
    * Pad the LAST `padding.length` axes with `[before, after]` element counts
    * each (leading axes untouched) — NumPy `pad`-style spec, constant-value
    * mode only (`options.value`, default 0). Concretely unblocks
-   * `mallory-data`'s `collate.vectors()`, which currently throws on ragged
+   * `@johnhenry/math-plus-data`'s `collate.vectors()`, which currently throws on ragged
    * batches for lack of exactly this primitive.
    */
   pad(padding: ReadonlyArray<readonly [number, number]>, options: { value?: number } = {}): Tensor {

@@ -1,6 +1,6 @@
 """`.npy`/`.npz` helper tests (issue #21) -- thin wrapper sanity checks, not
 a conformance suite in the bidirectional sense (see module doc on npy.py):
-`.npy`/`.npz` are NumPy-native on both sides already (mallory-tensor-core's
+`.npy`/`.npz` are NumPy-native on both sides already (@johnhenry/math-plus-tensor-core's
 own `.npy` reader/writer, packages/tensor-core/src/npy.ts, targets the same
 format numpy.save/numpy.load do -- that conformance is already covered by
 tensor-core's own NumPy-oracle differential tests, see docs/TESTING.md).
@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mallory_interop import load_npy, load_npz, save_npy, save_npz
+from math_plus_interop import load_npy, load_npz, save_npy, save_npz
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

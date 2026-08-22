@@ -27,12 +27,12 @@
  *    not the math -- the math is covered by the gradient leg, the existing
  *    fixed suites, and the erf cross-check.
  *
- * Knobs: MALLORY_FUZZ_CASES (default 150 per leg), MALLORY_FUZZ_SEED
+ * Knobs: MATH_PLUS_FUZZ_CASES (default 150 per leg), MATH_PLUS_FUZZ_SEED
  * (default 20260813) -- override to replay a reported failure exactly.
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { compile, CompiledFn, evalWithGrad, type IRNode } from "../src/index.ts";
 import {
   allSubnodes,
@@ -47,12 +47,12 @@ import {
   type Rng,
 } from "./fuzz-generator.ts";
 
-const CASES = Number(process.env.MALLORY_FUZZ_CASES ?? 150);
-const BASE_SEED = Number(process.env.MALLORY_FUZZ_SEED ?? 20260813);
+const CASES = Number(process.env.MATH_PLUS_FUZZ_CASES ?? 150);
+const BASE_SEED = Number(process.env.MATH_PLUS_FUZZ_SEED ?? 20260813);
 
 function report(label: string, seed: number, node: IRNode, extra: string): string {
   return (
-    `${label} (replay with MALLORY_FUZZ_SEED=${seed} MALLORY_FUZZ_CASES=1)\n` +
+    `${label} (replay with MATH_PLUS_FUZZ_SEED=${seed} MATH_PLUS_FUZZ_CASES=1)\n` +
     `minimal diverging graph: ${JSON.stringify(node)}\n${extra}`
   );
 }

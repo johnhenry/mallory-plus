@@ -1,6 +1,6 @@
 /**
  * The correctness oracle the issue asks for: run the SAME traced `IRNode`
- * (built once via `mallory-tensor-compile`'s `Traced`, exactly as a real
+ * (built once via `@johnhenry/math-plus-tensor-compile`'s `Traced`, exactly as a real
  * `compile()` call would) through TWO independent backends —
  * `evalWithGrad` on the CPU (tensor-compile's own interpreter) and
  * `compileIRToWGSL` + `runElementwiseWGSL` on a live GPUAdapter — and assert
@@ -12,7 +12,7 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 import test, { after } from "node:test";
-import { evalWithGrad, Traced, type IRNode } from "mallory-tensor-compile";
+import { evalWithGrad, Traced, type IRNode } from "@johnhenry/math-plus-tensor-compile";
 import { bundleForBrowser, closeHarness, getHarness, SRC } from "./helpers.ts";
 
 after(closeHarness);
@@ -89,7 +89,7 @@ async function crossCheck(
 test("fusion cross-check: single unary ops", async (t) => {
   const x = randomData(64, 1, 0.8); // kept in (-0.8, 0.8): safe domain for asin/acos/atanh/etc.
   const positiveX = randomData(64, 2, 0.8).map((v) => Math.abs(v) + 0.1); // safe domain for log/sqrt/acosh-ish ops
-  const cases: Array<{ op: import("mallory-tensor-compile").UnaryOp; data: Float32Array }> = [
+  const cases: Array<{ op: import("@johnhenry/math-plus-tensor-compile").UnaryOp; data: Float32Array }> = [
     { op: "neg", data: x },
     { op: "relu", data: x },
     { op: "sigmoid", data: x },
@@ -132,7 +132,7 @@ test("fusion cross-check: binary ops", async (t) => {
   const a = randomData(64, 3, 3);
   const b = randomData(64, 4, 3).map((v) => (v === 0 ? 0.5 : v)); // avoid exact zero divisor
   const positiveA = randomData(64, 5, 2).map((v) => Math.abs(v) + 0.1);
-  const cases: Array<{ op: import("mallory-tensor-compile").BinaryOp; l: Float32Array; r: Float32Array }> = [
+  const cases: Array<{ op: import("@johnhenry/math-plus-tensor-compile").BinaryOp; l: Float32Array; r: Float32Array }> = [
     { op: "add", l: a, r: b },
     { op: "sub", l: a, r: b },
     { op: "mul", l: a, r: b },
@@ -168,7 +168,7 @@ test("fusion cross-check: select() (piecewise) matches CPU short-circuit semanti
 test("fusion cross-check: cmp ops produce 0.0/1.0 matching CPU", async (t) => {
   const a = randomData(64, 13, 3);
   const b = randomData(64, 14, 3);
-  const cases: readonly import("mallory-tensor-compile").CmpOp[] = ["lt", "le", "gt", "ge", "eq", "ne"];
+  const cases: readonly import("@johnhenry/math-plus-tensor-compile").CmpOp[] = ["lt", "le", "gt", "ge", "eq", "ne"];
   for (const op of cases) {
     const expr = Traced.input(0).cmp(op, Traced.input(1));
     await crossCheck(t, `cmp ${op}`, expr.node, [a, b]);

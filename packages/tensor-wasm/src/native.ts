@@ -14,7 +14,7 @@
  * found. Callers fall back to {@link Kernels} (the WASM path), which works
  * everywhere. Binary resolution order:
  *   1. explicit `libraryPath` option
- *   2. `$MALLORY_NATIVE_KERNELS_PATH`
+ *   2. `$MATH_PLUS_NATIVE_KERNELS_PATH`
  *   3. `<package>/native/<os>-<arch>/` (where the CI matrix artifacts land;
  *      see .github/workflows/native-kernels.yml)
  *   4. a repo-checkout `target/release/` build (development convenience)
@@ -76,7 +76,7 @@ function libraryFileName(os: string): string {
 function candidatePaths(explicit: string | undefined, deno: DenoFFI): string[] {
   const paths: string[] = [];
   if (explicit) paths.push(explicit);
-  const env = deno.env.get("MALLORY_NATIVE_KERNELS_PATH");
+  const env = deno.env.get("MATH_PLUS_NATIVE_KERNELS_PATH");
   if (env) paths.push(env);
   const file = libraryFileName(deno.build.os);
   const pkgRoot = new URL("..", import.meta.url).pathname;

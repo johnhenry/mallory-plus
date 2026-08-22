@@ -1,7 +1,7 @@
 /**
  * IR -> WGSL lowering (issue #12, "Elementwise fusion via the #11 IR").
  *
- * `mallory-tensor-compile`'s `IRNode` (packages/tensor-compile/src/ir.ts) is a
+ * `@johnhenry/math-plus-tensor-compile`'s `IRNode` (packages/tensor-compile/src/ir.ts) is a
  * small, closed, elementwise/broadcast-only IR that its own module doc calls
  * "the shared lowering target the future WebGPU kernel DSL (#12) ... reuses".
  * This module is that second backend: instead of `evalWithGrad`'s recursive
@@ -31,7 +31,7 @@
  * `unaryValueAndDeriv` in tensor-compile/src/ir.ts uses (documented per-op
  * below), not re-derived independently — same math, different backend.
  */
-import type { BinaryOp, CmpOp, IRNode, UnaryOp } from "mallory-tensor-compile";
+import type { BinaryOp, CmpOp, IRNode, UnaryOp } from "@johnhenry/math-plus-tensor-compile";
 
 /** WGSL source `x` is bound to the node's own value; produces an `f32` expression string (parenthesized, safe to splice into a larger expression without precedence surprises). */
 function unaryExpr(op: UnaryOp, x: string): string {
@@ -127,7 +127,7 @@ function unaryExpr(op: UnaryOp, x: string): string {
     case "log1p":
       return `(log(1.0 + (${x})))`;
     case "erf":
-      return `(mallory_erf(${x}))`;
+      return `(math_plus_erf(${x}))`;
   }
 }
 
@@ -207,7 +207,7 @@ function formatFloatLiteral(value: number): string {
  * but is long; inlining would bloat the shader source for no benefit.
  */
 const ERF_WGSL_FN = `
-fn mallory_erf(x: f32) -> f32 {
+fn math_plus_erf(x: f32) -> f32 {
   let s: f32 = sign(x);
   let ax: f32 = abs(x);
   let t: f32 = 1.0 / (1.0 + 0.3275911 * ax);

@@ -5,7 +5,7 @@
  * `Parameter`/`Module` instances via a reflection pass over own properties,
  * per the source design's explicit preference.
  */
-import { Tensor, random, allocate, isBigIntDType, type AnyTypedArray, type Rng } from "mallory-tensor-core";
+import { Tensor, random, allocate, isBigIntDType, type AnyTypedArray, type Rng } from "@johnhenry/math-plus-tensor-core";
 import { Variable, constant } from "./variable.ts";
 
 /** A leaf Variable that always requires grad and is collected by `Module.parameters()`. */

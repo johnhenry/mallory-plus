@@ -1,7 +1,7 @@
 /** trainer.configure/fit (issue #43). */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { random, Tensor } from "mallory-tensor-core";
+import { random, Tensor } from "@johnhenry/math-plus-tensor-core";
 import { nn, optim, trainer, Variable } from "../src/index.ts";
 
 test("trainer.fit({x, y}): linear regression converges with plain SGD (same problem/threshold as the existing toy-training-loop test)", async () => {

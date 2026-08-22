@@ -10,7 +10,7 @@
  *
  * True laziness — registering multiple files as plan-level sources and only
  * reading the row data a later `.collect()`-equivalent actually needs — DID
- * require a new plan-level extension point in mallory-frame-arrow itself
+ * require a new plan-level extension point in @johnhenry/math-plus-frame-arrow itself
  * (`"lazySource"`, `Frame.fromLazySource()`/`collectAsync()`), tracked as a
  * follow-up and now shipped (issue #32). See `scan-lazy.ts`'s
  * `scanParquetLazy` for that genuinely-lazy counterpart to this function.
@@ -37,7 +37,7 @@
  * directly below — no local workaround needed anymore.
  */
 import { glob } from "node:fs/promises";
-import { Frame } from "mallory-frame-arrow";
+import { Frame } from "@johnhenry/math-plus-frame-arrow";
 import { readParquet, type ReadParquetOptions } from "./read.ts";
 
 export type ScanParquetOptions = ReadParquetOptions;

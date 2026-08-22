@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { toWebGPU, GPUTensor } from "../src/device.ts";
 import { chooseGemmBackend, GEMM_ELEMENT_THRESHOLD } from "../src/threshold.ts";
 import { closeHarness, getHarness } from "./helpers.ts";

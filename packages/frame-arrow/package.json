@@ -1,6 +1,6 @@
 {
-  "name": "mallory-frame-arrow",
-  "version": "1.0.0",
+  "name": "@johnhenry/math-plus-frame-arrow",
+  "version": "0.0.0",
   "description": "Immutable, expression-oriented Frame/Series dataframe library on top of apache-arrow — part of Mallory Plus",
   "type": "module",
   "exports": {
@@ -21,21 +21,24 @@
     "apache-arrow": "21.2.0"
   },
   "peerDependencies": {
-    "mallory-tensor-core": "^0.2.0"
+    "@johnhenry/math-plus-tensor-core": "^0.0.0"
   },
   "peerDependenciesMeta": {
-    "mallory-tensor-core": {
+    "@johnhenry/math-plus-tensor-core": {
       "optional": true
     }
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/johnhenry/mallory-plus.git",
+    "url": "git+https://github.com/johnhenry/math-plus.git",
     "directory": "packages/frame-arrow"
   },
   "license": "MIT",
   "sideEffects": false,
   "engines": {
     "node": ">=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

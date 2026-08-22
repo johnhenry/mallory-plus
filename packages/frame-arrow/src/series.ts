@@ -169,8 +169,8 @@ export class Series<T = unknown> {
   }
 
   /**
-   * Lazy dynamic import of mallory-tensor-core — see package.json:
-   * mallory-tensor-core is an OPTIONAL peerDependency, never a regular
+   * Lazy dynamic import of @johnhenry/math-plus-tensor-core — see package.json:
+   * @johnhenry/math-plus-tensor-core is an OPTIONAL peerDependency, never a regular
    * dependency, so this package's static import graph has zero edge to the
    * tensor track. Throws for dtypes Tensor can't represent (utf8,
    * dictionary, timestamp, list, struct) — no silent misconversion.

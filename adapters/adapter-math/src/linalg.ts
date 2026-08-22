@@ -2,7 +2,7 @@
  * Reference-speed linalg surface (issue #26) — decisions recorded on the
  * issue, restated here so the rationale travels with the code:
  *
- * 1. **Ships now, before any native WASM kernel exists.** mallory-math
+ * 1. **Ships now, before any native WASM kernel exists.** @johnhenry/math
  *    already has working (if unaccelerated, nested-array) LU/QR/Cholesky/
  *    symmetric-eigendecomposition/SVD/solve/rref/rank/nullSpace/
  *    leastSquares/pseudoInverse/norms — wiring them through here turns a
@@ -22,13 +22,13 @@
  *    (mirroring how tensor-autograd's DualNumber cross-check and the NumPy
  *    oracle already work in this repo) rather than deleting it.
  *
- * Every function converts its 2-D Tensor argument(s) to a mallory-math
+ * Every function converts its 2-D Tensor argument(s) to a @johnhenry/math
  * `Matrix<number>` (via `toMatrix`), delegates to `MatrixMath`, and
  * converts the result(s) back (via `fromMatrix`/`fromVector`) — the same
  * copy-at-the-edge pattern `matrix.ts` (issue #14) already established.
  */
-import { ComplexNumber, MatrixMath } from "mallory-math";
-import type { Tensor } from "mallory-tensor-core";
+import { ComplexNumber, MatrixMath } from "@johnhenry/math";
+import type { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { fromMatrix, fromVector, toMatrix, toVector } from "./matrix.ts";
 
 export interface LUDecomposition {
@@ -158,11 +158,11 @@ export function eigSymmetric(a: Tensor, options: { maxSweeps?: number } = {}): E
 // why this returns `ComplexNumber[]` rather than reusing `eigSymmetric`'s
 // real-valued `EigenDecomposition` shape.
 //
-// Deliberately placed HERE rather than in mallory-math's MatrixMath
+// Deliberately placed HERE rather than in @johnhenry/math's MatrixMath
 // (alongside eigenSymmetric, which would be the "by the book" home): this
-// algorithm needs real numerical testing that mallory-plus already has
+// algorithm needs real numerical testing that math-plus already has
 // infrastructure for (the NumPy oracle harness, numpy.linalg.eigvals as the
-// reference) and mallory-math does not. A disclosed, deliberate deviation
+// reference) and @johnhenry/math does not. A disclosed, deliberate deviation
 // from the eigSymmetric precedent, not an accidental one.
 //
 // Algorithm: Hessenberg reduction (Householder similarity transforms) then
@@ -337,7 +337,7 @@ export interface PowerIterationResult {
  * free: takes a `matvec` closure (`v => A·v`) rather than a materialized
  * Tensor, so callers with an implicit/structural matrix (e.g. a height-h
  * strip's transfer matrix, `|tiles|^h × |tiles|^h` for the generalized
- * Wang tile laboratory, johnhenry/mallory-graph#92 — dense enough that
+ * Wang tile laboratory, johnhenry/mallory#92 — dense enough that
  * `eigGeneral`'s O(n³) Hessenberg-QR would be far too slow, or the matrix
  * may never need materializing at all) never need to build the matrix.
  * `eigGeneral` stays the differential-test oracle for small cases where

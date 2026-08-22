@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Float64, Table, vectorFromArray } from "apache-arrow";
-import { Symbolic } from "mallory-math";
-import { col, Frame } from "mallory-frame-arrow";
+import { Symbolic } from "@johnhenry/math";
+import { col, Frame } from "@johnhenry/math-plus-frame-arrow";
 import { compileFrameExpr, UnsupportedFrameExprError } from "../src/index.ts";
 
 function frameOf(values: Record<string, number[]>): Frame {

@@ -9,7 +9,7 @@
  * shape is the caller's job (see tensor.ts's `GPUTensor`-facing wrapper),
  * exactly as noted in fusion-wgsl.ts's module doc.
  */
-import type { IRNode } from "mallory-tensor-compile";
+import type { IRNode } from "@johnhenry/math-plus-tensor-compile";
 import { compileIRToWGSL } from "./fusion-wgsl.ts";
 import {
   allocateOutputBuffer,
@@ -25,7 +25,7 @@ const WORKGROUP_SIZE = 64;
 
 /**
  * Run a compiled elementwise expression (a `CompiledFn`'s traced `IRNode`,
- * reused verbatim from `mallory-tensor-compile`) on the GPU: one shader
+ * reused verbatim from `@johnhenry/math-plus-tensor-compile`) on the GPU: one shader
  * dispatch touches every output element once, fusing however many ops the
  * expression chained together — no intermediate GPU buffer per op.
  */

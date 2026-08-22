@@ -27,7 +27,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as path from "node:path";
-import { evalWithGrad, type BinaryOp, type IRNode, type UnaryOp } from "mallory-tensor-compile";
+import { evalWithGrad, type BinaryOp, type IRNode, type UnaryOp } from "@johnhenry/math-plus-tensor-compile";
 import {
   allSubnodes,
   genNode,
@@ -38,8 +38,8 @@ import {
 } from "../../tensor-compile/test/fuzz-generator.ts";
 import { bundleForBrowser, closeHarness, getHarness, SRC } from "./helpers.ts";
 
-const CASES = Number(process.env.MALLORY_WGSL_FUZZ_CASES ?? 25);
-const BASE_SEED = Number(process.env.MALLORY_WGSL_FUZZ_SEED ?? 20260813);
+const CASES = Number(process.env.MATH_PLUS_WGSL_FUZZ_CASES ?? 25);
+const BASE_SEED = Number(process.env.MATH_PLUS_WGSL_FUZZ_SEED ?? 20260813);
 const ELEMENTS = 64;
 
 /** f32-tame subset: smooth, WGSL-pole-safe under the rejection guard below. */
@@ -149,7 +149,7 @@ test(`WGSL fuzz: ${CASES} random IR programs agree between real-GPU WGSL and the
       minimal = reduced;
     }
     assert.fail(
-      `WGSL/CPU divergence (replay: MALLORY_WGSL_FUZZ_SEED=${c.seed} MALLORY_WGSL_FUZZ_CASES=1)\n` +
+      `WGSL/CPU divergence (replay: MATH_PLUS_WGSL_FUZZ_SEED=${c.seed} MATH_PLUS_WGSL_FUZZ_CASES=1)\n` +
         `minimal diverging program: ${JSON.stringify(minimal)}\n` +
         `first divergent element #${badIndex}: cpu=${c.expected[badIndex]} gpu=${gpu[badIndex]}`,
     );

@@ -34,14 +34,14 @@ export type AggOp = "count" | "sum" | "mean" | "stddev";
  * (issue #38: growing `fn.*` beyond just `month`, on `frame-arrow`'s own
  * merits — e.g. `withColumns({ y: fn.sin(col('x')) })`).
  *
- * Deliberately spelled to match `mallory-math`'s `Symbolic` `FuncName` union
+ * Deliberately spelled to match `@johnhenry/math`'s `Symbolic` `FuncName` union
  * 1:1 (same 41 names, including "ln" rather than tensor-compile's "log"),
- * not because `frame-arrow` depends on `mallory-math` (it doesn't — no new
+ * not because `frame-arrow` depends on `@johnhenry/math` (it doesn't — no new
  * dependency here) but so that an *external* bridge translating a
  * `Symbolic` `Expr`'s `{ type: "func", name, arg }` nodes into `fn.*` calls
- * can do so with a plain identity lookup, the same way `mallory-adapter-math`'s
+ * can do so with a plain identity lookup, the same way `@johnhenry/math-plus-adapter-math`'s
  * `UNARY_FUNC_MAP` (adapters/adapter-math/src/expr.ts) already does for the
- * `tensor-compile` IR target. See `mallory-adapter-math`'s `compileFrameExpr`
+ * `tensor-compile` IR target. See `@johnhenry/math-plus-adapter-math`'s `compileFrameExpr`
  * for that second compile target.
  */
 export const SCALAR_MATH_FUNCS = [

@@ -1,4 +1,4 @@
-import type { DType, Tensor } from "mallory-tensor-core";
+import type { DType, Tensor } from "@johnhenry/math-plus-tensor-core";
 
 /**
  * Flatten a Tensor's contiguous values into a plain Float64Array, row-major.

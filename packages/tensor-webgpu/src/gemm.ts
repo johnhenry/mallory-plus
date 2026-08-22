@@ -2,7 +2,7 @@
  * WebGPU GEMM (issue #12, v1 scope item 1): `out[m,n] = sum_k a[m,k] * b[k,n]`,
  * row-major f32, one thread per output element. Naive (no shared-memory
  * tiling) — v1's job was proving the seam and measuring the crossover
- * against `mallory-tensor-wasm`'s `matmulInto`, not squeezing out the last
+ * against `@johnhenry/math-plus-tensor-wasm`'s `matmulInto`, not squeezing out the last
  * GFLOP. The measurement (docs/spikes/webgpu-baseline.md) came back honest
  * rather than flattering: on this machine (integrated GPU via ANGLE's GL
  * backend, no discrete GPU) this naive kernel never beats WASM, at any size
@@ -66,7 +66,7 @@ function dimsUniform(device: GPUDevice, m: number, n: number, k: number): SizedB
 
 /**
  * `a` is `m x k`, `b` is `k x n`, both row-major contiguous `Float32Array`s;
- * returns `m x n` row-major. Matches `mallory-tensor-wasm`'s `matmulInto`
+ * returns `m x n` row-major. Matches `@johnhenry/math-plus-tensor-wasm`'s `matmulInto`
  * shape contract (2-D only in v1) so the two backends are drop-in comparable
  * for the threshold measurement.
  */

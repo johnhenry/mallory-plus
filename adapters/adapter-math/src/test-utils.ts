@@ -1,7 +1,7 @@
 /**
  * DualNumber forward-mode gradient oracle (issue #17) — a third,
  * algorithmically independent way to check a gradient, alongside the
- * reverse-mode tape (`mallory-tensor-autograd`) and finite differences.
+ * reverse-mode tape (`@johnhenry/math-plus-tensor-autograd`) and finite differences.
  * Forward-mode dual numbers propagate derivatives through the SAME
  * evaluation as the value (no separate backward pass, no tape), so a bug
  * shared between "the analytic formula" and "the tape's backward rule"
@@ -11,12 +11,12 @@
  * Also pure JS (no Python subprocess), so it runs anywhere the NumPy/torch
  * oracle (docs/TESTING.md) can't: browser CI, local watch mode, etc.
  *
- * Exported as a separate `mallory-adapter-math/test-utils` subpath — this
+ * Exported as a separate `@johnhenry/math-plus-adapter-math/test-utils` subpath — this
  * is test/oracle plumbing, not part of the adapter's main runtime surface
  * (`fromMatrix`/`compileExpr`/etc.), so consumers who don't need it don't
  * pull DualNumber-wrapping code into their main bundle.
  */
-import { DualNumber } from "mallory-math";
+import { DualNumber } from "@johnhenry/math";
 
 export type ScalarDualFn = (x: DualNumber) => DualNumber;
 export type MultivariateDualFn = (xs: DualNumber[]) => DualNumber;
@@ -26,7 +26,7 @@ export function dualGrad(fn: ScalarDualFn, x: number): number {
   return DualNumber.derivative(fn, x);
 }
 
-/** The full gradient of a scalar-valued multivariate `fn` at `xs`, via mallory-math's forward-mode gradient driver (one dual-number sweep per input, matching how `DualNumber.gradient` itself is implemented). */
+/** The full gradient of a scalar-valued multivariate `fn` at `xs`, via @johnhenry/math's forward-mode gradient driver (one dual-number sweep per input, matching how `DualNumber.gradient` itself is implemented). */
 export function dualGradN(fn: MultivariateDualFn, xs: readonly number[]): number[] {
   return DualNumber.gradient(fn, [...xs]);
 }

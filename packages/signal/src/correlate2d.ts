@@ -1,7 +1,7 @@
 /**
  * correlate2D (issue #84) — true 2-D cross-correlation via FFT, upstream
  * for the generalized Wang tile laboratory's autocorrelation-surface
- * analysis (johnhenry/mallory-graph#92): the standard repetitivity
+ * analysis (johnhenry/mallory#92): the standard repetitivity
  * picture, bright peaks at every translation vector under which a tiling
  * approximately recurs. `correlate` (correlate.ts) is 1-D with row/column
  * BATCHING of a 2-D input, per its own doc comment — there is no genuine
@@ -18,8 +18,8 @@
  * axis (both `fft2`'s own requirement and what avoids circular-wraparound
  * aliasing, the standard "pad before FFT-convolve" technique).
  */
-import { fft2, ComplexTensor, ifft2 } from "mallory-fft";
-import { Tensor } from "mallory-tensor-core";
+import { fft2, ComplexTensor, ifft2 } from "@johnhenry/math-plus-fft";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 
 function nextPow2(n: number): number {
   let p = 1;

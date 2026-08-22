@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { Kernels } from "../src/index.ts";
 
 test("addInto writes the sum directly into a pre-allocated resident buffer", async () => {
@@ -79,7 +79,7 @@ test("addInto allocates ZERO times across repeated calls on resident buffers", a
 // ---- telemetry hook (issue #10) --------------------------------------------
 
 test("allocator emits wasm/alloc.bytes and wasm/alloc.calls metrics when a sink is installed", async () => {
-  const { setSink } = await import("mallory-telemetry");
+  const { setSink } = await import("@johnhenry/math-plus-telemetry");
   const events: unknown[] = [];
   setSink((e) => events.push(e));
   try {
@@ -224,7 +224,7 @@ test("subInto/divInto allocate ZERO times across repeated calls on resident buff
   assert.equal(out.toFloat32Array()[0], 3);
 });
 
-test("subInto/divInto agree with mallory-tensor-core's Tensor.sub/Tensor.div on random data (differential leg)", async () => {
+test("subInto/divInto agree with @johnhenry/math-plus-tensor-core's Tensor.sub/Tensor.div on random data (differential leg)", async () => {
   const kernels = await Kernels.load();
   const N = 257; // deliberately not a round SIMD-friendly size
   const aData = Float32Array.from({ length: N }, (_, i) => Math.sin(i) * 37 + 50); // stays away from 0

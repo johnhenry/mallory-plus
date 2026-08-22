@@ -1,11 +1,11 @@
 /**
- * mallory-adapter-onnx (issue #18) — mode 1 only: `onnx.load(modelSource)` /
- * `model.run(inputs)`, marshalling between mallory-tensor-core's `Tensor`
+ * @johnhenry/math-plus-adapter-onnx (issue #18) — mode 1 only: `onnx.load(modelSource)` /
+ * `model.run(inputs)`, marshalling between @johnhenry/math-plus-tensor-core's `Tensor`
  * and onnxruntime-web's `Tensor`. That marshalling is the entire job.
  *
  * Backend selection (wasm/webgl/webgpu/...) delegates entirely to ONNX
  * Runtime Web's own `env`/`SessionOptions.executionProviders` — v1 does not
- * route ORT through mallory-plus's own device abstraction.
+ * route ORT through math-plus's own device abstraction.
  *
  * Deliberately deferred (see the issue for the reasoning): mode 2 (adapting
  * our storage to ORT's tensor storage — couples two independently evolving
@@ -15,7 +15,7 @@
  * about).
  */
 import * as ort from "onnxruntime-web";
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { dtypeToOrtType, ortTypeToDtype } from "./dtype.ts";
 
 export { UnsupportedDTypeError } from "./dtype.ts";
@@ -32,7 +32,7 @@ export interface OnnxModel {
   release(): Promise<void>;
 }
 
-/** mallory Tensor -> ORT Tensor. Copies only if `t` isn't already contiguous (ORT tensors are always flat buffers, no stride support) — never for the common case of a freshly-built input Tensor. */
+/** math-plus Tensor -> ORT Tensor. Copies only if `t` isn't already contiguous (ORT tensors are always flat buffers, no stride support) — never for the common case of a freshly-built input Tensor. */
 function tensorToOrt(t: Tensor): ort.Tensor {
   const packed = t.contiguous();
   const ortType = dtypeToOrtType(packed.dtype);
@@ -44,7 +44,7 @@ function tensorToOrt(t: Tensor): ort.Tensor {
   return new ort.Tensor(ortType, packed.data as never, packed.shape);
 }
 
-/** ORT Tensor -> mallory Tensor. No copy — wraps the ORT tensor's own output buffer. */
+/** ORT Tensor -> math-plus Tensor. No copy — wraps the ORT tensor's own output buffer. */
 function ortToTensor(t: ort.Tensor): Tensor {
   const dtype = ortTypeToDtype(t.type);
   return Tensor.fromTypedArray(t.data as never, t.dims, { dtype });

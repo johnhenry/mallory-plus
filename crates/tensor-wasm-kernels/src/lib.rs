@@ -1,9 +1,9 @@
-//! Flat-numeric kernel ABI for mallory-tensor-wasm.
+//! Flat-numeric kernel ABI for @johnhenry/math-plus-tensor-wasm.
 //!
 //! Exports use plain `extern "C"` with pointer/offset/stride params (no
 //! wasm-bindgen object marshalling) — callers on the JS side own buffer
 //! layout and pass offsets into linear memory. Offsets/strides are in
-//! *elements*, not bytes (matches mallory-tensor-core's `Tensor.strides`
+//! *elements*, not bytes (matches @johnhenry/math-plus-tensor-core's `Tensor.strides`
 //! convention on the JS side).
 //!
 //! Alignment contract (issue #7): `alloc` takes an explicit `align` and
@@ -206,12 +206,12 @@ pub unsafe extern "C" fn gemm_f32(
 
 /// Solve `A·x = b` for a square `n x n` system via LU decomposition with
 /// partial pivoting (issue #39, the first native-kernel candidate named in
-/// docs/PLAN.md §9 item 1) — same algorithm as mallory-math's
+/// docs/PLAN.md §9 item 1) — same algorithm as @johnhenry/math's
 /// `MatrixMath.lu`/`solve` (largest-absolute-value-in-column pivot
 /// selection, in-place Doolittle elimination storing L's multipliers where
 /// U's zeros go, forward-substitute `Ly=Pb` then back-substitute `Ux=y`),
 /// so results agree with `adapter-math`'s existing reference-speed `solve`
-/// (which delegates to that same mallory-math algorithm) up to f32-vs-f64
+/// (which delegates to that same @johnhenry/math algorithm) up to f32-vs-f64
 /// precision — see `adapter-math/src/linalg.ts`'s own doc comment: this
 /// native kernel is meant to sit ALONGSIDE that reference path as a faster
 /// option, not replace it (the reference path stays the correctness
@@ -328,7 +328,7 @@ pub unsafe extern "C" fn solve_f32(
 /// validation in its ENTIRETY on a runtime without SIMD support — module
 /// loading is all-or-nothing, unlike native code's per-call feature
 /// detection, so there is no way to ship one module with both a SIMD path
-/// and a guaranteed-always-loadable fallback. `mallory-tensor-wasm`'s
+/// and a guaranteed-always-loadable fallback. `@johnhenry/math-plus-tensor-wasm`'s
 /// `Kernels.load()` feature-detects at runtime (`WebAssembly.validate()`)
 /// and picks whichever of the two built .wasm files is appropriate,
 /// falling back to the always-present scalar/strided kernels above for

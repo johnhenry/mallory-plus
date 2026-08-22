@@ -79,7 +79,7 @@ export class Frame {
    * rows, honoring the SAME column-pruning `wanted` conveys to every other
    * plan node kind.
    *
-   * Meant for adapter/format packages (e.g. `mallory-frame-parquet`'s
+   * Meant for adapter/format packages (e.g. `@johnhenry/math-plus-frame-parquet`'s
    * `scanParquetLazy`) to build on, not typical application code.
    */
   static fromLazySource(schema: Schema, read: (wanted: Wanted) => Promise<Table>): Frame {

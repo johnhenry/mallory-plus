@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""scipy.signal oracle for mallory-signal's differential tests (issue #44).
+"""scipy.signal oracle for @johnhenry/math-plus-signal's differential tests (issue #44).
 
 Same job-file convention as tensor-core's numpy_oracle.py: a single JSON
 argument path describing the operation, writes a JSON result to stdout

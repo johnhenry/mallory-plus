@@ -1,5 +1,5 @@
 /**
- * Graph -> CSR bridge (issue #16). mallory-math's `Graph<T>` stores
+ * Graph -> CSR bridge (issue #16). @johnhenry/math's `Graph<T>` stores
  * `Map<T, Map<T, number>>` adjacency privately (no public accessor for the
  * raw nested Map) and already exposes `vertices()`, `edges()`, and the
  * public `readonly directed` flag — `toCSR` reconstructs the exact same
@@ -35,7 +35,7 @@
  * convention (absent = Infinity, diagonal defaults to 0 unless a real
  * self-loop edge overrides it) for feeding shortest-path algorithms.
  */
-import type { Graph } from "mallory-math";
+import type { Graph } from "@johnhenry/math";
 
 export interface CSRGraph<T> {
   /** Length `order.length + 1`. Row `i`'s entries are `columnIndices`/`values` in `[rowPointers[i], rowPointers[i+1])`. */

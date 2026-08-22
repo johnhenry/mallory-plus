@@ -1,5 +1,5 @@
 /**
- * Seeded PRNG for mallory-tensor-core (issue #5).
+ * Seeded PRNG for @johnhenry/math-plus-tensor-core (issue #5).
  *
  * PCG32 (XSH-RR variant) — see https://www.pcg-random.org/. Chosen over
  * Math.random() specifically because it's a documented, seedable algorithm:

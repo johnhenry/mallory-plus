@@ -1,6 +1,6 @@
 {
-  "name": "@johnhenry/mallory-tensor-core",
-  "version": "0.0.1",
+  "name": "@johnhenry/math-plus-tensor-core",
+  "version": "0.0.0",
   "license": "MIT",
   "exports": "./src/index.ts"
 }

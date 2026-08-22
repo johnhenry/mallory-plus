@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { collate, Dataset, fromAsync } from "../src/index.ts";
 
 async function* slowNumbers(n: number, delayMs = 1): AsyncGenerator<number> {

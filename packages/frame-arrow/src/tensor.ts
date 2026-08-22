@@ -2,7 +2,7 @@
  * toTensor() implementation, imported ONLY via dynamic `import()` from
  * series.ts/frame.ts's async `toTensor()` methods — never statically.
  *
- * This module intentionally does NOT `import type` from "mallory-tensor-core"
+ * This module intentionally does NOT `import type` from "@johnhenry/math-plus-tensor-core"
  * either: frame-arrow's own typecheck (`tsc --noEmit`) must succeed even in
  * a hypothetical checkout where tensor-core's types aren't resolvable, since
  * the issue is explicit that frame-arrow has NO dependency (static OR
@@ -40,7 +40,7 @@ interface TensorCoreModule {
 }
 
 async function loadTensorCore(): Promise<TensorCoreModule> {
-  const mod = await import("mallory-tensor-core");
+  const mod = await import("@johnhenry/math-plus-tensor-core");
   return mod as unknown as TensorCoreModule;
 }
 

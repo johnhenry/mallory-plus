@@ -48,7 +48,7 @@
  * EAGERLY, at node-construction time — see `Frame.fromLazySource`) plus a
  * `read(wanted)` callback that materializes the actual data lazily, on
  * demand, honoring the same column pruning every other node kind gets.
- * This exists for `mallory-frame-parquet`'s `scanParquetLazy` (a Parquet
+ * This exists for `@johnhenry/math-plus-frame-parquet`'s `scanParquetLazy` (a Parquet
  * file's rows shouldn't be read from disk until something downstream
  * actually needs them — the whole point of #32).
  *

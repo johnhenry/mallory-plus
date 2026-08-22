@@ -1,6 +1,6 @@
 /**
- * mallory-frame-parquet — a Parquet read/write bridge into
- * mallory-frame-arrow's Frame, built on hyparquet (issue #20; see
+ * @johnhenry/math-plus-frame-parquet — a Parquet read/write bridge into
+ * @johnhenry/math-plus-frame-arrow's Frame, built on hyparquet (issue #20; see
  * docs/spikes/parquet-bakeoff.md for why hyparquet over parquet-wasm).
  *
  * ## API shape — a deliberate deviation from the issue's literal phrasing

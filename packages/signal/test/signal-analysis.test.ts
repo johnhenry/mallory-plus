@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Tensor } from "mallory-tensor-core";
+import { Tensor } from "@johnhenry/math-plus-tensor-core";
 import { butter, convolve1D, correlate, correlate1D, freqz, welch } from "../src/index.ts";
 import { runScipyOracle, SCIPY_SKIP_REASON } from "./helpers.ts";
 
