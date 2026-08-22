@@ -23,7 +23,7 @@
     "@johnhenry/math-plus-tensor-autograd": "0.2.2"
   },
   "devDependencies": {
-    "@johnhenry/math": "^0.8.0"
+    "@johnhenry/math": "^0.15.0"
   },
   "repository": {
     "type": "git",
